@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% block title %}Pricing Plans - DevDialogue AI{% endblock %}
+
+{% block content %}
+<section class="pricing-section">
+    <div class="section-header">
+        <div class="badge">Pricing Options</div>
+        <h2 class="section-title">Simple, Developer-Friendly Plans</h2>
+        <p class="section-subtitle">Unlock advanced generation limits, team collaborations, and custom workflow adapters.</p>
+    </div>
+    
+    <div class="pricing-grid">
+        <!-- Basic Plan -->
+        <div class="pricing-card glass-card">
+            <div class="plan-header">
+                <span class="plan-name">Basic</span>
+                <div class="plan-price">$0<span class="price-period">/month</span></div>
+                <p class="plan-desc">For student developers and hobby projects.</p>
+            </div>
+            <div class="plan-features">
+                <ul>
+                    <li><i data-lucide="check" class="check-icon"></i> 5 Code Generation Sessions / month</li>
+                    <li><i data-lucide="check" class="check-icon"></i> Python & Web Templates</li>
+                    <li><i data-lucide="check" class="check-icon"></i> Standard Dialogue Engine</li>
+                    <li><i data-lucide="check" class="check-icon"></i> SQLite Default Database</li>
+                </ul>
+            </div>
+            <div class="plan-action">
+                <a href="{% url 'signup' %}?plan=basic" class="btn btn-secondary btn-full">Get Started</a>
+            </div>
+        </div>
+        
+        <!-- Pro Plan -->
+        <div class="pricing-card glass-card featured">
+            <div class="popular-badge">Most Popular</div>
+            <div class="plan-header">
+                <span class="plan-name">Pro</span>
+                <div class="plan-price">$19<span class="price-period">/month</span></div>
+                <p class="plan-desc">For professional developers building apps.</p>
+            </div>
+            <div class="plan-features">
+                <ul>
+                    <li><i data-lucide="check" class="check-icon"></i> Unlimited Code Generations</li>
+                    <li><i data-lucide="check" class="check-icon"></i> Faster response times (&lt; 8s)</li>
+                    <li><i data-lucide="check" class="check-icon"></i> Mode 2 (Incremental Generation)</li>
+                    <li><i data-lucide="check" class="check-icon"></i> PostgreSQL Support</li>
+                    <li><i data-lucide="check" class="check-icon"></i> Swappable AI Models</li>
+                </ul>
+            </div>
+            <div class="plan-action">
+                <a href="{% url 'signup' %}?plan=pro" class="btn btn-primary btn-full">Upgrade to Pro</a>
+            </div>
+        </div>
+        
+        <!-- Premium Plan -->
+        <div class="pricing-card glass-card">
+            <div class="plan-header">
+                <span class="plan-name">Premium</span>
+                <div class="plan-price">$49<span class="price-period">/month</span></div>
+                <p class="plan-desc">For startup engineering teams and agencies.</p>
+            </div>
+            <div class="plan-features">
+                <ul>
+                    <li><i data-lucide="check" class="check-icon"></i> Everything in Pro</li>
+                    <li><i data-lucide="check" class="check-icon"></i> Dedicated self-hosted N8N pipeline</li>
+                    <li><i data-lucide="check" class="check-icon"></i> VS Code & JetBrains Extensions</li>
+                    <li><i data-lucide="check" class="check-icon"></i> Real-time Collaborative Mode</li>
+                    <li><i data-lucide="check" class="check-icon"></i> Priority supervisor support</li>
+                </ul>
+            </div>
+            <div class="plan-action">
+                <a href="{% url 'signup' %}?plan=premium" class="btn btn-secondary btn-full">Go Premium</a>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

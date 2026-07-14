@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard - DevDialogue AI{% endblock %}
+
+{% block content %}
+<div class="dashboard-wrapper">
+    <!-- User Overview Panel -->
+    <div class="dashboard-header-panel glass-card">
+        <div class="user-info-section">
+            <h2>Welcome, {{ user.username }}!</h2>
+            <p>Develop smarter, requirement-aware codebases using AI dialogue.</p>
+        </div>
+        <div class="plan-status-section">
+            <span class="plan-label">Current Plan</span>
+            <div class="plan-tag {{ profile.plan }}">{{ profile.plan|upper }}</div>
+            {% if profile.plan == 'basic' %}
+                <a href="{% url 'home' %}#pricing" class="upgrade-link">Upgrade to Pro <i data-lucide="zap" class="icon-inline"></i></a>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="dashboard-grid">
+        <!-- Launch Workspace Form -->
+        <div class="launch-card glass-card">
+            <h3>Start New AI Workspace</h3>
+            <p class="section-desc">Briefly describe the software system you want to generate. The AI will interview you regarding modules, behavior, and data schemas.</p>
+            
+            <form method="POST" action="{% url 'create_session' %}" class="session-create-form">
+                {% csrf_token %}
+                
+                <div class="form-group">
+                    <label>Execution Mode</label>
+                    <div class="mode-selector-grid">
+                        <label class="mode-card">
+                            <input type="radio" name="mode" value="mode1" checked>
+                            <div class="mode-card-content">
+                                <span class="mode-title">Mode 1: Dialogue-Driven</span>
+                                <span class="mode-desc">Full conversation interview first, then generates complete codebase at once.</span>
+                            </div>
+                        </label>
+                        
+                        <label class="mode-card">
+                            <input type="radio" name="mode" value="mode2">
+                            <div class="mode-card-content">
+                                <span class="mode-title">Mode 2: Incremental</span>
+                                <span class="mode-desc">Iterates and generates code component-by-component, seeking feedback at each step.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="project-description">Initial Project Concept</label>
+                    <textarea name="description" id="project-description" rows="5" class="form-control" placeholder="Describe the application you want to build (e.g., 'A library management system with user login, borrow records, and overdue fines calculations')." required></textarea>
+                </div>
+                
+                <button type="submit" class="btn btn-primary btn-lg btn-full">
+                    Launch AI Dialogue Engine <i data-lucide="play" class="icon-inline"></i>
+                </button>
+            </form>
+        </div>
+        
+        <!-- Previous Workspace Sessions -->
+        <div class="workspaces-card glass-card">
+            <h3>Previous Workspaces</h3>
+            <p class="section-desc">Resume or view generated files from your past design dialogues.</p>
+            
+            {% if sessions %}
+                <div class="sessions-list">
+                    {% for session in sessions %}
+                        <div class="session-item glass-card">
+                            <div class="session-meta">
+                                <span class="session-title">Workspace #{{ session.id }}</span>
+                                <div class="session-tags">
+                                    <span class="tag-mode">{{ session.get_mode_display }}</span>
+                                    <span class="tag-status status-{{ session.status }}">{{ session.status|title }}</span>
+                                </div>
+                                <div class="session-date">Started {{ session.started_at|date:"M d, Y, h:i A" }}</div>
+                            </div>
+                            <div class="session-actions">
+                                <a href="{% url 'chat' session_id=session.id %}" class="btn btn-secondary btn-sm">
+                                    {% if session.status == 'active' %}
+                                        Resume Chat <i data-lucide="message-square" class="icon-inline"></i>
+                                    {% else %}
+                                        View Code <i data-lucide="code" class="icon-inline"></i>
+                                    {% endif %}
+                                </a>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-sessions text-center">
+                    <i data-lucide="folder-open" class="empty-icon"></i>
+                    <p>No workspace sessions found. Describe your project concept above to initiate your first design dialogue!</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

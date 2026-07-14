@@ -1,0 +1,366 @@
+{% extends 'base.html' %}
+{% block title %}Workspace Console - DevDialogue AI{% endblock %}
+
+{% block content %}
+<div class="chat-workspace-container {% if not generated_codes %}collapsed-code{% endif %}" id="chat-workspace-wrapper">
+    <!-- Left Panel: Chat Console -->
+    <div class="chat-console-panel glass-card">
+        <!-- Console Toggle Button -->
+        <button type="button" id="btn-toggle-workspace" class="workspace-toggle-btn" onclick="toggleCodeWorkspace()" title="Toggle Code View">
+            <i data-lucide="{% if not generated_codes %}chevron-left{% else %}chevron-right{% endif %}" id="toggle-icon"></i>
+        </button>
+        <!-- Console Header -->
+        <div class="console-header">
+            <div class="header-meta">
+                <a href="{% url 'dashboard' %}?back=true" class="btn-back"><i data-lucide="arrow-left"></i> Dashboard</a>
+                <h2>Workspace #{{ session.id }}</h2>
+                <div class="tags-group">
+                    <span class="tag-mode">{{ session.get_mode_display }}</span>
+                    <span id="session-status-badge" class="tag-status status-{{ session.status }}">{{ session.status|title }}</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Messages Box -->
+        <div class="chat-messages-box" id="messages-box">
+            {% for msg in chat_messages %}
+                <div class="message-row {% if msg.role == 'user' %}user-row{% else %}assistant-row{% endif %}">
+                    <div class="message-bubble glass-card">
+                        <div class="msg-author">
+                            {% if msg.role == 'user' %}
+                                <i data-lucide="user" class="icon-inline"></i> You
+                            {% else %}
+                                <i data-lucide="cpu" class="icon-inline"></i> DevDialogue AI
+                            {% endif %}
+                        </div>
+                        <div class="msg-content">
+                            <!-- Support basic rendering, newlines or markdown -->
+                            {{ msg.content|linebreaksbr }}
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+            
+            <!-- Dynamic elements loaded via JS go here -->
+            <div class="message-row assistant-row typing-indicator-row hidden" id="typing-indicator">
+                <div class="message-bubble glass-card">
+                    <div class="msg-author"><i data-lucide="cpu" class="icon-inline"></i> DevDialogue AI</div>
+                    <div class="typing-loader">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Input Area -->
+        <div class="console-input-area">
+            {% if session.status == 'completed' and session.mode == 'mode1' %}
+                <div class="completed-msg-banner text-center">
+                    <i data-lucide="check-circle" class="icon-inline text-success"></i> Requirements gathered. This session is complete. You can view all files on the right.
+                </div>
+            {% else %}
+                <form id="chat-input-form" class="input-form">
+                    {% csrf_token %}
+                    <input type="text" id="chat-input-field" class="form-control" placeholder="Type your response here..." autocomplete="off" required>
+                    <button type="submit" class="btn btn-primary" id="btn-send-message">
+                        Send <i data-lucide="send" class="icon-inline"></i>
+                    </button>
+                </form>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Right Panel: Code Workspace -->
+    <div class="code-workspace-panel glass-card">
+        <div class="code-header">
+            <h3>Generated Codebase</h3>
+            <p>Requirements-driven generated files</p>
+        </div>
+        
+        <!-- File list tabs -->
+        <div class="file-tabs-bar" id="file-tabs-container">
+            {% if generated_codes %}
+                {% for code in generated_codes %}
+                    <button class="file-tab {% if forloop.first %}active{% endif %}" data-code-id="{{ code.id }}" onclick="loadCodeFile({{ code.id }}, this)">
+                        <i data-lucide="file-code" class="icon-inline"></i> {{ code.module_name }}
+                    </button>
+                {% endfor %}
+            {% else %}
+                <div class="no-files-tab" id="no-files-notice-tab">No files generated yet</div>
+            {% endif %}
+        </div>
+        
+        <!-- Code Content Area -->
+        <div class="code-display-area">
+            <div class="code-actions-header {% if not generated_codes %}hidden{% endif %}" id="code-actions-bar">
+                <span id="active-file-title" class="file-title">
+                    {% if generated_codes %}
+                        {{ generated_codes.0.module_name }}
+                    {% endif %}
+                </span>
+                <div class="action-buttons">
+                    <button class="btn btn-secondary btn-sm" id="btn-copy-code" onclick="copyCodeContent()">
+                        <i data-lucide="copy" class="icon-inline"></i> Copy
+                    </button>
+                    <button class="btn btn-secondary btn-sm" id="btn-download-code" onclick="downloadCodeContent()">
+                        <i data-lucide="download" class="icon-inline"></i> Download
+                    </button>
+                </div>
+            </div>
+            
+            <div class="code-pre-wrapper" id="code-view-container">
+                {% if generated_codes %}
+                    <pre class="code-block"><code id="code-output-block">{{ generated_codes.0.code_content }}</code></pre>
+                {% else %}
+                    <div class="empty-code-view" id="empty-code-notice">
+                        <i data-lucide="code-2" class="empty-code-icon"></i>
+                        <h4>Design Dialogue In Progress</h4>
+                        <p>Answer the AI questions on the left. The generated system code will appear here automatically as requirements are gathered.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const chatForm = document.getElementById('chat-input-form');
+    const inputField = document.getElementById('chat-input-field');
+    const messagesBox = document.getElementById('messages-box');
+    const typingIndicator = document.getElementById('typing-indicator');
+    const sessionStatusBadge = document.getElementById('session-status-badge');
+    const inputArea = document.querySelector('.console-input-area');
+    const workspaceWrapper = document.getElementById('chat-workspace-wrapper');
+    const toggleIcon = document.getElementById('toggle-icon');
+    
+    function toggleCodeWorkspace() {
+        if (workspaceWrapper.classList.contains('collapsed-code')) {
+            workspaceWrapper.classList.remove('collapsed-code');
+            toggleIcon.setAttribute('data-lucide', 'chevron-right');
+        } else {
+            workspaceWrapper.classList.add('collapsed-code');
+            toggleIcon.setAttribute('data-lucide', 'chevron-left');
+        }
+        lucide.createIcons();
+    }
+    
+    // Code panel refs
+    const fileTabsContainer = document.getElementById('file-tabs-container');
+    const activeFileTitle = document.getElementById('active-file-title');
+    const codeActionsBar = document.getElementById('code-actions-bar');
+    const codeViewContainer = document.getElementById('code-view-container');
+    
+    // Auto-scroll messages to bottom
+    function scrollToBottom() {
+        messagesBox.scrollTop = messagesBox.scrollHeight;
+    }
+    
+    scrollToBottom();
+    
+    // Submit message via AJAX
+    if (chatForm) {
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const messageText = inputField.value.strip ? inputField.value.strip() : inputField.value.trim();
+            if (!messageText) return;
+            
+            // Append user message bubble locally
+            appendMessageBubble('user', messageText);
+            inputField.value = '';
+            scrollToBottom();
+            
+            // Show typing indicator
+            typingIndicator.classList.remove('hidden');
+            scrollToBottom();
+            
+            try {
+                const response = await fetch("{% url 'send_message_api' session_id=session.id %}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify({ message: messageText })
+                });
+                
+                const data = await response.json();
+                
+                // Hide typing indicator
+                typingIndicator.classList.add('hidden');
+                
+                if (response.ok) {
+                    appendMessageBubble('assistant', data.response);
+                    
+                    // Update session status badge
+                    if (data.status) {
+                        sessionStatusBadge.textContent = data.status.charAt(0).toUpperCase() + data.status.slice(1);
+                        sessionStatusBadge.className = `tag-status status-${data.status}`;
+                        
+                        // Check if Completed & Mode 1
+                        if (data.status === 'completed' && "{{ session.mode }}" === "mode1") {
+                            inputArea.innerHTML = `
+                                <div class="completed-msg-banner text-center">
+                                    <i data-lucide="check-circle" class="icon-inline text-success"></i> Requirements gathered. This session is complete. You can view all files on the right.
+                                </div>
+                            `;
+                            lucide.createIcons();
+                        }
+                    }
+                    
+                    // Update code files panel
+                    if (data.codes && data.codes.length > 0) {
+                        updateCodeFilesPanel(data.codes);
+                        
+                        // Auto-expand panel when new code is generated
+                        if (workspaceWrapper.classList.contains('collapsed-code')) {
+                            workspaceWrapper.classList.remove('collapsed-code');
+                            toggleIcon.setAttribute('data-lucide', 'chevron-right');
+                            lucide.createIcons();
+                        }
+                    }
+                } else {
+                    appendMessageBubble('assistant', `⚠️ Error: ${data.error || 'Something went wrong.'}`);
+                }
+            } catch (err) {
+                typingIndicator.classList.add('hidden');
+                appendMessageBubble('assistant', '⚠️ Network error. Please check your connection and try again.');
+            }
+            scrollToBottom();
+        });
+    }
+    
+    // Append chat bubbles
+    function appendMessageBubble(role, content) {
+        const rowDiv = document.createElement('div');
+        rowDiv.className = `message-row ${role === 'user' ? 'user-row' : 'assistant-row'}`;
+        
+        // Convert double newlines to paragraph or br
+        const formattedContent = content.replace(/\n/g, '<br>');
+        
+        rowDiv.innerHTML = `
+            <div class="message-bubble glass-card">
+                <div class="msg-author">
+                    ${role === 'user' ? '<i data-lucide="user" class="icon-inline"></i> You' : '<i data-lucide="cpu" class="icon-inline"></i> DevDialogue AI'}
+                </div>
+                <div class="msg-content">
+                    ${formattedContent}
+                </div>
+            </div>
+        `;
+        
+        messagesBox.insertBefore(rowDiv, typingIndicator);
+        lucide.createIcons();
+    }
+    
+    // Dynamic tabs updating
+    function updateCodeFilesPanel(codes) {
+        // Clear tab list and notice
+        const noticeTab = document.getElementById('no-files-notice-tab');
+        if (noticeTab) noticeTab.remove();
+        
+        const existingTabs = fileTabsContainer.querySelectorAll('.file-tab');
+        const activeId = existingTabs.length > 0 ? Array.from(existingTabs).find(t => t.classList.contains('active'))?.getAttribute('data-code-id') : null;
+        
+        fileTabsContainer.innerHTML = '';
+        
+        codes.forEach((code, index) => {
+            const btn = document.createElement('button');
+            btn.className = `file-tab ${((activeId && activeId == code.id) || (!activeId && index === 0)) ? 'active' : ''}`;
+            btn.setAttribute('data-code-id', code.id);
+            btn.setAttribute('onclick', `loadCodeFile(${code.id}, this)`);
+            btn.innerHTML = `<i data-lucide="file-code" class="icon-inline"></i> ${code.module_name}`;
+            fileTabsContainer.appendChild(btn);
+        });
+        
+        // Show actions bar
+        codeActionsBar.classList.remove('hidden');
+        
+        // Load first or active file content if not already showing
+        const activeTab = fileTabsContainer.querySelector('.file-tab.active');
+        if (activeTab) {
+            const activeCodeId = activeTab.getAttribute('data-code-id');
+            const tabName = activeTab.textContent.trim();
+            
+            // If the code view is empty, fetch and render
+            if (document.getElementById('empty-code-notice')) {
+                loadCodeFile(activeCodeId, activeTab);
+            }
+        }
+        
+        lucide.createIcons();
+    }
+    
+    // Fetch file code content
+    async function loadCodeFile(codeId, tabElement) {
+        // Toggle active tabs
+        const tabs = fileTabsContainer.querySelectorAll('.file-tab');
+        tabs.forEach(t => t.classList.remove('active'));
+        tabElement.classList.add('active');
+        
+        try {
+            const response = await fetch(`/api/code/${codeId}/`);
+            if (response.ok) {
+                const data = await response.json();
+                
+                activeFileTitle.textContent = data.module_name;
+                
+                // Set code block
+                codeViewContainer.innerHTML = `
+                    <pre class="code-block"><code id="code-output-block"></code></pre>
+                `;
+                
+                // Escape code content
+                const codeNode = document.getElementById('code-output-block');
+                codeNode.textContent = data.code_content;
+                
+                // Make sure action buttons are visible
+                codeActionsBar.classList.remove('hidden');
+            }
+        } catch (err) {
+            console.error("Error loading code file:", err);
+        }
+    }
+    
+    // Utility functions: Copy Code
+    function copyCodeContent() {
+        const codeElement = document.getElementById('code-output-block');
+        if (!codeElement) return;
+        
+        navigator.clipboard.writeText(codeElement.textContent)
+            .then(() => {
+                const copyBtn = document.getElementById('btn-copy-code');
+                const origHTML = copyBtn.innerHTML;
+                copyBtn.innerHTML = '<i data-lucide="check" class="icon-inline text-success"></i> Copied!';
+                lucide.createIcons();
+                setTimeout(() => {
+                    copyBtn.innerHTML = origHTML;
+                    lucide.createIcons();
+                }, 2000);
+            })
+            .catch(err => {
+                console.error("Copy failed:", err);
+            });
+    }
+    
+    // Utility functions: Download Code
+    function downloadCodeContent() {
+        const codeElement = document.getElementById('code-output-block');
+        const filename = activeFileTitle.textContent.trim();
+        if (!codeElement || !filename) return;
+        
+        const blob = new Blob([codeElement.textContent], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+</script>
+{% endblock %}

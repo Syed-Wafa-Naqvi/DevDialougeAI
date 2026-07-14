@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% block title %}Features - DevDialogue AI{% endblock %}
+
+{% block content %}
+<section class="features-section">
+    <div class="section-header">
+        <div class="badge">Platform Features</div>
+        <h2 class="section-title">Engage, Refine, and Generate</h2>
+        <p class="section-subtitle">Choose between two workflow modes designed to fit your coding speed and architectural complexity.</p>
+    </div>
+    
+    <div class="features-grid">
+        <div class="feature-card glass-card">
+            <div class="feature-icon-wrapper purple-glow">
+                <i data-lucide="message-square" class="feature-icon"></i>
+            </div>
+            <h3>Mode 1: Dialogue-Driven</h3>
+            <p>Conform to a structured conversational interview. The AI asks targeted questions about modules, dependencies, database requirements, and edge cases, then delivers a complete, cohesive codebase.</p>
+            <ul class="feature-bullets">
+                <li><i data-lucide="check" class="bullet-icon"></i> Context-Aware Questioning</li>
+                <li><i data-lucide="check" class="bullet-icon"></i> Full System Spec Elicitation</li>
+                <li><i data-lucide="check" class="bullet-icon"></i> Unified Code Output</li>
+            </ul>
+        </div>
+        
+        <div class="feature-card glass-card">
+            <div class="feature-icon-wrapper blue-glow">
+                <i data-lucide="layers" class="feature-icon"></i>
+            </div>
+            <h3>Mode 2: Incremental</h3>
+            <p>Perfect for complex, multi-module apps. The system generates code module-by-module, presenting each block individually and incorporating your feedback before proceeding to the next.</p>
+            <ul class="feature-bullets">
+                <li><i data-lucide="check" class="bullet-icon"></i> Step-by-Step Architecture</li>
+                <li><i data-lucide="check" class="bullet-icon"></i> Interactive Component Feedback</li>
+                <li><i data-lucide="check" class="bullet-icon"></i> Flexible Local Refinements</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="section-header" style="margin-top: 80px;">
+        <h2 class="section-title">Why Developers Choose DevDialogue AI</h2>
+        <p class="section-subtitle">A professional platform designed for bulletproof prototyping and generation.</p>
+    </div>
+    
+    <div class="features-grid">
+        <div class="feature-card glass-card">
+            <div class="feature-icon-wrapper gray-glow">
+                <i data-lucide="alert-triangle" class="feature-icon"></i>
+            </div>
+            <h3>Ambiguity Detection</h3>
+            <p>The Dialogue Engine analyzes specifications to identify and resolve conflicting constraints before generating code.</p>
+        </div>
+        
+        <div class="feature-card glass-card">
+            <div class="feature-icon-wrapper gray-glow">
+                <i data-lucide="file-output" class="feature-icon"></i>
+            </div>
+            <h3>Structured Code Export</h3>
+            <p>Export your full, generated project structure as modular python files. Supports templates, models, and forms.</p>
+        </div>
+
+        <div class="feature-card glass-card">
+            <div class="feature-icon-wrapper gray-glow">
+                <i data-lucide="refresh-cw" class="feature-icon"></i>
+            </div>
+            <h3>Real-Time Refinement Loop</h3>
+            <p>If you don't like a module, instruct the Dialogue Engine to modify it. The AI regenerates the files immediately based on feedback.</p>
+        </div>
+    </div>
+</section>
+{% endblock %}
