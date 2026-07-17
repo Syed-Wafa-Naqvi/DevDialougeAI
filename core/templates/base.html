@@ -19,7 +19,7 @@
     
     {% block extra_head %}{% endblock %}
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
     <!-- Background elements for ambient glow -->
     <div class="ambient-glow glow-1"></div>
     <div class="ambient-glow glow-2"></div>
@@ -37,9 +37,41 @@
                 <a href="{% url 'about' %}" class="nav-link">About & Contact</a>
                 {% if user.is_authenticated %}
                     <a href="{% url 'dashboard' %}" class="nav-link">Dashboard</a>
-                    <div class="user-menu">
-                        <span class="user-badge"><i data-lucide="user" class="icon-inline"></i> {{ user.username }}</span>
-                        <a href="{% url 'logout' %}" class="btn btn-secondary btn-sm">Log Out</a>
+                    <div class="user-dropdown-container">
+                        <button class="user-dropdown-trigger" id="userDropdownTrigger" aria-haspopup="true" aria-expanded="false">
+                            {% if user.profile.profile_picture %}
+                                <img src="{{ user.profile.profile_picture.url }}" alt="{{ user.username }}" class="user-avatar-img">
+                            {% else %}
+                                <div class="user-avatar-initials">{{ user.username|slice:":1"|upper }}</div>
+                            {% endif %}
+                            <span class="user-dropdown-username">{{ user.username }}</span>
+                            <i data-lucide="chevron-down" class="chevron-icon"></i>
+                        </button>
+                        
+                        <div class="dropdown-menu-card glass-card" id="userDropdownMenu">
+                            <div class="dropdown-header">
+                                {% if user.profile.profile_picture %}
+                                    <img src="{{ user.profile.profile_picture.url }}" alt="{{ user.username }}" class="user-avatar-img lg">
+                                {% else %}
+                                    <div class="user-avatar-initials lg">{{ user.username|slice:":1"|upper }}</div>
+                                {% endif %}
+                                <div class="dropdown-header-info">
+                                    <span class="dropdown-username">{{ user.username }}</span>
+                                    <span class="dropdown-plan-badge {{ user.profile.plan }}">{{ user.profile.get_plan_display }}</span>
+                                </div>
+                            </div>
+                            <div class="dropdown-divider"></div>
+                            <a href="{% url 'settings' %}" class="dropdown-item">
+                                <i data-lucide="settings" class="dropdown-item-icon"></i> Account Settings
+                            </a>
+                            <a href="{% url 'settings' %}?action=password" class="dropdown-item">
+                                <i data-lucide="key-round" class="dropdown-item-icon"></i> Change Password
+                            </a>
+                            <div class="dropdown-divider"></div>
+                            <a href="{% url 'logout' %}" class="dropdown-item text-danger">
+                                <i data-lucide="log-out" class="dropdown-item-icon"></i> Log Out
+                            </a>
+                        </div>
                     </div>
                 {% else %}
                     <a href="{% url 'login' %}" class="nav-link">Log In</a>
@@ -107,6 +139,26 @@
         
         // Initialize lucide icons
         lucide.createIcons();
+
+        // User dropdown toggling
+        const dropdownTrigger = document.getElementById('userDropdownTrigger');
+        const dropdownMenu = document.getElementById('userDropdownMenu');
+        
+        if (dropdownTrigger && dropdownMenu) {
+            dropdownTrigger.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isExpanded = dropdownTrigger.getAttribute('aria-expanded') === 'true';
+                dropdownTrigger.setAttribute('aria-expanded', !isExpanded);
+                dropdownMenu.classList.toggle('active');
+            });
+            
+            document.addEventListener('click', (e) => {
+                if (!dropdownMenu.contains(e.target) && !dropdownTrigger.contains(e.target)) {
+                    dropdownTrigger.setAttribute('aria-expanded', 'false');
+                    dropdownMenu.classList.remove('active');
+                }
+            });
+        }
     </script>
     {% block extra_js %}{% endblock %}
 </body>

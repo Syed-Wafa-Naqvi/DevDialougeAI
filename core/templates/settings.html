@@ -1,0 +1,229 @@
+{% extends 'base.html' %}
+{% block title %}Account Settings - DevDialogue AI{% endblock %}
+
+{% block content %}
+<div class="settings-container">
+    <!-- Sidebar Navigation -->
+    <div class="settings-sidebar glass-card">
+        <h3 class="sidebar-title">Settings</h3>
+        <ul class="sidebar-menu">
+            <li class="menu-item active">
+                <a href="#account" class="menu-link"><i data-lucide="user" class="menu-icon"></i> Account</a>
+            </li>
+            <li class="menu-item disabled">
+                <span class="menu-link"><i data-lucide="users" class="menu-icon"></i> Team <span class="badge-disabled">Coming Soon</span></span>
+            </li>
+            <li class="menu-item disabled">
+                <span class="menu-link"><i data-lucide="credit-card" class="menu-icon"></i> Subscription <span class="badge-disabled">Coming Soon</span></span>
+            </li>
+            <li class="menu-item disabled">
+                <span class="menu-link"><i data-lucide="bot" class="menu-icon"></i> Bot settings <span class="badge-disabled">Coming Soon</span></span>
+            </li>
+            <li class="menu-item disabled">
+                <span class="menu-link"><i data-lucide="database" class="menu-icon"></i> Data management <span class="badge-disabled">Coming Soon</span></span>
+            </li>
+            <li class="menu-item disabled">
+                <span class="menu-link"><i data-lucide="terminal" class="menu-icon"></i> Developers <span class="badge-disabled">Coming Soon</span></span>
+            </li>
+        </ul>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="settings-content glass-card">
+        <!-- Account Tab Content -->
+        <div id="account-tab" class="tab-panel active">
+            <h2 class="panel-title">Account</h2>
+            
+            <form id="account-form" method="POST" enctype="multipart/form-data" action="{% url 'settings' %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="update_profile">
+                <input type="hidden" name="remove_profile_picture" id="remove-pic-flag" value="false">
+                
+                <!-- Profile Pic & Info Header -->
+                <div class="profile-header-section">
+                    <div class="avatar-upload-container">
+                        {% if profile.profile_picture %}
+                            <img src="{{ profile.profile_picture.url }}" alt="{{ request.user.username }}" id="avatar-preview" class="avatar-preview-img">
+                        {% else %}
+                            <div id="avatar-initials-preview" class="avatar-preview-initials">{{ request.user.username|slice:":1"|upper }}</div>
+                        {% endif %}
+                        <button type="button" class="avatar-edit-btn" onclick="document.getElementById('profile-pic-input').click()" title="Upload Profile Picture">
+                            <i data-lucide="pencil" class="edit-icon"></i>
+                        </button>
+                        <input type="file" name="profile_picture" id="profile-pic-input" accept="image/*" style="display: none;" onchange="previewAvatar(this)">
+                    </div>
+                    
+                    <div class="profile-header-info">
+                        <div class="role-badge">Owner</div>
+                        <h3 class="profile-display-name">{{ request.user.username }}</h3>
+                        {% if profile.profile_picture %}
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="removeAvatar()" style="margin-top: 8px; font-size: 11px; padding: 4px 8px;">Remove Photo</button>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Form Fields -->
+                <div class="form-fields-grid">
+                    <div class="form-group">
+                        <label for="{{ user_form.username.id_for_label }}">Name</label>
+                        {{ user_form.username }}
+                        {% if user_form.username.errors %}
+                            <span class="field-error">{{ user_form.username.errors.0 }}</span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="id_email">Email Address</label>
+                        <input type="email" id="id_email" class="form-control" value="{{ request.user.email }}" readonly disabled style="opacity: 0.6; cursor: not-allowed;">
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; margin-top: 10px;">
+                    <button type="submit" class="btn btn-primary">
+                        Save Profile Changes <i data-lucide="save" class="icon-inline"></i>
+                    </button>
+                </div>
+            </form>
+
+            <div class="settings-divider"></div>
+
+            <!-- Cards Row -->
+            <div class="cards-grid">
+                <!-- Change Password Card -->
+                <div class="settings-action-card" onclick="togglePasswordForm()">
+                    <div class="card-icon-wrapper">
+                        <i data-lucide="lock" class="card-icon"></i>
+                    </div>
+                    <div class="card-content">
+                        <h4>Change password</h4>
+                        <p>Update your password to keep your account secure.</p>
+                    </div>
+                    <i data-lucide="chevron-right" class="card-chevron"></i>
+                </div>
+
+                <!-- Transfer Ownership Card -->
+                <div class="settings-action-card disabled">
+                    <div class="card-icon-wrapper">
+                        <i data-lucide="user-minus" class="card-icon"></i>
+                    </div>
+                    <div class="card-content">
+                        <h4>Transfer ownership</h4>
+                        <p>Transfer this account ownership to another user.</p>
+                    </div>
+                    <span class="card-status-badge">Disabled</span>
+                </div>
+            </div>
+
+            <div class="settings-divider"></div>
+
+            <!-- Hidden/Expandable Password Change Form -->
+            <div id="password-change-panel" class="password-panel glass-card hidden">
+                <div class="password-panel-header">
+                    <h4>Change Your Password</h4>
+                    <button type="button" class="btn-close" onclick="togglePasswordForm()">&times;</button>
+                </div>
+                <form method="POST" action="{% url 'settings' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="change_password">
+                    
+                    {% for field in password_form %}
+                        <div class="form-group">
+                            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                            {{ field }}
+                            {% if field.errors %}
+                                <span class="field-error">{{ field.errors.0 }}</span>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                    
+                    <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px;">
+                        <button type="button" class="btn btn-secondary" onclick="togglePasswordForm()">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Change Password</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Delete Account Panel -->
+            <div class="settings-danger-zone">
+                <div class="danger-header">
+                    <i data-lucide="trash-2" class="danger-icon"></i>
+                    <div class="danger-title-desc">
+                        <h4>Delete account</h4>
+                        <p>Contact our support team to process the deletion of your account.</p>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-secondary disabled" style="border-color: rgba(239, 68, 68, 0.4); color: #ef4444;">
+                    Request Deletion
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function previewAvatar(input) {
+        if (input.files && input.files[0]) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                let previewImg = document.getElementById('avatar-preview');
+                const initialsDiv = document.getElementById('avatar-initials-preview');
+                
+                if (!previewImg) {
+                    // Create image preview element if it doesn't exist
+                    previewImg = document.createElement('img');
+                    previewImg.id = 'avatar-preview';
+                    previewImg.className = 'avatar-preview-img';
+                    initialsDiv.parentNode.insertBefore(previewImg, initialsDiv);
+                    initialsDiv.style.display = 'none';
+                }
+                
+                previewImg.src = e.target.result;
+                document.getElementById('remove-pic-flag').value = 'false';
+            };
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+
+    function removeAvatar() {
+        const previewImg = document.getElementById('avatar-preview');
+        const initialsDiv = document.getElementById('avatar-initials-preview');
+        
+        if (previewImg) {
+            previewImg.remove();
+        }
+        
+        if (initialsDiv) {
+            initialsDiv.style.display = 'flex';
+        } else {
+            const container = document.querySelector('.avatar-upload-container');
+            const newInitials = document.createElement('div');
+            newInitials.id = 'avatar-initials-preview';
+            newInitials.className = 'avatar-preview-initials';
+            newInitials.textContent = '{{ request.user.username|slice:":1"|upper }}';
+            container.insertBefore(newInitials, container.firstChild);
+        }
+        
+        document.getElementById('remove-pic-flag').value = 'true';
+        document.getElementById('profile-pic-input').value = '';
+    }
+
+    function togglePasswordForm() {
+        const panel = document.getElementById('password-change-panel');
+        panel.classList.toggle('hidden');
+    }
+
+    // Auto-open password panel if password form contains errors or action was password
+    window.addEventListener('DOMContentLoaded', () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const actionParam = urlParams.get('action');
+        
+        // check if there are errors in fields or if URL requested change password
+        const passwordErrors = document.querySelectorAll('#password-change-panel .field-error');
+        if (passwordErrors.length > 0 || actionParam === 'password') {
+            togglePasswordForm();
+        }
+    });
+</script>
+{% endblock %}

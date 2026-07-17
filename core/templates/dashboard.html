@@ -69,7 +69,7 @@
                     {% for session in sessions %}
                         <div class="session-item glass-card">
                             <div class="session-meta">
-                                <span class="session-title">Workspace #{{ session.id }}</span>
+                                <span class="session-title">{{ session.title }}</span>
                                 <div class="session-tags">
                                     <span class="tag-mode">{{ session.get_mode_display }}</span>
                                     <span class="tag-status status-{{ session.status }}">{{ session.status|title }}</span>

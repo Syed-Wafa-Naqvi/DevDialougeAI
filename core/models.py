@@ -16,6 +16,7 @@ class Profile(models.Model):
     is_verified = models.BooleanField(default=False)
     otp = models.CharField(max_length=6, blank=True, null=True)
     otp_created_at = models.DateTimeField(blank=True, null=True)
+    profile_picture = models.ImageField(upload_to='profile_pics/', blank=True, null=True)
 
     def generate_otp(self):
         self.otp = f"{random.randint(100000, 999999)}"
@@ -58,6 +59,8 @@ class Session(models.Model):
     mode = models.CharField(max_length=10, choices=MODE_CHOICES, default='mode1')
     started_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='active')
+    title = models.CharField(max_length=255, default="New Chat")
+    has_custom_title = models.BooleanField(default=False)
 
     def __str__(self):
         return f"Session {self.id} ({self.get_mode_display()}) - {self.user.username}"
