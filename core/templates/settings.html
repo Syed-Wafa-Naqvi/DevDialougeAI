@@ -130,8 +130,13 @@
                         <div class="form-group">
                             <label for="{{ field.id_for_label }}">{{ field.label }}</label>
                             {{ field }}
+                            {% if field.name == 'new_password1' or field.name == 'new_password' %}
+                                <small class="form-hint" style="display: block; margin-top: 5px; color: var(--text-muted, #888); font-size: 0.82rem;">Must be at least 8 characters, start with a Capital letter, and contain lowercase, digit & special character.</small>
+                            {% endif %}
                             {% if field.errors %}
-                                <span class="field-error">{{ field.errors.0 }}</span>
+                                {% for error in field.errors %}
+                                    <span class="field-error" style="display: block;">{{ error }}</span>
+                                {% endfor %}
                             {% endif %}
                         </div>
                     {% endfor %}

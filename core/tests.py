@@ -72,3 +72,82 @@ class DialogueEngineTests(TestCase):
         self.assertIn("models.py", modules)
         self.assertIn("views.py", modules)
         self.assertIn("templates/index.html", modules)
+
+
+from core.validators import CapitalFirstPasswordValidator
+from core.forms import SignUpForm, ResetPasswordForm
+from django.core.exceptions import ValidationError
+
+class PasswordValidationTests(TestCase):
+    def setUp(self):
+        self.validator = CapitalFirstPasswordValidator()
+
+    def test_valid_password(self):
+        """Test that a password meeting all criteria passes validation."""
+        try:
+            self.validator.validate("Password123!")
+        except ValidationError:
+            self.fail("validate() raised ValidationError unexpectedly for valid password!")
+
+    def test_first_letter_lowercase_fails(self):
+        """Test that a password starting with a lowercase letter fails."""
+        with self.assertRaises(ValidationError) as cm:
+            self.validator.validate("password123!")
+        self.assertTrue(any("capital" in str(e).lower() for e in cm.exception.messages))
+
+    def test_short_password_fails(self):
+        """Test that a password under 8 characters fails."""
+        with self.assertRaises(ValidationError) as cm:
+            self.validator.validate("Pass1!")
+        self.assertTrue(any("at least 8" in str(e).lower() for e in cm.exception.messages))
+
+    def test_missing_digit_fails(self):
+        """Test that a password missing digits fails."""
+        with self.assertRaises(ValidationError) as cm:
+            self.validator.validate("Password!")
+        self.assertTrue(any("digit" in str(e).lower() for e in cm.exception.messages))
+
+    def test_missing_special_char_fails(self):
+        """Test that a password missing special characters fails."""
+        with self.assertRaises(ValidationError) as cm:
+            self.validator.validate("Password123")
+        self.assertTrue(any("special" in str(e).lower() for e in cm.exception.messages))
+
+    def test_signup_form_password_validation(self):
+        """Test SignUpForm rejects weak password and accepts valid password."""
+        invalid_form = SignUpForm(data={
+            'username': 'newuser',
+            'email': 'newuser@example.com',
+            'password': 'invalidpassword',
+            'confirm_password': 'invalidpassword',
+            'plan': 'basic'
+        })
+        self.assertFalse(invalid_form.is_valid())
+        self.assertIn('password', invalid_form.errors)
+
+        valid_form = SignUpForm(data={
+            'username': 'validuser',
+            'email': 'validuser@example.com',
+            'password': 'ValidPassword123!',
+            'confirm_password': 'ValidPassword123!',
+            'plan': 'basic'
+        })
+        self.assertTrue(valid_form.is_valid())
+
+    def test_reset_password_form_validation(self):
+        """Test ResetPasswordForm rejects weak password and accepts valid password."""
+        invalid_form = ResetPasswordForm(data={
+            'otp': '123456',
+            'new_password': 'weak',
+            'confirm_new_password': 'weak'
+        })
+        self.assertFalse(invalid_form.is_valid())
+        self.assertIn('new_password', invalid_form.errors)
+
+        valid_form = ResetPasswordForm(data={
+            'otp': '123456',
+            'new_password': 'StrongPassword99#',
+            'confirm_new_password': 'StrongPassword99#'
+        })
+        self.assertTrue(valid_form.is_valid())
+

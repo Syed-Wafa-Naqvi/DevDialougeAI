@@ -47,8 +47,11 @@
             <div class="form-group">
                 <label for="{{ form.password.id_for_label }}">Password</label>
                 {{ form.password }}
+                <small class="form-hint" style="display: block; margin-top: 5px; color: var(--text-muted, #888); font-size: 0.82rem;">Must be at least 8 characters, start with a Capital letter, and contain lowercase, digit & special character.</small>
                 {% if form.password.errors %}
-                    <span class="field-error">{{ form.password.errors.0 }}</span>
+                    {% for error in form.password.errors %}
+                        <span class="field-error" style="display: block;">{{ error }}</span>
+                    {% endfor %}
                 {% endif %}
             </div>
             

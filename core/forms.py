@@ -1,5 +1,6 @@
 from django import forms
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
 from core.models import Profile
 
 class SignUpForm(forms.ModelForm):
@@ -36,6 +37,12 @@ class SignUpForm(forms.ModelForm):
         cleaned_data = super().clean()
         password = cleaned_data.get('password')
         confirm_password = cleaned_data.get('confirm_password')
+
+        if password:
+            try:
+                validate_password(password)
+            except forms.ValidationError as error:
+                self.add_error('password', error)
 
         if password and confirm_password and password != confirm_password:
             self.add_error('confirm_password', "Passwords do not match.")
@@ -86,6 +93,12 @@ class ResetPasswordForm(forms.Form):
         cleaned_data = super().clean()
         new_password = cleaned_data.get('new_password')
         confirm_new_password = cleaned_data.get('confirm_new_password')
+
+        if new_password:
+            try:
+                validate_password(new_password)
+            except forms.ValidationError as error:
+                self.add_error('new_password', error)
 
         if new_password and confirm_new_password and new_password != confirm_new_password:
             self.add_error('confirm_new_password', "Passwords do not match.")
