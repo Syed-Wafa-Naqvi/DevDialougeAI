@@ -250,6 +250,13 @@
                                             <i data-lucide="paperclip"></i>
                                         </button>
                                         <div class="toggle-chips-container">
+                                            <select id="provider-selector" class="toggle-chip" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); color: #e2e8f0; padding: 4px 8px; border-radius: 6px; font-size: 0.8rem; cursor: pointer;">
+                                                <option value="free" selected style="background: #1e1e1e; color: #fff;">Free AI (LLaMA 3.3 / Qwen)</option>
+                                                <option value="gemini" style="background: #1e1e1e; color: #fff;">Google Gemini</option>
+                                                <option value="openai" style="background: #1e1e1e; color: #fff;">OpenAI (GPT-4o)</option>
+                                                <option value="claude" style="background: #1e1e1e; color: #fff;">Claude 3.5 Sonnet</option>
+                                                <option value="deepseek" style="background: #1e1e1e; color: #fff;">DeepSeek Coder</option>
+                                            </select>
                                             <button type="button" class="toggle-chip" id="chip-search" onclick="toggleChip(this)">
                                                 <i data-lucide="search" class="chip-icon"></i>Search
                                             </button>
@@ -306,8 +313,11 @@
                                 <i data-lucide="copy" class="icon-inline"></i> Copy
                             </button>
                             <button class="btn btn-secondary btn-sm" id="btn-download-code" onclick="downloadCodeContent()">
-                                <i data-lucide="download" class="icon-inline"></i> Download
+                                <i data-lucide="download" class="icon-inline"></i> Download File
                             </button>
+                            <a href="{% url 'download_project_zip_api' session_id=session.id %}" class="btn btn-primary btn-sm" id="btn-download-zip" title="Download Full Project ZIP">
+                                <i data-lucide="archive" class="icon-inline"></i> Download ZIP
+                            </a>
                         </div>
                     </div>
                     
@@ -523,13 +533,14 @@
             }
             
             try {
+                const selectedProvider = document.getElementById('provider-selector') ? document.getElementById('provider-selector').value : 'gemini';
                 const response = await fetch("{% url 'send_message_api' session_id=session.id %}", {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRFToken': '{{ csrf_token }}'
                     },
-                    body: JSON.stringify({ message: messageText })
+                    body: JSON.stringify({ message: messageText, provider: selectedProvider })
                 });
                 
                 const data = await response.json();
