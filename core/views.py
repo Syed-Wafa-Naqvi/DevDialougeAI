@@ -8,6 +8,7 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.core.mail import send_mail
 from django.conf import settings
+from django.db import transaction, models
 
 from core.models import Profile, Session, Message, GeneratedCode
 from core.forms import SignUpForm, OTPVerificationForm, ForgotPasswordForm, ResetPasswordForm, UserUpdateForm
@@ -73,43 +74,77 @@ def signup_view(request):
     if request.method == 'POST':
         form = SignUpForm(request.POST)
         if form.is_valid():
-            user = form.save(commit=False)
-            user.is_active = False # Deactivate user until verified
-            user.set_password(form.cleaned_data['password'])
-            user.save()
-            
-            # Retrieve or create profile (signal automatically creates one, but let's make sure)
-            profile, created = Profile.objects.get_or_create(user=user)
-            profile.plan = form.cleaned_data['plan']
-            profile.save()
-            
-            # Generate and Send OTP
-            otp = profile.generate_otp()
-            
-            # Send verification email
-            subject = "DevDialogue AI - Verify Your Account"
-            message = (
-                f"Hello {user.username},\n\n"
-                f"Welcome to DevDialogue AI!\n\n"
-                f"Your 6-digit email verification code (OTP) is: {otp}\n\n"
-                f"This code is valid for 2 minutes. If you did not sign up for this account, please ignore this email.\n\n"
-                f"Best regards,\n"
-                f"The DevDialogue AI Team"
-            )
+            username = form.cleaned_data['username']
+            email = form.cleaned_data['email']
+            password = form.cleaned_data['password']
+            plan = form.cleaned_data['plan']
+
             try:
-                send_mail(
-                    subject, 
-                    message, 
-                    settings.DEFAULT_FROM_EMAIL, 
-                    [user.email], 
-                    fail_silently=False
-                )
-                # Store user ID in session to allow OTP verification
+                with transaction.atomic():
+                    # If an unverified user exists with this username or email from a failed/incomplete signup, clean it up
+                    unverified_users = User.objects.filter(
+                        models.Q(username=username) | models.Q(email=email),
+                        is_active=False
+                    )
+                    for unverified_user in unverified_users:
+                        if hasattr(unverified_user, 'profile') and not unverified_user.profile.is_verified:
+                            unverified_user.delete()
+
+                    user = form.save(commit=False)
+                    user.is_active = False # Deactivate user until verified
+                    user.set_password(password)
+                    user.save()
+                    
+                    # Retrieve or create profile
+                    profile, created = Profile.objects.get_or_create(user=user)
+                    profile.plan = plan
+                    profile.save()
+                    
+                    # Generate OTP
+                    otp = profile.generate_otp()
+
+                print(f"\n==========================================")
+                print(f"[DevDialogue AI] Verification OTP for {user.username} ({user.email}): {otp}")
+                print(f"==========================================\n")
+                
+                # Store user ID in session to allow OTP verification BEFORE sending email
                 request.session['pre_verified_user_id'] = user.id
-                messages.success(request, "Registration successful! We have sent a 6-digit verification code to your email.")
+                
+                # Send verification email
+                subject = "DevDialogue AI - Verify Your Account"
+                message = (
+                    f"Hello {user.username},\n\n"
+                    f"Welcome to DevDialogue AI!\n\n"
+                    f"Your 6-digit email verification code (OTP) is: {otp}\n\n"
+                    f"This code is valid for 2 minutes. If you did not sign up for this account, please ignore this email.\n\n"
+                    f"Best regards,\n"
+                    f"The DevDialogue AI Team"
+                )
+                try:
+                    send_mail(
+                        subject, 
+                        message, 
+                        settings.DEFAULT_FROM_EMAIL, 
+                        [user.email], 
+                        fail_silently=False
+                    )
+                    messages.success(request, "Registration successful! We have sent a 6-digit verification code to your email.")
+                except Exception as e:
+                    if settings.DEBUG:
+                        messages.warning(
+                            request, 
+                            f"Account created! Verification email could not be sent via SMTP ({str(e)}). "
+                            f"For development testing, your OTP is: {otp}"
+                        )
+                    else:
+                        messages.warning(
+                            request, 
+                            "Account created! Verification email delivery failed. Please check SMTP settings or click Resend OTP."
+                        )
+                
                 return redirect('verify_otp')
             except Exception as e:
-                messages.error(request, f"Error sending verification email: {str(e)}. Please check SMTP configuration.")
+                messages.error(request, f"Error processing signup: {str(e)}. Please try again.")
         else:
             messages.error(request, "Please correct the errors below.")
     else:
@@ -175,6 +210,9 @@ def resend_otp_view(request):
     
     # Generate and Send OTP
     otp = profile.generate_otp()
+    print(f"\n==========================================")
+    print(f"[DevDialogue AI] Resent OTP for {user.username} ({user.email}): {otp}")
+    print(f"==========================================\n")
     
     if is_reset:
         subject = "DevDialogue AI - Reset Your Password"
@@ -207,6 +245,11 @@ def resend_otp_view(request):
         )
         return JsonResponse({'success': True, 'message': 'A new OTP has been sent to your email.'})
     except Exception as e:
+        if settings.DEBUG:
+            return JsonResponse({
+                'success': True, 
+                'message': f'SMTP Error ({str(e)}). For local testing, your new OTP is: {otp}'
+            })
         return JsonResponse({'error': f'Error sending email: {str(e)}'}, status=500)
 
 # 4. User Login
@@ -470,6 +513,12 @@ def forgot_password_view(request):
             
             # Generate OTP
             otp = profile.generate_otp()
+            print(f"\n==========================================")
+            print(f"[DevDialogue AI] Reset Password OTP for {user.username} ({user.email}): {otp}")
+            print(f"==========================================\n")
+            
+            # Store session state BEFORE attempting email send
+            request.session['reset_password_user_id'] = user.id
             
             # Send Email
             subject = "DevDialogue AI - Reset Your Password"
@@ -489,11 +538,18 @@ def forgot_password_view(request):
                     [email],
                     fail_silently=False
                 )
-                request.session['reset_password_user_id'] = user.id
                 messages.success(request, "A password reset code has been sent to your email.")
-                return redirect('reset_password')
             except Exception as e:
-                messages.error(request, f"Error sending email: {str(e)}")
+                if settings.DEBUG:
+                    messages.warning(
+                        request, 
+                        f"Reset code generated! Email delivery failed via SMTP ({str(e)}). "
+                        f"For development, your OTP code is: {otp}"
+                    )
+                else:
+                    messages.warning(request, "Reset code generated, but email delivery failed. Please check SMTP settings.")
+            
+            return redirect('reset_password')
         else:
             messages.error(request, "Please correct the error below.")
     else:

@@ -30,7 +30,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-y727zrv529e!(4*b3#l95
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -42,7 +42,12 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'core',
+    'accounts',
+    'llm_engine',
+    'dialogue',
+    'generator',
+    'chat',
+    'exporter',
 ]
 
 MIDDLEWARE = [
@@ -103,7 +108,7 @@ AUTH_PASSWORD_VALIDATORS = [
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
     {
-        'NAME': 'core.validators.CapitalFirstPasswordValidator',
+        'NAME': 'accounts.validators.CapitalFirstPasswordValidator',
     },
 ]
 
