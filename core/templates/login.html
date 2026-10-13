@@ -1,51 +1,81 @@
 {% extends 'base.html' %}
-{% block title %}Log In - DevDialogue AI{% endblock %}
+{% load static %}
+
+{% block title %}Log In — DevDialogue AI{% endblock %}
+{% block page_namespace %}auth{% endblock %}
 
 {% block content %}
-<div class="auth-wrapper">
-    <div class="auth-card glass-card">
-        <div class="auth-header">
-            <h2>Welcome Back</h2>
-            <p>Enter your credentials to access your workspaces.</p>
+<div style="min-height: calc(100vh - 60px); display: grid; grid-template-columns: 1fr 1fr; background: var(--canvas);">
+    <!-- Left Column: Studio Light Auth Form -->
+    <div style="display: flex; align-items: center; justify-content: center; padding: 48px 32px; background: var(--surface);">
+        <div style="width: 100%; max-width: 400px;">
+            <div style="margin-bottom: 32px;">
+                <div style="width: 36px; height: 36px; background: var(--brand); border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 16px;">D</div>
+                <h2 style="font-size: var(--text-heading); font-weight: 700; color: var(--ink); margin-bottom: 8px;">Welcome Back</h2>
+                <p style="color: var(--ink-2); font-size: 14px;">Enter your credentials to access your projects.</p>
+            </div>
+
+            <form method="POST" action="{% url 'login' %}" style="display: flex; flex-direction: column; gap: 18px;">
+                {% csrf_token %}
+                
+                {% if form.non_field_errors %}
+                    <div style="background: var(--error-tint); border: 1px solid var(--error-text); border-radius: 6px; padding: 12px; color: var(--error-text); font-size: 13px;">
+                        {% for error in form.non_field_errors %}
+                            <p style="margin: 0;">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+                <div>
+                    <label for="id_username" style="display: block; font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 6px;">Username</label>
+                    <input type="text" name="username" autofocus required id="id_username" placeholder="Enter your username">
+                    {% if form.username.errors %}
+                        <span style="color: var(--error-text); font-size: 12px; margin-top: 4px; display: block;">{{ form.username.errors.0 }}</span>
+                    {% endif %}
+                </div>
+
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <label for="id_password" style="font-size: 13px; font-weight: 600; color: var(--ink);">Password</label>
+                        <a href="{% url 'forgot_password' %}" style="font-size: 13px; color: var(--brand); text-decoration: none;">Forgot?</a>
+                    </div>
+                    <input type="password" name="password" required id="id_password" placeholder="••••••••">
+                    {% if form.password.errors %}
+                        <span style="color: var(--error-text); font-size: 12px; margin-top: 4px; display: block;">{{ form.password.errors.0 }}</span>
+                    {% endif %}
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-lg" style="width: 100%; margin-top: 8px;">
+                    Log In
+                </button>
+            </form>
+
+            <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); font-size: 14px; color: var(--ink-2); text-align: center;">
+                Don't have an account? <a href="{% url 'signup' %}" style="color: var(--brand); font-weight: 600; text-decoration: none;">Sign Up free</a>
+            </div>
         </div>
-        
-        <form method="POST" action="{% url 'login' %}" class="auth-form">
-            {% csrf_token %}
-            
-            {% if form.non_field_errors %}
-                <div class="form-errors">
-                    {% for error in form.non_field_errors %}
-                        <p class="error-msg">{{ error }}</p>
-                    {% endfor %}
-                </div>
-            {% endif %}
-            
-            <div class="form-group">
-                <label for="id_username">Username</label>
-                <input type="text" name="username" autofocus required id="id_username" class="form-control" placeholder="Enter Username">
-                {% if form.username.errors %}
-                    <span class="field-error">{{ form.username.errors.0 }}</span>
-                {% endif %}
+    </div>
+
+    <!-- Right Column: Product Preview Panel (§8) -->
+    <div style="background: var(--surface-sunken); border-left: 1px solid var(--border); padding: 48px; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; box-shadow: var(--shadow-md); max-width: 440px; width: 100%;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+                <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--success-solid);"></span>
+                <span style="font-size: 12px; font-weight: 600; color: var(--ink);">clinic-booking-api / views.py</span>
             </div>
-            
-            <div class="form-group">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <label for="id_password" style="margin-bottom: 0;">Password</label>
-                    <a href="{% url 'forgot_password' %}" style="font-size: 13px; font-weight: 500;">Forgot Password?</a>
-                </div>
-                <input type="password" name="password" required id="id_password" class="form-control" placeholder="Enter Password">
-                {% if form.password.errors %}
-                    <span class="field-error">{{ form.password.errors.0 }}</span>
-                {% endif %}
+            <pre style="font-family: var(--font-mono); font-size: 12px; line-height: 1.6; color: var(--ink); background: var(--surface-sunken); padding: 14px; border-radius: 6px; border: 1px solid var(--border); overflow: hidden;">
+<span style="color: var(--code-keyword);">class</span> <span style="color: var(--code-type);">AppointmentViewSet</span>(viewsets.ModelViewSet):
+    queryset = Appointment.objects.all()
+    serializer_class = AppointmentSerializer
+
+    <span style="color: var(--code-keyword);">def</span> <span style="color: var(--code-function);">perform_create</span>(self, serializer):
+        appointment = serializer.save()
+        send_confirmation_sms(appointment)
+</pre>
+            <div style="margin-top: 16px; font-size: 13px; color: var(--ink-2); display: flex; align-items: center; justify-content: space-between;">
+                <span>✓ Verified Architecture</span>
+                <span class="badge badge-success">0 Lint Errors</span>
             </div>
-            
-            <button type="submit" class="btn btn-primary btn-full btn-lg">
-                Log In <i data-lucide="log-in" class="icon-inline"></i>
-            </button>
-        </form>
-        
-        <div class="auth-footer">
-            <p>Don't have an account? <a href="{% url 'signup' %}">Sign Up free</a></p>
         </div>
     </div>
 </div>

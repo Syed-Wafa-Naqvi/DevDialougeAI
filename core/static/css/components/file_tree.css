@@ -1,0 +1,138 @@
+/* ==========================================================================
+   DevDialogue AI — File Tree & Code Viewer Components (§4.7)
+   ========================================================================== */
+
+.file-tree-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background-color: var(--sheet);
+}
+
+.file-tree-toolbar {
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--rule);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.file-search-input {
+    font-size: var(--text-sm);
+    padding: var(--space-1) var(--space-3);
+}
+
+.tree-view-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-2);
+    list-style: none;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+}
+
+.tree-node {
+    user-select: none;
+}
+
+.tree-item-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    color: var(--ink);
+    transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.tree-item-row:hover {
+    background-color: var(--paper);
+}
+
+.tree-item-row.active {
+    background-color: var(--blueprint-bg);
+    color: var(--blueprint);
+}
+
+.tree-item-left {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tree-chevron-icon {
+    width: 14px;
+    height: 14px;
+    color: var(--pencil);
+    transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.tree-node.expanded > .tree-item-row .tree-chevron-icon {
+    transform: rotate(90deg);
+}
+
+.tree-children {
+    padding-left: var(--space-4);
+    display: none;
+}
+
+.tree-node.expanded > .tree-children {
+    display: block;
+}
+
+/* Code Viewer Sticky Header & Highlighting (§4.7) */
+.code-viewer-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background-color: var(--sheet);
+}
+
+.code-viewer-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    height: 48px;
+    background-color: var(--sheet);
+    border-bottom: 1px solid var(--rule);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 var(--space-4);
+}
+
+.code-viewer-path {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.code-scroll-pane {
+    flex: 1;
+    overflow: auto;
+    padding: var(--space-4);
+    background-color: var(--sheet);
+}
+
+.code-scroll-pane pre {
+    margin: 0;
+    background: transparent !important;
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    line-height: var(--lh-code);
+}
+
+/* Line Highlighting when opened from Verification issue */
+.code-line-highlight {
+    background-color: var(--warn-bg);
+    display: block;
+    width: 100%;
+}

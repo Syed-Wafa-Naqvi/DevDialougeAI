@@ -1,48 +1,65 @@
 {% extends 'base.html' %}
-{% block title %}Verify Account - DevDialogue AI{% endblock %}
+{% load static %}
+
+{% block title %}Verify Account — DevDialogue AI{% endblock %}
+{% block page_namespace %}auth{% endblock %}
 
 {% block content %}
-<div class="auth-wrapper">
-    <div class="auth-card glass-card">
-        <div class="auth-header">
-            <h2>Verify Your Email</h2>
-            <p>We've sent a 6-digit OTP code to the email address: <br><strong>{{ email }}</strong></p>
-        </div>
-        
-        <form method="POST" action="{% url 'verify_otp' %}" class="auth-form">
-            {% csrf_token %}
-            
-            {% if form.non_field_errors %}
-                <div class="form-errors">
-                    {% for error in form.non_field_errors %}
-                        <p class="error-msg">{{ error }}</p>
-                    {% endfor %}
-                </div>
-            {% endif %}
-            
-            <div class="form-group text-center">
-                <label for="{{ form.otp.id_for_label }}">Verification Code</label>
-                {{ form.otp }}
-                {% if form.otp.errors %}
-                    <span class="field-error">{{ form.otp.errors.0 }}</span>
+<div style="min-height: calc(100vh - 60px); display: grid; grid-template-columns: 1fr 1fr; background: var(--canvas);">
+    <!-- Left Column: Form -->
+    <div style="display: flex; align-items: center; justify-content: center; padding: 48px 32px; background: var(--surface);">
+        <div style="width: 100%; max-width: 400px;">
+            <div style="margin-bottom: 28px; text-align: center;">
+                <div style="width: 36px; height: 36px; background: var(--brand); border-radius: 8px; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 16px;">D</div>
+                <h2 style="font-size: var(--text-heading); font-weight: 700; color: var(--ink); margin-bottom: 6px;">Verify Your Email</h2>
+                <p style="color: var(--ink-2); font-size: 14px;">We've sent a 6-digit OTP code to: <br><strong style="color: var(--brand);">{{ email }}</strong></p>
+            </div>
+
+            <form method="POST" action="{% url 'verify_otp' %}" style="display: flex; flex-direction: column; gap: 20px;">
+                {% csrf_token %}
+                
+                {% if form.non_field_errors %}
+                    <div style="background: var(--error-tint); border: 1px solid var(--error-text); border-radius: 6px; padding: 12px; color: var(--error-text); font-size: 13px;">
+                        {% for error in form.non_field_errors %}
+                            <p style="margin: 0;">{{ error }}</p>
+                        {% endfor %}
+                    </div>
                 {% endif %}
-                <p class="help-text">Please check your email client or the local terminal output for the OTP code.</p>
-            </div>
-            
-            <button type="submit" class="btn btn-primary btn-full btn-lg">
-                Verify Code & Activate Account
-            </button>
-            
-            <div class="otp-countdown-container text-center" style="margin-top: 20px; font-size: 14px;">
-                <p id="countdown-text" style="color: var(--text-secondary);">Code expires in: <strong id="otp-timer" style="color: var(--accent); font-family: monospace; font-size: 16px;">02:00</strong></p>
-                <div id="resend-container" class="hidden">
-                    <p style="color: var(--text-secondary);">Didn't receive the code? <a href="#" id="btn-resend-otp" onclick="resendOTP(event)" style="color: var(--accent); font-weight: 600; text-decoration: underline;">Resend OTP</a></p>
+
+                <div style="text-align: center;">
+                    <label for="{{ form.otp.id_for_label }}" style="display: block; font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 10px;">Verification Code</label>
+                    <div style="max-width: 260px; margin: 0 auto;">
+                        {{ form.otp }}
+                    </div>
+                    {% if form.otp.errors %}
+                        <span style="color: var(--error-text); font-size: 12px; margin-top: 6px; display: block;">{{ form.otp.errors.0 }}</span>
+                    {% endif %}
                 </div>
+
+                <button type="submit" class="btn btn-primary btn-lg" style="width: 100%;">
+                    Verify & Activate Account
+                </button>
+
+                <div style="text-align: center; font-size: 14px; color: var(--ink-2);">
+                    <p id="countdown-text">Code expires in: <strong id="otp-timer" style="color: var(--brand); font-family: var(--font-mono); font-size: 15px;">02:00</strong></p>
+                    <div id="resend-container" style="display: none;">
+                        <p>Didn't receive the code? <a href="#" id="btn-resend-otp" onclick="resendOTP(event)" style="color: var(--brand); font-weight: 600; text-decoration: underline;">Resend OTP</a></p>
+                    </div>
+                </div>
+            </form>
+
+            <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); font-size: 14px; color: var(--ink-2); text-align: center;">
+                Wrong email? <a href="{% url 'signup' %}" style="color: var(--brand); font-weight: 600; text-decoration: none;">Sign Up again</a>
             </div>
-        </form>
-        
-        <div class="auth-footer">
-            <p>Wrong email? <a href="{% url 'signup' %}">Sign Up with another account</a></p>
+        </div>
+    </div>
+
+    <!-- Right Column: Product Preview Panel -->
+    <div style="background: var(--surface-sunken); border-left: 1px solid var(--border); padding: 48px; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; box-shadow: var(--shadow-md); max-width: 440px; width: 100%; text-align: center;">
+            <div style="width: 48px; height: 48px; background: var(--success-tint); color: var(--success-solid); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-weight: 700; font-size: 20px;">✓</div>
+            <h3 style="font-size: 18px; font-weight: 600; color: var(--ink); margin-bottom: 8px;">Automated Security Check</h3>
+            <p style="font-size: 14px; color: var(--ink-2); line-height: 1.5;">Your account is protected with email verification and session encryption.</p>
         </div>
     </div>
 </div>
@@ -50,7 +67,7 @@
 
 {% block extra_js %}
 <script>
-    let timerDuration = 120; // 2 minutes in seconds
+    let timerDuration = 120;
     let intervalId = null;
 
     function startTimer() {
@@ -60,18 +77,18 @@
         const countdownText = document.getElementById('countdown-text');
         const resendContainer = document.getElementById('resend-container');
         
-        countdownText.classList.remove('hidden');
-        resendContainer.classList.add('hidden');
+        if (countdownText) countdownText.style.display = 'block';
+        if (resendContainer) resendContainer.style.display = 'none';
 
         intervalId = setInterval(() => {
             const minutes = Math.floor(timeRemaining / 60);
             const seconds = timeRemaining % 60;
-            timerSpan.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            if (timerSpan) timerSpan.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
             
             if (timeRemaining <= 0) {
                 clearInterval(intervalId);
-                countdownText.classList.add('hidden');
-                resendContainer.classList.remove('hidden');
+                if (countdownText) countdownText.style.display = 'none';
+                if (resendContainer) resendContainer.style.display = 'block';
             }
             timeRemaining--;
         }, 1000);
@@ -80,9 +97,9 @@
     async function resendOTP(event) {
         event.preventDefault();
         const resendBtn = document.getElementById('btn-resend-otp');
+        if (!resendBtn) return;
         const origText = resendBtn.textContent;
         resendBtn.textContent = 'Sending...';
-        resendBtn.style.pointerEvents = 'none';
 
         try {
             const response = await fetch("{% url 'resend_otp' %}", {
@@ -94,62 +111,15 @@
             });
             const data = await response.json();
             if (response.ok && data.success) {
-                // Show temporary success message
-                showTemporaryMessage(data.message, 'success');
-                // Restart timer
                 startTimer();
-            } else {
-                showTemporaryMessage(data.error || 'Failed to resend OTP.', 'error');
             }
         } catch (err) {
-            showTemporaryMessage('Network error. Please try again.', 'error');
+            console.error(err);
         } finally {
             resendBtn.textContent = origText;
-            resendBtn.style.pointerEvents = 'auto';
         }
     }
 
-    function showTemporaryMessage(text, type) {
-        const existingAlerts = document.querySelectorAll('.dynamic-alert');
-        existingAlerts.forEach(a => a.remove());
-
-        const alertDiv = document.createElement('div');
-        alertDiv.className = `alert alert-${type} dynamic-alert glass-card`;
-        alertDiv.style.cssText = 'position: fixed; top: 80px; right: 20px; z-index: 1000; padding: 15px 25px; border-radius: 8px; animation: slideIn 0.3s ease; display: flex; align-items: center; gap: 10px;';
-        
-        if (type === 'success') {
-            alertDiv.style.border = '1px solid rgba(16, 185, 129, 0.3)';
-            alertDiv.style.background = 'rgba(16, 185, 129, 0.15)';
-            alertDiv.style.color = '#10b981';
-        } else {
-            alertDiv.style.border = '1px solid rgba(239, 68, 68, 0.3)';
-            alertDiv.style.background = 'rgba(239, 68, 68, 0.15)';
-            alertDiv.style.color = '#ef4444';
-        }
-
-        alertDiv.innerHTML = `<i data-lucide="${type === 'success' ? 'check-circle' : 'alert-circle'}"></i> <span>${text}</span>`;
-        document.body.appendChild(alertDiv);
-        lucide.createIcons();
-
-        setTimeout(() => {
-            alertDiv.style.animation = 'slideOut 0.3s ease';
-            setTimeout(() => alertDiv.remove(), 300);
-        }, 3000);
-    }
-
-    // Start timer on page load
-    window.addEventListener('DOMContentLoaded', () => {
-        startTimer();
-    });
+    window.addEventListener('DOMContentLoaded', startTimer);
 </script>
-<style>
-    @keyframes slideIn {
-        from { transform: translateX(120%); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
-    }
-    @keyframes slideOut {
-        from { transform: translateX(0); opacity: 1; }
-        to { transform: translateX(120%); opacity: 0; }
-    }
-</style>
 {% endblock %}

@@ -1,100 +1,85 @@
 {% extends 'base.html' %}
-{% block title %}Dashboard - DevDialogue AI{% endblock %}
+{% load static %}
+
+{% block title %}Dashboard & Projects — DevDialogue AI{% endblock %}
+{% block page_namespace %}home{% endblock %}
 
 {% block content %}
-<div class="dashboard-wrapper">
-    <!-- User Overview Panel -->
-    <div class="dashboard-header-panel glass-card">
-        <div class="user-info-section">
-            <h2>Welcome, {{ user.username }}!</h2>
-            <p>Develop smarter, requirement-aware codebases using AI dialogue.</p>
+<div style="max-width: 1200px; margin: 0 auto; padding: 40px 24px;">
+    <!-- Studio Light Composer Card (§4, §8) -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-xl); padding: 36px; margin-bottom: 40px; box-shadow: var(--shadow-md);">
+        <div style="margin-bottom: 24px;">
+            <span class="badge badge-brand" style="margin-bottom: 12px;">AI Composer</span>
+            <h1 style="font-size: var(--text-hero); font-weight: 700; color: var(--ink); margin-bottom: 10px;">What do you want to build?</h1>
+            <p style="color: var(--ink-2); font-size: var(--text-lead); max-width: 600px;">
+                Describe your application idea. DevDialogue AI will interview you, construct blueprints, and write verified code.
+            </p>
         </div>
-        <div class="plan-status-section">
-            <span class="plan-label">Current Plan</span>
-            <div class="plan-tag {{ profile.plan }}">{{ profile.plan|upper }}</div>
-            {% if profile.plan == 'basic' %}
-                <a href="{% url 'home' %}#pricing" class="upgrade-link">Upgrade to Pro <i data-lucide="zap" class="icon-inline"></i></a>
-            {% endif %}
-        </div>
-    </div>
-    
-    <div class="dashboard-grid">
-        <!-- Launch Workspace Form -->
-        <div class="launch-card glass-card">
-            <h3>Start New AI Workspace</h3>
-            <p class="section-desc">Briefly describe the software system you want to generate. The AI will interview you regarding modules, behavior, and data schemas.</p>
-            
-            <form method="POST" action="{% url 'create_session' %}" class="session-create-form">
-                {% csrf_token %}
+
+        <form method="POST" action="{% url 'create_session' %}">
+            {% csrf_token %}
+            <div style="background: var(--surface-sunken); border: 1px solid var(--border-strong); border-radius: var(--r-lg); padding: 16px; margin-bottom: 20px;">
+                <textarea name="description" rows="3" style="background: transparent; border: none; width: 100%; color: var(--ink); font-family: var(--font-sans); font-size: 15px; outline: none; resize: none;" placeholder="e.g. 'A real-time Library Management System with Django, SQLite schema, borrow limits, and fine notifications...'" required></textarea>
                 
-                <div class="form-group">
-                    <label>Execution Mode</label>
-                    <div class="mode-selector-grid">
-                        <label class="mode-card">
-                            <input type="radio" name="mode" value="mode1" checked>
-                            <div class="mode-card-content">
-                                <span class="mode-title">Mode 1: Dialogue-Driven</span>
-                                <span class="mode-desc">Full conversation interview first, then generates complete codebase at once.</span>
-                            </div>
+                <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 14px; border-top: 1px solid var(--border); margin-top: 12px; flex-wrap: wrap; gap: 12px;">
+                    <div style="display: flex; gap: 16px; align-items: center;">
+                        <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); cursor: pointer; font-weight: 500;">
+                            <input type="radio" name="mode" value="mode1" checked /> All at Once (Dialogue-Driven)
                         </label>
-                        
-                        <label class="mode-card">
-                            <input type="radio" name="mode" value="mode2">
-                            <div class="mode-card-content">
-                                <span class="mode-title">Mode 2: Incremental</span>
-                                <span class="mode-desc">Iterates and generates code component-by-component, seeking feedback at each step.</span>
-                            </div>
+                        <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); cursor: pointer; font-weight: 500;">
+                            <input type="radio" name="mode" value="mode2" /> File by File (Incremental)
                         </label>
                     </div>
+                    <button type="submit" class="btn btn-primary">
+                        Create Workspace
+                    </button>
                 </div>
-                
-                <div class="form-group">
-                    <label for="project-description">Initial Project Concept</label>
-                    <textarea name="description" id="project-description" rows="5" class="form-control" placeholder="Describe the application you want to build (e.g., 'A library management system with user login, borrow records, and overdue fines calculations')." required></textarea>
-                </div>
-                
-                <button type="submit" class="btn btn-primary btn-lg btn-full">
-                    Launch AI Dialogue Engine <i data-lucide="play" class="icon-inline"></i>
-                </button>
-            </form>
+            </div>
+        </form>
+
+        <!-- Example Chips -->
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <span style="font-size: 12px; color: var(--ink-3); font-weight: 600; text-transform: uppercase;">Examples:</span>
+            <button type="button" class="btn btn-ghost btn-sm" style="border: 1px solid var(--border);" onclick="document.querySelector('textarea[name=description]').value='Library Management System with borrow limits and member tiers';">📚 Library System</button>
+            <button type="button" class="btn btn-ghost btn-sm" style="border: 1px solid var(--border);" onclick="document.querySelector('textarea[name=description]').value='E-commerce store with product categories, shopping cart, and Stripe integration';">🛒 E-Commerce App</button>
+            <button type="button" class="btn btn-ghost btn-sm" style="border: 1px solid var(--border);" onclick="document.querySelector('textarea[name=description]').value='RESTful API for Task Management with JWT Auth and WebSocket notifications';">⚡ Task API Engine</button>
         </div>
-        
-        <!-- Previous Workspace Sessions -->
-        <div class="workspaces-card glass-card">
-            <h3>Previous Workspaces</h3>
-            <p class="section-desc">Resume or view generated files from your past design dialogues.</p>
-            
-            {% if sessions %}
-                <div class="sessions-list">
-                    {% for session in sessions %}
-                        <div class="session-item glass-card">
-                            <div class="session-meta">
-                                <span class="session-title">{{ session.title }}</span>
-                                <div class="session-tags">
-                                    <span class="tag-mode">{{ session.get_mode_display }}</span>
-                                    <span class="tag-status status-{{ session.status }}">{{ session.status|title }}</span>
-                                </div>
-                                <div class="session-date">Started {{ session.started_at|date:"M d, Y, h:i A" }}</div>
+    </div>
+
+    <!-- Recent Projects Grid -->
+    <div>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px;">
+            <h2 style="font-size: var(--text-heading); font-weight: 600; color: var(--ink);">Recent Projects</h2>
+            <span style="font-size: 14px; color: var(--ink-3);">{{ sessions|length }} Workspaces</span>
+        </div>
+
+        {% if sessions %}
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px;">
+                {% for session in sessions %}
+                    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 24px; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; justify-content: space-between; transition: box-shadow var(--t-micro) ease, border-color var(--t-micro) ease;">
+                        <div>
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                                <span class="badge badge-brand">{{ session.get_mode_display }}</span>
+                                <span class="badge badge-success">✓ Verified</span>
                             </div>
-                            <div class="session-actions">
-                                <a href="{% url 'chat' session_id=session.id %}" class="btn btn-secondary btn-sm">
-                                    {% if session.status == 'active' %}
-                                        Resume Chat <i data-lucide="message-square" class="icon-inline"></i>
-                                    {% else %}
-                                        View Code <i data-lucide="code" class="icon-inline"></i>
-                                    {% endif %}
-                                </a>
-                            </div>
+                            <h3 style="font-size: 18px; font-weight: 600; color: var(--ink); margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ session.title }}</h3>
+                            <p style="font-size: 12px; color: var(--ink-3); margin-bottom: 20px;">Created {{ session.started_at|date:"M d, Y" }}</p>
                         </div>
-                    {% endfor %}
-                </div>
-            {% else %}
-                <div class="empty-sessions text-center">
-                    <i data-lucide="folder-open" class="empty-icon"></i>
-                    <p>No workspace sessions found. Describe your project concept above to initiate your first design dialogue!</p>
-                </div>
-            {% endif %}
-        </div>
+                        <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 14px; border-top: 1px solid var(--border);">
+                            <span style="font-size: 12px; color: var(--ink-2); font-weight: 500;">Django + Python</span>
+                            <a href="{% url 'chat' session_id=session.id %}" class="btn btn-secondary btn-sm">
+                                Open Workspace
+                            </a>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div style="background: var(--surface); border: 1px dashed var(--border-strong); border-radius: var(--r-lg); padding: 48px 24px; text-align: center;">
+                <h3 style="font-size: 18px; font-weight: 600; color: var(--ink); margin-bottom: 6px;">No projects yet</h3>
+                <p style="color: var(--ink-2); font-size: 14px; max-width: 400px; margin: 0 auto 20px;">Use the composer above to describe your first application idea and start building.</p>
+            </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

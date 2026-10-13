@@ -152,3 +152,42 @@ EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'no-reply@devdialogue.ai')
 
+# LLM Purpose Routing & Configuration
+import sys
+IS_TESTING = 'test' in sys.argv
+
+USE_MOCK_LLM = IS_TESTING or (os.environ.get('USE_MOCK_LLM', 'False') == 'True')
+LLM_LOG_BODIES = os.environ.get('LLM_LOG_BODIES', 'False') == 'True'
+CELERY_TASK_ALWAYS_EAGER = True
+
+LLM_PURPOSE_ROUTING = {
+    'chat': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o-mini'), ('free', 'llama-3.3-70b')],
+    'completeness': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o-mini'), ('free', 'llama-3.3-70b')],
+    'srs': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o'), ('free', 'llama-3.3-70b')],
+    'plan': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o'), ('claude', 'claude-3-5-sonnet-latest'), ('deepseek', 'deepseek-chat'), ('free', 'qwen-2.5-coder')],
+    'codegen': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o'), ('claude', 'claude-3-5-sonnet-latest'), ('deepseek', 'deepseek-chat'), ('free', 'qwen-2.5-coder')],
+    'repair': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o'), ('claude', 'claude-3-5-sonnet-latest'), ('deepseek', 'deepseek-chat'), ('free', 'qwen-2.5-coder')],
+    'summary': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o-mini'), ('free', 'llama-3.3-70b')],
+}
+
+# Phase 7 — Lite Runtime Checks Settings
+RUNTIME_CHECKS_ENABLED = os.environ.get('RUNTIME_CHECKS_ENABLED', 'False') == 'True'
+RUNTIME_CHECKS_VENV_PATH = os.environ.get('RUNTIME_CHECKS_VENV_PATH', sys.executable)
+RUNTIME_CHECKS_TIMEOUT = int(os.environ.get('RUNTIME_CHECKS_TIMEOUT', 60))
+RUNTIME_CHECKS_WORKSPACE_ROOT = os.environ.get('RUNTIME_CHECKS_WORKSPACE_ROOT', None)
+
+# Phase 8 — Security Hardening Settings
+DAILY_USER_TOKEN_LIMIT = int(os.environ.get('DAILY_USER_TOKEN_LIMIT', 500000))
+MAX_CONCURRENT_JOBS_PER_USER = int(os.environ.get('MAX_CONCURRENT_JOBS_PER_USER', 2))
+FIELD_ENCRYPTION_KEY = os.environ.get('FIELD_ENCRYPTION_KEY', None)
+
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+
+
+
+

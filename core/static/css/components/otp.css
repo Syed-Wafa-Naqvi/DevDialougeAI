@@ -1,0 +1,67 @@
+/* ==========================================================================
+   DevDialogue AI — OTP & Sign-In Components (§4.1)
+   ========================================================================== */
+
+.otp-card-container {
+    max-width: 440px;
+    margin: 48px auto;
+    padding: var(--space-6);
+    background-color: var(--sheet);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+    text-align: center;
+}
+
+.otp-digit-grid {
+    display: flex;
+    justify-content: center;
+    gap: var(--space-2);
+}
+
+.otp-digit-input {
+    width: 48px;
+    height: 56px;
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--ink);
+    background-color: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-md);
+    transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.otp-digit-input:focus {
+    border-color: var(--blueprint);
+    background-color: var(--sheet);
+}
+
+.otp-resend-row {
+    font-size: var(--text-sm);
+    color: var(--pencil);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+}
+
+.btn-resend-otp {
+    background: none;
+    border: none;
+    color: var(--blueprint);
+    font-weight: 600;
+    cursor: pointer;
+    font-size: var(--text-sm);
+    padding: 0;
+}
+
+.btn-resend-otp:disabled {
+    color: var(--pencil);
+    cursor: not-allowed;
+    font-weight: 400;
+}

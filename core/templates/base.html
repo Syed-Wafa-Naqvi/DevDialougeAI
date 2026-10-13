@@ -1,164 +1,164 @@
 {% load static %}
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}DevDialogue AI - Requirement-Aware AI Code Generation{% endblock %}</title>
+    <title>{% block title %}DevDialogue AI — Requirement-Aware AI System Builder{% endblock %}</title>
+    <meta name="description" content="DevDialogue AI turns natural language requirements into verified production software through autonomous dialogue, blueprints, and multi-file code synthesis.">
     
-    <!-- Google Fonts -->
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="{% static 'img/favicon.svg' %}">
+    <link rel="alternate icon" type="image/x-icon" href="{% static 'img/favicon.ico' %}">
+    
+    <!-- Anti-Flash Inline Theme Bootstrap (Default Studio Light §3.1) -->
+    <script>
+        (function() {
+            const saved = localStorage.getItem('devdialogue_theme');
+            if (saved === 'dim' || saved === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dim');
+            } else {
+                document.documentElement.setAttribute('data-theme', 'light');
+            }
+        })();
+    </script>
+
+    <!-- Google Fonts (§4): Instrument Sans & JetBrains Mono -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
-    
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400..700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <!-- Vendored Libraries -->
+    <script src="{% static 'vendor/gsap.min.js' %}"></script>
+    <script src="{% static 'vendor/ScrollTrigger.min.js' %}"></script>
+    <script src="{% static 'vendor/Flip.min.js' %}"></script>
+    <script src="{% static 'vendor/lenis.min.js' %}"></script>
+    <script src="{% static 'vendor/barba.min.js' %}"></script>
+    <script src="{% static 'vendor/three.min.js' %}"></script>
+    <script src="{% static 'vendor/purify.min.js' %}"></script>
+    <script src="{% static 'vendor/marked.min.js' %}"></script>
+
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    
-    <!-- Custom CSS -->
+
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="{% static 'css/tokens.css' %}">
+    <link rel="stylesheet" href="{% static 'css/base.css' %}">
+    <link rel="stylesheet" href="{% static 'css/layout.css' %}">
+    <link rel="stylesheet" href="{% static 'css/components/stepper.css' %}">
+    <link rel="stylesheet" href="{% static 'css/components/orb.css' %}">
+    <link rel="stylesheet" href="{% static 'css/components/command_palette.css' %}">
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
-    
+
+    <!-- App Entry -->
+    <script type="module" src="{% static 'js/app.js' %}"></script>
     {% block extra_head %}{% endblock %}
 </head>
-<body class="{% block body_class %}{% endblock %}">
-    <!-- Background elements for ambient glow -->
-    <div class="ambient-glow glow-1"></div>
-    <div class="ambient-glow glow-2"></div>
-    
-    <!-- Navigation -->
-    <nav class="navbar">
-        <div class="nav-container">
-            <a href="{% url 'home' %}" class="nav-brand">
-                <span class="brand-gradient">DevDialogue AI</span>
+<body data-barba="wrapper" class="{% block body_class %}{% endblock %}">
+    <!-- Top Progress Bar -->
+    <div class="top-progress-bar"></div>
+
+    <!-- Navigation Header (§8) -->
+    <header class="navbar" style="background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100;">
+        <div class="nav-container" style="max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; padding: 12px 24px;">
+            <a href="{% url 'home' %}" class="nav-brand" style="display: flex; align-items: center; gap: 10px; text-decoration: none;">
+                <div class="brand-mark" style="width: 32px; height: 32px; background: var(--brand); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700;">D</div>
+                <span style="font-weight: 700; font-size: 1.125rem; color: var(--ink);">DevDialogue AI</span>
             </a>
             
-            <div class="nav-menu">
-                <a href="{% url 'features' %}" class="nav-link">Features</a>
-                <a href="{% url 'pricing' %}" class="nav-link">Pricing</a>
-                <a href="{% url 'about' %}" class="nav-link">About & Contact</a>
-                {% if user.is_authenticated %}
-                    <a href="{% url 'dashboard' %}" class="nav-link">Dashboard</a>
-                    <div class="user-dropdown-container">
-                        <button class="user-dropdown-trigger" id="userDropdownTrigger" aria-haspopup="true" aria-expanded="false">
-                            {% if user.profile.profile_picture %}
-                                <img src="{{ user.profile.profile_picture.url }}" alt="{{ user.username }}" class="user-avatar-img">
-                            {% else %}
-                                <div class="user-avatar-initials">{{ user.username|slice:":1"|upper }}</div>
-                            {% endif %}
-                            <span class="user-dropdown-username">{{ user.username }}</span>
-                            <i data-lucide="chevron-down" class="chevron-icon"></i>
-                        </button>
-                        
-                        <div class="dropdown-menu-card glass-card" id="userDropdownMenu">
-                            <div class="dropdown-header">
-                                {% if user.profile.profile_picture %}
-                                    <img src="{{ user.profile.profile_picture.url }}" alt="{{ user.username }}" class="user-avatar-img lg">
-                                {% else %}
-                                    <div class="user-avatar-initials lg">{{ user.username|slice:":1"|upper }}</div>
-                                {% endif %}
-                                <div class="dropdown-header-info">
-                                    <span class="dropdown-username">{{ user.username }}</span>
-                                    <span class="dropdown-plan-badge {{ user.profile.plan }}">{{ user.profile.get_plan_display }}</span>
-                                </div>
-                            </div>
-                            <div class="dropdown-divider"></div>
-                            <a href="{% url 'settings' %}" class="dropdown-item">
-                                <i data-lucide="settings" class="dropdown-item-icon"></i> Account Settings
-                            </a>
-                            <a href="{% url 'settings' %}?action=password" class="dropdown-item">
-                                <i data-lucide="key-round" class="dropdown-item-icon"></i> Change Password
-                            </a>
-                            <div class="dropdown-divider"></div>
-                            <a href="{% url 'logout' %}" class="dropdown-item text-danger">
-                                <i data-lucide="log-out" class="dropdown-item-icon"></i> Log Out
-                            </a>
-                        </div>
-                    </div>
-                {% else %}
-                    <a href="{% url 'login' %}" class="nav-link">Log In</a>
-                    <a href="{% url 'signup' %}" class="btn btn-primary btn-sm">Get Started</a>
-                {% endif %}
+            <nav class="nav-menu" style="display: flex; align-items: center; gap: 16px;">
+                <a href="{% url 'features' %}" class="btn btn-ghost">Features</a>
+                <a href="{% url 'pricing' %}" class="btn btn-ghost">Pricing</a>
+                <a href="{% url 'about' %}" class="btn btn-ghost">About</a>
+                <a href="{% url 'styleguide' %}" class="btn btn-ghost" title="Styleguide">Styleguide</a>
                 
-                <!-- Theme Toggle Button -->
-                <button id="theme-toggle" class="theme-toggle-btn" aria-label="Toggle Theme">
-                    <i data-lucide="sun" class="sun-icon"></i>
-                    <i data-lucide="moon" class="moon-icon"></i>
+                {% if user.is_authenticated %}
+                    <a href="{% url 'dashboard' %}" class="btn btn-secondary btn-sm">Projects</a>
+                    <a href="{% url 'settings' %}" class="btn btn-ghost btn-sm" aria-label="Settings"><i data-lucide="settings"></i></a>
+                    <a href="{% url 'logout' %}" class="btn btn-ghost btn-sm text-danger" aria-label="Logout"><i data-lucide="log-out"></i></a>
+                {% else %}
+                    <a href="{% url 'login' %}" class="btn btn-ghost">Log In</a>
+                    <a href="{% url 'signup' %}" class="btn btn-primary">Start Building</a>
+                {% endif %}
+
+                <!-- Theme Toggle Button (§3.2) -->
+                <button id="theme-toggle" class="btn btn-ghost" style="padding: 6px 10px;" aria-label="Toggle Studio Light / Dim Theme" title="Toggle Light/Dim Theme">
+                    <i data-lucide="sun" id="theme-icon"></i>
                 </button>
-            </div>
+            </nav>
         </div>
-    </nav>
-    
-    <!-- Toast Messages -->
-    {% if messages %}
-    <div class="messages-container">
-        {% for message in messages %}
-        <div class="alert alert-{{ message.tags }}">
-            <i data-lucide="{% if message.tags == 'error' %}alert-circle{% elif message.tags == 'success' %}check-circle{% else %}info{% endif %}" class="alert-icon"></i>
-            <span class="alert-text">{{ message.message }}</span>
-            <button class="alert-close" onclick="this.parentElement.remove();">&times;</button>
-        </div>
-        {% endfor %}
+    </header>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="toast toast-{{ message.tags }}">
+                    <i data-lucide="{% if message.tags == 'error' %}alert-circle{% elif message.tags == 'success' %}check-circle{% else %}info{% endif %}"></i>
+                    <span>{{ message.message }}</span>
+                </div>
+            {% endfor %}
+        {% endif %}
     </div>
-    {% endif %}
-    
-    <!-- Main Content -->
-    <main class="main-content-wrapper">
+
+    <!-- Command Palette Dialog (`Ctrl+K`) -->
+    <dialog id="command-palette" class="command-palette-dialog">
+        <div class="palette-input-row">
+            <i data-lucide="search" style="color: var(--brand);"></i>
+            <input type="text" id="palette-search-input" class="palette-search-input" placeholder="Type a command or search projects... (Press Esc to close)" />
+        </div>
+        <ul id="palette-results" class="palette-results-list">
+            <li class="palette-item selected" data-action="new-project">
+                <span><i data-lucide="plus"></i> Create New Project</span>
+                <span class="palette-shortcut-badge">N</span>
+            </li>
+            <li class="palette-item" data-action="theme-toggle">
+                <span><i data-lucide="sun-moon"></i> Toggle Light/Dim Theme</span>
+                <span class="palette-shortcut-badge">T</span>
+            </li>
+            <li class="palette-item" data-action="settings">
+                <span><i data-lucide="settings"></i> Open Settings</span>
+                <span class="palette-shortcut-badge">S</span>
+            </li>
+        </ul>
+    </dialog>
+
+    <!-- Main Container -->
+    <main data-barba="container" data-barba-namespace="{% block page_namespace %}default{% endblock %}" class="page-container">
         {% block content %}{% endblock %}
     </main>
-    
-    <!-- Footer -->
-    <footer class="footer">
-        <div class="footer-container">
-            <p>&copy; 2026 DevDialogue AI. Built for BSCS Final Year Project. All rights reserved.</p>
-        </div>
-    </footer>
-    
-    <!-- Lucide Icon Initialization & Theme Handler -->
-    <script>
-        // Theme toggling logic
-        const themeToggleBtn = document.getElementById('theme-toggle');
-        const currentTheme = localStorage.getItem('theme') || 'dark';
-        
-        document.documentElement.setAttribute('data-theme', currentTheme);
-        
-        themeToggleBtn.addEventListener('click', () => {
-            let theme = document.documentElement.getAttribute('data-theme');
-            let newTheme = theme === 'dark' ? 'light' : 'dark';
-            document.documentElement.setAttribute('data-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
-        });
-        
-        // Auto-fade alerts after 3 seconds
-        document.querySelectorAll('.messages-container .alert').forEach(alert => {
-            setTimeout(() => {
-                alert.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
-                alert.style.opacity = '0';
-                alert.style.transform = 'translateY(-20px)';
-                setTimeout(() => alert.remove(), 500);
-            }, 3000);
-        });
-        
-        // Initialize lucide icons
-        lucide.createIcons();
 
-        // User dropdown toggling
-        const dropdownTrigger = document.getElementById('userDropdownTrigger');
-        const dropdownMenu = document.getElementById('userDropdownMenu');
-        
-        if (dropdownTrigger && dropdownMenu) {
-            dropdownTrigger.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const isExpanded = dropdownTrigger.getAttribute('aria-expanded') === 'true';
-                dropdownTrigger.setAttribute('aria-expanded', !isExpanded);
-                dropdownMenu.classList.toggle('active');
-            });
-            
-            document.addEventListener('click', (e) => {
-                if (!dropdownMenu.contains(e.target) && !dropdownTrigger.contains(e.target)) {
-                    dropdownTrigger.setAttribute('aria-expanded', 'false');
-                    dropdownMenu.classList.remove('active');
+    <!-- Lucide Icon Init & Theme Script -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+
+            // Sync theme button icon
+            const updateThemeIcon = () => {
+                const current = document.documentElement.getAttribute('data-theme') || 'light';
+                const iconElem = document.getElementById('theme-icon');
+                if (iconElem) {
+                    iconElem.setAttribute('data-lucide', current === 'dim' ? 'sun' : 'moon');
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
                 }
-            });
-        }
+            };
+
+            updateThemeIcon();
+
+            const themeBtn = document.getElementById('theme-toggle');
+            if (themeBtn) {
+                themeBtn.addEventListener('click', () => {
+                    const current = document.documentElement.getAttribute('data-theme') || 'light';
+                    const next = current === 'light' ? 'dim' : 'light';
+                    document.documentElement.setAttribute('data-theme', next);
+                    localStorage.setItem('devdialogue_theme', next);
+                    localStorage.setItem('theme', next);
+                    updateThemeIcon();
+                });
+            }
+        });
     </script>
     {% block extra_js %}{% endblock %}
 </body>

@@ -3,6 +3,15 @@
 
 {% block body_class %}chat-page-body{% endblock %}
 
+{% block extra_head %}
+<!-- Prism.js Syntax Highlighting Theme -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markup.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+{% endblock %}
+
 {% block content %}
 <div class="chat-app-layout">
     <!-- Left Sidebar: Conversations History & Settings -->
@@ -147,6 +156,10 @@
                 {% endif %}
                 <span class="username-text">{{ user.username }}</span>
             </a>
+            <button type="button" class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Light / Dark Theme">
+                <i data-lucide="sun" class="sun-icon"></i>
+                <i data-lucide="moon" class="moon-icon"></i>
+            </button>
             <a href="{% url 'settings' %}" class="sidebar-settings-btn" title="Settings">
                 <i data-lucide="settings" class="footer-settings-icon"></i>
             </a>
@@ -156,24 +169,111 @@
     <!-- Main Chat Workspace Wrapper -->
     <div class="chat-main-wrapper" id="chatMainWrapper">
         <!-- Top Navbar -->
-        <header class="chat-topbar">
-            <div class="topbar-left">
-                <button type="button" class="sidebar-hamburger-btn" onclick="toggleSidebarMobile()">
+        <!-- Top Navbar with 5-Stage Stepper & Presence Orb (§4, §6.4) -->
+        <header class="chat-topbar" style="background: var(--surface-sunken); border-bottom: 1px solid var(--border); padding: 0 20px; height: 48px; display: flex; align-items: center; justify-content: space-between;">
+            <div class="topbar-left" style="display: flex; align-items: center; gap: 14px;">
+                <button type="button" class="sidebar-toggle-btn" onclick="toggleSidebarMobile()" style="background: none; border: none; color: var(--ink-2); cursor: pointer;">
                     <i data-lucide="menu"></i>
                 </button>
-                <h3 class="topbar-title" onclick="startRenameSession(event, {{ session.id }}, '{% url 'rename_session' session_id=session.id %}')" title="Click to rename workspace">
+                <h3 class="topbar-title" onclick="startRenameSession(event, {{ session.id }}, '{% url 'rename_session' session_id=session.id %}')" title="Click to rename workspace" style="font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer; display: flex; align-items: center;">
                     <span id="active-topbar-title-text">{{ session.title }}</span>
-                    <i data-lucide="edit-2" class="title-pencil-icon"></i>
+                    <i data-lucide="edit-2" style="width: 12px; color: var(--ink-3); margin-left: 6px;"></i>
                 </h3>
-                <span class="topbar-mode-badge">{{ session.get_mode_display }}</span>
+                
+                <!-- Build Style Pill -->
+                <span class="badge badge-brand" style="font-size: 11px; font-weight: 500;">
+                    {% if session.mode == 'mode1' %}All at once{% else %}File by file{% endif %}
+                </span>
+
+                <!-- Model Picker Chip -->
+                <span class="badge badge-brand" style="font-size: 11px; font-weight: 500;">
+                    Auto (Recommended)
+                </span>
             </div>
-            
-            <div class="topbar-right">
-                <button type="button" class="btn-topbar-action" onclick="toggleCodeWorkspace()" title="Toggle Code Workspace">
-                    <i data-lucide="code" class="icon-inline"></i> Code View
+
+            <!-- 5-Stage Stepper Bar (§4) -->
+            <div class="stage-stepper-container" id="stage-stepper-row">
+                <button type="button" class="stage-step-btn active" data-stage="discover" onclick="switchWorkspaceStage('discover')">
+                    <span class="stage-step-num">1</span> Discover
+                </button>
+                <span class="stage-step-divider"></span>
+                <button type="button" class="stage-step-btn" data-stage="blueprint" onclick="switchWorkspaceStage('blueprint')">
+                    <span class="stage-step-num">2</span> Blueprint
+                </button>
+                <span class="stage-step-divider"></span>
+                <button type="button" class="stage-step-btn" data-stage="build" onclick="switchWorkspaceStage('build')">
+                    <span class="stage-step-num">3</span> Build
+                </button>
+                <span class="stage-step-divider"></span>
+                <button type="button" class="stage-step-btn" data-stage="review" onclick="switchWorkspaceStage('review')">
+                    <span class="stage-step-num">4</span> Review
+                </button>
+                <span class="stage-step-divider"></span>
+                <button type="button" class="stage-step-btn" data-stage="export" onclick="switchWorkspaceStage('export')">
+                    <span class="stage-step-num">5</span> Export
                 </button>
             </div>
+            
+            <div class="topbar-right" style="display: flex; align-items: center; gap: 14px;">
+                <!-- Living Presence Status Pill (§7.3) -->
+                <div class="presence-status-pill" id="header-presence-orb" data-state="idle" title="AI Architect Status">
+                    <span class="presence-status-icon"></span>
+                    <span class="status-pill-label">Ready</span>
+                </div>
+
+                <a href="{% url 'download_project_zip_api' session_id=session.id %}" class="btn btn-primary btn-sm" id="btn-topbar-export">
+                    <i data-lucide="archive"></i> Export ZIP
+                </a>
+            </div>
         </header>
+
+        <!-- Honest Status Banner & Live Completeness Ticks (§4.5, §4.8, §8) -->
+        <div class="honest-status-bar">
+            <div class="status-indicators">
+                <span class="status-pill {% if generated_codes %}status-static-pass{% else %}status-runtime-off{% endif %}" id="pill-static-checks">
+                    <i data-lucide="shield-check" class="icon-sm"></i> Static: <strong>{% if generated_codes %}Passed ({{ generated_codes.count }} files){% else %}Pre-build (Ready){% endif %}</strong>
+                </span>
+                <span class="status-pill status-runtime-off" id="pill-runtime-checks">
+                    <i data-lucide="terminal" class="icon-sm"></i> Runtime: <strong>Not run (Off)</strong>
+                </span>
+            </div>
+            <div class="interview-completeness-box">
+                <div class="completeness-header">
+                    <span>Elicitation Completeness</span>
+                    <strong id="completeness-score-val">{{ completeness_score|default:0 }}%</strong>
+                </div>
+                <div class="completeness-bar-track">
+                    <div class="completeness-bar-fill" id="completeness-bar-fill" style="width: {{ completeness_score|default:0 }}%;"></div>
+                </div>
+                <div class="completeness-ticks" id="completeness-ticks-row">
+                    <span class="rubric-tick {% if rubric_cats.core_features == 'covered' or rubric_cats.core_features == 'partial' or completeness_score >= 20 %}active{% endif %}">Features {% if rubric_cats.core_features == 'covered' or rubric_cats.core_features == 'partial' or completeness_score >= 20 %}✓{% endif %}</span>
+                    <span class="rubric-tick {% if rubric_cats.tech_stack == 'covered' or rubric_cats.tech_stack == 'partial' or completeness_score >= 35 %}active{% endif %}">Stack {% if rubric_cats.tech_stack == 'covered' or rubric_cats.tech_stack == 'partial' or completeness_score >= 35 %}✓{% endif %}</span>
+                    <span class="rubric-tick {% if rubric_cats.auth_and_roles == 'covered' or rubric_cats.auth_and_roles == 'partial' or completeness_score >= 50 %}active{% endif %}">Roles {% if rubric_cats.auth_and_roles == 'covered' or rubric_cats.auth_and_roles == 'partial' or completeness_score >= 50 %}✓{% endif %}</span>
+                    <span class="rubric-tick {% if rubric_cats.data_model == 'covered' or rubric_cats.data_model == 'partial' or completeness_score >= 65 %}active{% endif %}">Schema {% if rubric_cats.data_model == 'covered' or rubric_cats.data_model == 'partial' or completeness_score >= 65 %}✓{% endif %}</span>
+                    <span class="rubric-tick {% if rubric_cats.integrations == 'covered' or completeness_score >= 80 %}active{% endif %}">Security {% if rubric_cats.integrations == 'covered' or completeness_score >= 80 %}✓{% endif %}</span>
+                    <span class="rubric-tick {% if rubric_cats.deployment == 'covered' or completeness_score >= 90 %}active{% endif %}">Infra {% if rubric_cats.deployment == 'covered' or completeness_score >= 90 %}✓{% endif %}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Background Job Banner -->
+        <div class="active-job-progress-banner glass-card hidden" id="job-progress-banner">
+            <div class="job-banner-header">
+                <div class="job-title-group">
+                    <div class="spinner-sm"></div>
+                    <span class="job-name-text" id="job-name-text">Executing Background Pipeline...</span>
+                </div>
+                <button type="button" class="btn btn-danger btn-sm" id="btn-cancel-job" onclick="cancelActiveJob()">
+                    <i data-lucide="stop-circle" class="icon-inline"></i> Cancel Job
+                </button>
+            </div>
+            <div class="job-bar-track">
+                <div class="job-bar-fill" id="job-bar-fill" style="width: 0%;"></div>
+            </div>
+            <div class="job-log-events" id="job-log-events">
+                <div class="job-event-item">Pipeline initialized...</div>
+            </div>
+        </div>
 
         <!-- Main Body: Chat + Code (Artifacts) -->
         <div class="chat-workspace-container {% if not generated_codes %}collapsed-code{% endif %}" id="chat-workspace-wrapper">
@@ -282,9 +382,17 @@
 
             <!-- Right Side: Code Workspace -->
             <div class="code-workspace-panel glass-card">
-                <div class="code-header">
-                    <h3>Generated Codebase</h3>
-                    <p>Requirements-driven generated files</p>
+                <!-- Panel Mode Selector -->
+                <div class="panel-mode-selector">
+                    <button type="button" class="panel-tab-btn active" id="tab-btn-tree" onclick="switchRightPanel('tree')">
+                        <i data-lucide="folder-tree" class="icon-inline"></i> File Tree
+                    </button>
+                    <button type="button" class="panel-tab-btn" id="tab-btn-plan" onclick="switchRightPanel('plan')">
+                        <i data-lucide="map" class="icon-inline"></i> Architecture Plan
+                    </button>
+                    <button type="button" class="panel-tab-btn" id="tab-btn-verif" onclick="switchRightPanel('verif')">
+                        <i data-lucide="shield-alert" class="icon-inline"></i> Verification & Diffs
+                    </button>
                 </div>
                 
                 <!-- File list tabs -->
@@ -338,6 +446,7 @@
     </div>
 </div>
 {% endblock %}
+
 
 {% block extra_js %}
 <script>
@@ -585,6 +694,28 @@
                         }
                     }
                     
+                    // Update live completeness score & rubric badges (§4.5, §8)
+                    if (data.completeness_score !== undefined) {
+                        const scoreVal = document.getElementById('completeness-score-val');
+                        const barFill = document.getElementById('completeness-bar-fill');
+                        if (scoreVal) scoreVal.textContent = `${data.completeness_score}%`;
+                        if (barFill) barFill.style.width = `${data.completeness_score}%`;
+
+                        const ticksRow = document.getElementById('completeness-ticks-row');
+                        if (ticksRow) {
+                            const score = data.completeness_score;
+                            const cats = data.rubric_cats || {};
+                            ticksRow.innerHTML = `
+                                <span class="rubric-tick ${cats.core_features === 'covered' || cats.core_features === 'partial' || score >= 20 ? 'active' : ''}">Features ${cats.core_features === 'covered' || cats.core_features === 'partial' || score >= 20 ? '✓' : ''}</span>
+                                <span class="rubric-tick ${cats.tech_stack === 'covered' || cats.tech_stack === 'partial' || score >= 35 ? 'active' : ''}">Stack ${cats.tech_stack === 'covered' || cats.tech_stack === 'partial' || score >= 35 ? '✓' : ''}</span>
+                                <span class="rubric-tick ${cats.auth_and_roles === 'covered' || cats.auth_and_roles === 'partial' || score >= 50 ? 'active' : ''}">Roles ${cats.auth_and_roles === 'covered' || cats.auth_and_roles === 'partial' || score >= 50 ? '✓' : ''}</span>
+                                <span class="rubric-tick ${cats.data_model === 'covered' || cats.data_model === 'partial' || score >= 65 ? 'active' : ''}">Schema ${cats.data_model === 'covered' || cats.data_model === 'partial' || score >= 65 ? '✓' : ''}</span>
+                                <span class="rubric-tick ${cats.integrations === 'covered' || score >= 80 ? 'active' : ''}">Security ${cats.integrations === 'covered' || score >= 80 ? '✓' : ''}</span>
+                                <span class="rubric-tick ${cats.deployment === 'covered' || score >= 90 ? 'active' : ''}">Infra ${cats.deployment === 'covered' || score >= 90 ? '✓' : ''}</span>
+                            `;
+                        }
+                    }
+
                     // Auto-update sidebar title after first exchange
                     if (data.title) {
                         const activeItem = document.querySelector('.history-item.active');
@@ -612,12 +743,10 @@
         });
     }
     
-    // Append chat bubbles
+    // Append chat bubbles safely (§4.3, §7.3)
     function appendMessageBubble(role, content) {
         const rowDiv = document.createElement('div');
         rowDiv.className = `message-row ${role === 'user' ? 'user-row' : 'assistant-row'}`;
-        
-        const formattedContent = content.replace(/\n/g, '<br>');
         
         const avatarHTML = role === 'user' 
             ? `<div class="msg-avatar-initials user-avatar">{{ user.username|slice:":1"|upper }}</div>`
@@ -625,20 +754,35 @@
             
         const authorName = role === 'user' ? 'You' : 'DevDialogue AI';
         
-        rowDiv.innerHTML = `
-            <div class="message-bubble">
-                <div class="msg-author">
-                    ${avatarHTML}
-                    <span class="msg-author-name">${authorName}</span>
-                </div>
-                <div class="msg-content">
-                    ${formattedContent}
-                </div>
-            </div>
-        `;
+        const bubbleDiv = document.createElement('div');
+        bubbleDiv.className = 'message-bubble';
+        
+        const authorDiv = document.createElement('div');
+        authorDiv.className = 'msg-author';
+        authorDiv.innerHTML = `${avatarHTML}<span class="msg-author-name">${authorName}</span>`;
+        
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'msg-content prose-content';
+        
+        if (role === 'assistant') {
+            if (typeof window.renderSanitizedMarkdown === 'function') {
+                contentDiv.innerHTML = window.renderSanitizedMarkdown(content);
+            } else if (typeof window.marked !== 'undefined' && typeof window.DOMPurify !== 'undefined') {
+                const raw = window.marked.parse(content, { gfm: true, breaks: true });
+                contentDiv.innerHTML = window.DOMPurify.sanitize(raw);
+            } else {
+                contentDiv.textContent = content;
+            }
+        } else {
+            contentDiv.textContent = content;
+        }
+
+        bubbleDiv.appendChild(authorDiv);
+        bubbleDiv.appendChild(contentDiv);
+        rowDiv.appendChild(bubbleDiv);
         
         messagesBox.insertBefore(rowDiv, typingIndicator);
-        lucide.createIcons();
+        if (typeof lucide !== 'undefined') lucide.createIcons();
     }
     
     // Dynamic tabs updating
@@ -690,14 +834,25 @@
                 
                 activeFileTitle.textContent = data.module_name;
                 
-                // Set code block
+                // Set code block with language class
+                const modName = data.module_name.toLowerCase();
+                let langClass = 'language-python';
+                if (modName.endsWith('.html') || modName.endsWith('.htm')) langClass = 'language-html';
+                else if (modName.endsWith('.js')) langClass = 'language-javascript';
+                else if (modName.endsWith('.css')) langClass = 'language-css';
+                else if (modName.endsWith('.json')) langClass = 'language-json';
+
                 codeViewContainer.innerHTML = `
-                    <pre class="code-block"><code id="code-output-block"></code></pre>
+                    <pre class="code-block ${langClass}"><code id="code-output-block" class="${langClass}"></code></pre>
                 `;
                 
                 // Escape code content
                 const codeNode = document.getElementById('code-output-block');
                 codeNode.textContent = data.code_content;
+
+                if (window.Prism) {
+                    Prism.highlightElement(codeNode);
+                }
                 
                 // Make sure action buttons are visible
                 codeActionsBar.classList.remove('hidden');
@@ -920,9 +1075,214 @@
         }
     });
 
-    // Titles are server-rendered from the DB — no localStorage needed.
+    // DevDialogue v2: 5-Stage Stepper & Dynamic Accent Shifting (§3.6, §6.3)
+    window.switchWorkspaceStage = function(stageName) {
+        document.documentElement.setAttribute('data-stage', stageName);
+        
+        document.querySelectorAll('.stage-step-btn').forEach(btn => {
+            if (btn.getAttribute('data-stage') === stageName) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+
+        const orb = document.getElementById('header-presence-orb');
+        if (orb) {
+            if (stageName === 'build') orb.setAttribute('data-state', 'building');
+            else if (stageName === 'export' || stageName === 'review') orb.setAttribute('data-state', 'verified');
+            else orb.setAttribute('data-state', 'idle');
+        }
+
+        if (stageName === 'discover') {
+            switchRightPanel('verif');
+        } else if (stageName === 'blueprint') {
+            switchRightPanel('plan');
+        } else if (stageName === 'build' || stageName === 'review') {
+            switchRightPanel('tree');
+        } else if (stageName === 'export') {
+            switchRightPanel('plan');
+        }
+    };
+    window.switchStageView = window.switchWorkspaceStage;
+
+    // Phase 10: Switch Right Side Panel Views
+    window.switchRightPanel = function(mode) {
+        document.querySelectorAll('.panel-tab-btn').forEach(btn => btn.classList.remove('active'));
+        if (mode === 'tree') {
+            document.getElementById('tab-btn-tree').classList.add('active');
+            if (fileTabsContainer) fileTabsContainer.style.display = 'flex';
+            if (codeActionsBar) codeActionsBar.style.display = 'flex';
+        } else if (mode === 'plan') {
+            document.getElementById('tab-btn-plan').classList.add('active');
+            if (fileTabsContainer) fileTabsContainer.style.display = 'none';
+            renderPlanViewPanel();
+        } else if (mode === 'verif') {
+            document.getElementById('tab-btn-verif').classList.add('active');
+            if (fileTabsContainer) fileTabsContainer.style.display = 'none';
+            renderVerificationPanel();
+        }
+    };
+
+    // Phase 10: Active Job Polling & Cancellation
+    let activeJobPollInterval = null;
+    let currentJobId = null;
+
+    window.pollActiveJobEvents = function(jobId) {
+        currentJobId = jobId;
+        const banner = document.getElementById('job-progress-banner');
+        if (banner) banner.classList.remove('hidden');
+
+        if (activeJobPollInterval) clearInterval(activeJobPollInterval);
+        
+        let afterSeq = 0;
+        activeJobPollInterval = setInterval(async () => {
+            try {
+                const resp = await fetch(`/api/jobs/${jobId}/events/?after=${afterSeq}`);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    document.getElementById('job-bar-fill').style.width = `${data.progress_current}%`;
+                    if (data.events && data.events.length > 0) {
+                        const logBox = document.getElementById('job-log-events');
+                        data.events.forEach(ev => {
+                            afterSeq = Math.max(afterSeq, ev.sequence_number);
+                            const item = document.createElement('div');
+                            item.className = `job-event-item ${ev.kind}`;
+                            item.textContent = `[${ev.kind.toUpperCase()}] ${ev.message}`;
+                            logBox.appendChild(item);
+                            logBox.scrollTop = logBox.scrollHeight;
+                        });
+                    }
+                    if (data.status === 'succeeded' || data.status === 'failed' || data.status === 'cancelled') {
+                        clearInterval(activeJobPollInterval);
+                        setTimeout(() => {
+                            if (banner) banner.classList.add('hidden');
+                        }, 3000);
+                    }
+                }
+            } catch (e) {
+                console.error("Job polling error:", e);
+            }
+        }, 1500);
+    };
+
+    window.cancelActiveJob = async function() {
+        if (!currentJobId) return;
+        try {
+            await fetch(`/api/jobs/${currentJobId}/cancel/`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': '{{ csrf_token }}', 'Content-Type': 'application/json' }
+            });
+            const logBox = document.getElementById('job-log-events');
+            if (logBox) {
+                const item = document.createElement('div');
+                item.className = 'job-event-item warning';
+                item.textContent = '[SYSTEM] Job cancellation requested by user...';
+                logBox.appendChild(item);
+            }
+        } catch (e) {
+            console.error("Cancel failed:", e);
+        }
+    };
+
+    // Phase 10: Render Architecture Plan View
+    async function renderPlanViewPanel() {
+        try {
+            const resp = await fetch(`/api/session/{{ session.id }}/plan/`);
+            if (resp.ok) {
+                const data = await resp.json();
+                if (!data.has_plan) {
+                    codeViewContainer.innerHTML = `
+                        <div class="plan-view-container">
+                            <div class="empty-code-view">
+                                <i data-lucide="map" class="empty-code-icon"></i>
+                                <h4>No Architecture Plan Yet</h4>
+                                <p>Continue the requirement interview on the left to synthesize a multi-file architecture plan.</p>
+                            </div>
+                        </div>
+                    `;
+                    lucide.createIcons();
+                    return;
+                }
+                const p = data.plan_data;
+                const files = p.files || [];
+                let filesHTML = files.map(f => `
+                    <div class="plan-file-card">
+                        <div class="plan-file-path">📄 ${f.path}</div>
+                        <div class="plan-file-purpose">${f.purpose || 'Module implementation'}</div>
+                        <div class="plan-deps">Depends on: ${(f.depends_on || []).join(', ') || 'None'}</div>
+                    </div>
+                `).join('');
+
+                codeViewContainer.innerHTML = `
+                    <div class="plan-view-container">
+                        <div class="plan-header-card">
+                            <div>
+                                <strong>Architecture Plan v${data.version}</strong>
+                                <span class="badge ${data.status === 'approved' ? 'badge-verified' : 'badge-warning'}">${data.status.toUpperCase()}</span>
+                            </div>
+                            <button class="btn btn-primary btn-sm" onclick="alert('Plan approved.')">Approve Plan</button>
+                        </div>
+                        <div class="plan-files-list">${filesHTML}</div>
+                    </div>
+                `;
+                lucide.createIcons();
+            }
+        } catch (e) {
+            console.error("Plan view load failed:", e);
+        }
+    }
+
+    // Phase 10: Render Verification Issues Panel
+    async function renderVerificationPanel() {
+        try {
+            const resp = await fetch(`/api/session/{{ session.id }}/verification/`);
+            if (resp.ok) {
+                const data = await resp.json();
+                if (!data.has_verification || !data.issues || data.issues.length === 0) {
+                    codeViewContainer.innerHTML = `
+                        <div class="verif-panel-container">
+                            <div class="empty-code-view">
+                                <i data-lucide="shield-check" class="empty-code-icon" style="color: #4ade80;"></i>
+                                <h4>Verification Passed Cleanly</h4>
+                                <p>Zero static verification errors or unresolved warnings detected across all generated files.</p>
+                            </div>
+                        </div>
+                    `;
+                    lucide.createIcons();
+                    return;
+                }
+                let issuesHTML = data.issues.map(iss => `
+                    <div class="verif-issue-card ${iss.severity}" onclick="jumpToIssueLine('${iss.file}', ${iss.line})">
+                        <div class="issue-file-line">📌 ${iss.file} (Line ${iss.line}) [${iss.check}]</div>
+                        <div class="issue-msg">${iss.message}</div>
+                    </div>
+                `).join('');
+
+                codeViewContainer.innerHTML = `
+                    <div class="verif-panel-container">
+                        <h4>Static Verification Issues (${data.issues.length})</h4>
+                        ${issuesHTML}
+                    </div>
+                `;
+                lucide.createIcons();
+            }
+        } catch (e) {
+            console.error("Verification load failed:", e);
+        }
+    }
+
+    // Phase 10: Jump to issue line in code editor
+    window.jumpToIssueLine = function(filePath, lineNum) {
+        switchRightPanel('tree');
+        const activeTab = Array.from(fileTabsContainer.querySelectorAll('.file-tab')).find(t => t.textContent.includes(filePath));
+        if (activeTab) {
+            activeTab.click();
+        }
+    };
+
     document.addEventListener('DOMContentLoaded', () => {
-        // Lucide icons are initialized globally; no extra title patching required.
+        // Lucide icons initialized globally
     });
 </script>
 {% endblock %}

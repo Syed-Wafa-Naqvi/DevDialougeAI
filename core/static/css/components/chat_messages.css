@@ -1,0 +1,187 @@
+/* ==========================================================================
+   DevDialogue AI — Chat Messages & Markdown Styling (§4.3, §7.3)
+   ========================================================================== */
+
+.message-item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    width: 100%;
+}
+
+/* User Message Block */
+.message-item-user {
+    align-self: flex-end;
+    background-color: var(--sheet);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-lg);
+    padding: var(--space-3) var(--space-4);
+    max-width: 85%;
+}
+
+.message-item-user .message-author-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-1);
+    font-size: var(--text-meta);
+    color: var(--pencil);
+    font-weight: 500;
+}
+
+/* Assistant Message Block (Full-width prose, no bubble) */
+.message-item-assistant {
+    align-self: flex-start;
+    width: 100%;
+    padding: var(--space-2) 0;
+}
+
+.message-item-assistant .message-author-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+    font-size: var(--text-meta);
+    color: var(--blueprint);
+    font-weight: 600;
+}
+
+.prose-content {
+    font-size: var(--text-body);
+    line-height: var(--lh-body);
+    color: var(--ink);
+    word-break: break-word;
+}
+
+.prose-content p {
+    margin-bottom: var(--space-3);
+}
+
+.prose-content p:last-child {
+    margin-bottom: 0;
+}
+
+.prose-content ul, .prose-content ol {
+    margin: var(--space-2) 0 var(--space-3) var(--space-5);
+}
+
+.prose-content li {
+    margin-bottom: var(--space-1);
+}
+
+.prose-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: var(--space-3) 0;
+    font-size: var(--text-sm);
+}
+
+.prose-content th, .prose-content td {
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--rule);
+    text-align: left;
+}
+
+.prose-content th {
+    background-color: var(--paper);
+    font-weight: 600;
+}
+
+/* Code Blocks in Chat (§4.3) */
+.chat-code-wrapper {
+    margin: var(--space-3) 0;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background-color: var(--sheet);
+}
+
+.chat-code-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-2) var(--space-3);
+    background-color: var(--paper);
+    border-bottom: 1px solid var(--rule);
+    font-family: var(--font-mono);
+    font-size: var(--text-meta);
+    color: var(--pencil);
+}
+
+.chat-code-lang {
+    font-weight: 600;
+    color: var(--ink);
+}
+
+.chat-code-pre {
+    margin: 0;
+    padding: var(--space-3);
+    overflow-x: auto;
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    line-height: var(--lh-code);
+    background-color: var(--sheet);
+}
+
+.chat-code-pre code {
+    font-family: inherit;
+}
+
+/* Thinking Indicator (§4.3, §5.2) */
+.thinking-indicator-box {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) 0;
+    color: var(--pencil);
+    font-size: var(--text-sm);
+}
+
+.thinking-dots {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.thinking-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--pencil);
+    animation: dotPulse 1.2s infinite ease-in-out;
+}
+
+.thinking-dot:nth-child(2) { animation-delay: 0.2s; }
+.thinking-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes dotPulse {
+    0%, 80%, 100% { opacity: 0.3; }
+    40% { opacity: 1; }
+}
+
+/* Reduced Motion for Thinking Dots (§5.3) */
+@media (prefers-reduced-motion: reduce) {
+    .thinking-dot {
+        animation: none !important;
+        opacity: 0.7;
+    }
+}
+
+/* Chat Input Field Contrast */
+#chat-input-field {
+    color: var(--ink);
+}
+
+[data-theme="dark"] #chat-input-field,
+[data-theme="dim"] #chat-input-field,
+:root[data-theme="dark"] #chat-input-field,
+:root[data-theme="dim"] #chat-input-field {
+    color: #F1F3F6 !important;
+}
+
+[data-theme="dark"] #chat-input-field::placeholder,
+[data-theme="dim"] #chat-input-field::placeholder,
+:root[data-theme="dark"] #chat-input-field::placeholder,
+:root[data-theme="dim"] #chat-input-field::placeholder {
+    color: #9AA1AC !important;
+}

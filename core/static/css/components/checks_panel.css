@@ -1,0 +1,88 @@
+/* ==========================================================================
+   DevDialogue AI — Verification Checks Panel (§4.8)
+   ========================================================================== */
+
+.checks-panel-container {
+    padding: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    background-color: var(--sheet);
+}
+
+.checks-summary-banner {
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-md);
+    background-color: var(--paper);
+    border: 1px solid var(--rule);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.checks-summary-status {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.issues-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.issues-file-header {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--pencil);
+    padding: var(--space-1) 0;
+    border-bottom: 1px solid var(--rule);
+}
+
+.issue-card-item {
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+    background-color: var(--sheet);
+    border: 1px solid var(--rule);
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    cursor: pointer;
+    transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.issue-card-item:hover {
+    border-color: var(--blueprint);
+}
+
+.issue-card-item.issue-err {
+    border-left: 4px solid var(--err);
+}
+
+.issue-card-item.issue-warn {
+    border-left: 4px solid var(--warn);
+}
+
+.issue-details {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.issue-line-badge {
+    font-family: var(--font-mono);
+    font-size: var(--text-meta);
+    color: var(--pencil);
+}
+
+.issue-message-text {
+    font-size: var(--text-sm);
+    color: var(--ink);
+    line-height: 1.4;
+}

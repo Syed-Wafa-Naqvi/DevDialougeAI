@@ -1,71 +1,48 @@
 {% extends 'base.html' %}
-{% block title %}Features - DevDialogue AI{% endblock %}
+{% load static %}
+
+{% block title %}Features — DevDialogue AI{% endblock %}
+{% block page_namespace %}features{% endblock %}
 
 {% block content %}
-<section class="features-section">
-    <div class="section-header">
-        <div class="badge">Platform Features</div>
-        <h2 class="section-title">Engage, Refine, and Generate</h2>
-        <p class="section-subtitle">Choose between two workflow modes designed to fit your coding speed and architectural complexity.</p>
-    </div>
-    
-    <div class="features-grid">
-        <div class="feature-card glass-card">
-            <div class="feature-icon-wrapper purple-glow">
-                <i data-lucide="message-square" class="feature-icon"></i>
-            </div>
-            <h3>Mode 1: Dialogue-Driven</h3>
-            <p>Conform to a structured conversational interview. The AI asks targeted questions about modules, dependencies, database requirements, and edge cases, then delivers a complete, cohesive codebase.</p>
-            <ul class="feature-bullets">
-                <li><i data-lucide="check" class="bullet-icon"></i> Context-Aware Questioning</li>
-                <li><i data-lucide="check" class="bullet-icon"></i> Full System Spec Elicitation</li>
-                <li><i data-lucide="check" class="bullet-icon"></i> Unified Code Output</li>
-            </ul>
-        </div>
-        
-        <div class="feature-card glass-card">
-            <div class="feature-icon-wrapper blue-glow">
-                <i data-lucide="layers" class="feature-icon"></i>
-            </div>
-            <h3>Mode 2: Incremental</h3>
-            <p>Perfect for complex, multi-module apps. The system generates code module-by-module, presenting each block individually and incorporating your feedback before proceeding to the next.</p>
-            <ul class="feature-bullets">
-                <li><i data-lucide="check" class="bullet-icon"></i> Step-by-Step Architecture</li>
-                <li><i data-lucide="check" class="bullet-icon"></i> Interactive Component Feedback</li>
-                <li><i data-lucide="check" class="bullet-icon"></i> Flexible Local Refinements</li>
-            </ul>
-        </div>
+<div style="max-width: 1200px; margin: 0 auto; padding: 80px 24px;">
+    <div class="text-center" style="margin-bottom: 60px;">
+        <div class="badge badge-violet" style="margin-bottom: 16px;">Platform Capabilities</div>
+        <h1 style="font-size: var(--text-hero); margin-bottom: 16px;" data-reveal="split">Requirement-Aware AI Software System</h1>
+        <p style="color: var(--text-2); font-size: var(--text-lead); max-width: 640px; margin: 0 auto;">DevDialogue AI turns natural language ideas into production software without missing requirements.</p>
     </div>
 
-    <div class="section-header" style="margin-top: 80px;">
-        <h2 class="section-title">Why Developers Choose DevDialogue AI</h2>
-        <p class="section-subtitle">A professional platform designed for bulletproof prototyping and generation.</p>
-    </div>
-    
-    <div class="features-grid">
-        <div class="feature-card glass-card">
-            <div class="feature-icon-wrapper gray-glow">
-                <i data-lucide="alert-triangle" class="feature-icon"></i>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 32px;">
+        <div class="tilt-card" style="background: var(--surface); border: 1px solid var(--line); padding: 36px; border-radius: var(--r-xl);">
+            <div class="tilt-card-inner">
+                <div style="width: 48px; height: 48px; background: var(--violet-soft); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--violet); margin-bottom: 20px;">
+                    <i data-lucide="message-square-code"></i>
+                </div>
+                <h3 style="font-size: var(--text-title-sm); margin-bottom: 12px;">Interactive Interview Engine</h3>
+                <p style="color: var(--text-2); font-size: var(--text-sm); line-height: 1.7;">Conducts context-aware conversations to elicit stack choices, authentication roles, database schemas, and business rules.</p>
             </div>
-            <h3>Ambiguity Detection</h3>
-            <p>The Dialogue Engine analyzes specifications to identify and resolve conflicting constraints before generating code.</p>
-        </div>
-        
-        <div class="feature-card glass-card">
-            <div class="feature-icon-wrapper gray-glow">
-                <i data-lucide="file-output" class="feature-icon"></i>
-            </div>
-            <h3>Structured Code Export</h3>
-            <p>Export your full, generated project structure as modular python files. Supports templates, models, and forms.</p>
         </div>
 
-        <div class="feature-card glass-card">
-            <div class="feature-icon-wrapper gray-glow">
-                <i data-lucide="refresh-cw" class="feature-icon"></i>
+        <div class="tilt-card" style="background: var(--surface); border: 1px solid var(--line); padding: 36px; border-radius: var(--r-xl);">
+            <div class="tilt-card-inner">
+                <div style="width: 48px; height: 48px; background: var(--cyan-soft); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--cyan); margin-bottom: 20px;">
+                    <i data-lucide="map-pin"></i>
+                </div>
+                <h3 style="font-size: var(--text-title-sm); margin-bottom: 12px;">2.5D & 3D Architecture Blueprint</h3>
+                <p style="color: var(--text-2); font-size: var(--text-sm); line-height: 1.7;">Generates an interactive node map of your application architecture with full 3D rotatable WebGL visualization.</p>
             </div>
-            <h3>Real-Time Refinement Loop</h3>
-            <p>If you don't like a module, instruct the Dialogue Engine to modify it. The AI regenerates the files immediately based on feedback.</p>
+        </div>
+
+        <div class="tilt-card" style="background: var(--surface); border: 1px solid var(--line); padding: 36px; border-radius: var(--r-xl);">
+            <div class="tilt-card-inner">
+                <div style="width: 48px; height: 48px; background: var(--ok-soft); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--ok); margin-bottom: 20px;">
+                    <i data-lucide="shield-check"></i>
+                </div>
+                <h3 style="font-size: var(--text-title-sm); margin-bottom: 12px;">Automated Static Verification</h3>
+                <p style="color: var(--text-2); font-size: var(--text-sm); line-height: 1.7;">Verifies syntax, imports, and cross-file references before presenting generated code, ensuring zero missing dependencies.</p>
+            </div>
         </div>
     </div>
-</section>
+</div>
 {% endblock %}
+

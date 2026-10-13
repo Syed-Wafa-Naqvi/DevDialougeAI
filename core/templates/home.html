@@ -1,196 +1,170 @@
 {% extends 'base.html' %}
-{% block title %}DevDialogue AI - Smart AI Code Generation System{% endblock %}
+{% load static %}
+
+{% block title %}DevDialogue AI — Requirement-Aware AI System Builder{% endblock %}
+{% block page_namespace %}landing{% endblock %}
 
 {% block content %}
-<!-- Section 1: Hero & Visual Preview -->
-<section class="hero-section text-center" style="min-height: 90vh; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 80px 24px;">
-    <div class="hero-content" style="max-width: 900px; margin: 0 auto;">
-        <div class="badge">Next-Gen AI Development</div>
-        <h1 class="hero-title">Requirement-Aware <br><span class="gradient-text">AI Code Generation</span></h1>
-        <p class="hero-subtitle">Stop the trial-and-error loop. DevDialogue AI conducts structured, intelligent interviews to elicit complete software specifications and write fully functional codebases.</p>
+<!-- Studio Light Hero Section (§7.2, §8) -->
+<section class="hero-section" style="padding: 80px 24px 100px; text-align: center; overflow: hidden; background: var(--canvas);">
+    <div style="max-width: 900px; margin: 0 auto; position: relative; z-index: 2;">
+        <span class="badge badge-brand" style="margin-bottom: 20px; font-size: 13px; padding: 6px 14px;">
+            Studio Light Architecture Engine
+        </span>
         
-        <div class="hero-actions" style="margin-bottom: 60px;">
+        <h1 style="font-size: var(--text-display); color: var(--ink); letter-spacing: -0.03em; margin-bottom: 20px; line-height: 1.1; font-weight: 700;">
+            From Conversation <br>to Production Code
+        </h1>
+        
+        <p style="font-size: var(--text-lead); color: var(--ink-2); max-width: 640px; margin: 0 auto 36px; line-height: 1.6;">
+            DevDialogue AI conducts structured requirement interviews, generates multi-file architecture blueprints, and compiles verified software repositories.
+        </p>
+
+        <div style="display: flex; gap: 14px; justify-content: center; align-items: center; margin-bottom: 60px;">
             {% if user.is_authenticated %}
-                <a href="{% url 'dashboard' %}" class="btn btn-primary btn-lg">Go to Dashboard <i data-lucide="arrow-right" class="icon-inline"></i></a>
+                <a href="{% url 'dashboard' %}" class="btn btn-primary btn-lg">
+                    Go to Projects
+                </a>
             {% else %}
-                <a href="{% url 'signup' %}" class="btn btn-primary btn-lg">Start Building Free <i data-lucide="sparkles" class="icon-inline"></i></a>
-                <a href="{% url 'features' %}" class="btn btn-secondary btn-lg">How it Works</a>
+                <a href="{% url 'signup' %}" class="btn btn-primary btn-lg">
+                    Start Building Free
+                </a>
+                <a href="{% url 'features' %}" class="btn btn-secondary btn-lg">Explore Capabilities</a>
             {% endif %}
         </div>
     </div>
-    
-    <!-- Mock Interface Terminal Preview -->
-    <div class="preview-container glass-card" style="width: 100%; max-width: 800px; border-radius: 12px; border: 1px solid var(--border-color); overflow: hidden; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6); margin-top: 40px;">
-        <div class="preview-header" style="background: rgba(255,255,255,0.03); padding: 12px 20px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between;">
-            <div style="display: flex; gap: 8px;">
-                <span style="width: 10px; height: 10px; border-radius: 50%; background: #ff5f56; display: inline-block;"></span>
-                <span style="width: 10px; height: 10px; border-radius: 50%; background: #ffbd2e; display: inline-block;"></span>
-                <span style="width: 10px; height: 10px; border-radius: 50%; background: #27c93f; display: inline-block;"></span>
-            </div>
-            <span style="font-family: 'Fira Code', monospace; font-size: 11px; color: var(--text-secondary); letter-spacing: 0.5px;">DevDialogue Console v1.0.0</span>
-            <div style="width: 46px;"></div>
-        </div>
-        <div class="preview-body" style="padding: 24px; text-align: left; font-family: 'Fira Code', monospace; font-size: 13px; line-height: 1.7; background: #0c0c0e; color: #d4d4d8; max-height: 380px; overflow-y: auto;">
-            <div style="margin-bottom: 12px;"><span style="color: #4ade80;">merik@devdialogue:~$</span> <span style="color: #f4f4f5;">python3 -m devdialogue.generator --interactive</span></div>
-            
-            <div style="color: #71717a; margin-bottom: 12px;">
-                [i] Loading AI Dialogue Engine...<br>
-                [i] Loaded model: Llama-3-70B-Spec-Elicitor<br>
-                [i] Initializing session #9284...
-            </div>
-            
-            <div style="margin-bottom: 12px;">
-                <span style="color: #e5e5e5; font-weight: 600;">DevDialogue AI:</span> Welcome, developer! Let's build your target application. What is the primary purpose and stack of the project?
-            </div>
-            
-            <div style="margin-bottom: 12px; padding-left: 12px; border-left: 2px solid #52525b;">
-                <span style="color: #a1a1aa; font-weight: 500;">merik:</span> A Library Management System in Django, using SQLite and vanilla CSS.
-            </div>
-            
-            <div style="margin-bottom: 12px;">
-                <span style="color: #e5e5e5; font-weight: 600;">DevDialogue AI:</span> Great choice. Let's design the schema. Should standard users have a limit on how many books they can borrow simultaneously?
-            </div>
-            
-            <div style="margin-bottom: 12px; padding-left: 12px; border-left: 2px solid #52525b;">
-                <span style="color: #a1a1aa; font-weight: 500;">merik:</span> Yes, limit standard members to 3 books, and premium members to 10 books.
-            </div>
-            
-            <div style="margin-bottom: 12px;">
-                <span style="color: #f43f5e; font-weight: 600;">[!] Ambiguity Alert:</span> Do borrowing limits expire, or is it a hard limit until books are returned?
-            </div>
-            
-            <div style="margin-bottom: 12px; padding-left: 12px; border-left: 2px solid #52525b;">
-                <span style="color: #a1a1aa; font-weight: 500;">merik:</span> It is a hard limit until they return the books.
-            </div>
-            
-            <div style="color: #4ade80; margin-bottom: 8px;">[+] Specification compiled successfully (100% resolution).</div>
-            <div style="color: #fbbf24; margin-bottom: 4px;">[+] Generating models.py... [Done]</div>
-            <div style="color: #fbbf24; margin-bottom: 4px;">[+] Generating views.py... [Done]</div>
-            <div style="color: #3b82f6;">[+] Launching Collapsible Code Workspace... [Active]</div>
-        </div>
-    </div>
-</section>
 
-<!-- Section 2: How It Works (Dialogue Engine Spec Elicitation) -->
-<section class="how-it-works-section" style="padding: 100px 24px; max-width: 1200px; margin: 0 auto; min-height: 80vh; display: flex; flex-direction: column; justify-content: center;">
-    <div class="section-header text-center" style="margin-bottom: 60px;">
-        <div class="badge">The Workflow</div>
-        <h2 class="section-title">Dialogue-Driven Specification Elicitation</h2>
-        <p class="section-subtitle">Traditional AI generators guess. DevDialogue AI interviews you to get exact specs.</p>
-    </div>
-    
-    <div class="steps-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 30px;">
-        <div class="step-card glass-card" style="padding: 32px; border-radius: 12px; position: relative; overflow: hidden;">
-            <div class="step-number" style="font-size: 64px; font-weight: 800; font-family: 'Outfit', sans-serif; position: absolute; right: 20px; top: -10px; opacity: 0.05; color: var(--text-primary);">01</div>
-            <div class="feature-icon-wrapper gray-glow" style="margin-bottom: 20px; width: 50px; height: 50px; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
-                <i data-lucide="help-circle"></i>
-            </div>
-            <h3 style="font-size: 18px; margin-bottom: 12px;">1. Interactive Interview</h3>
-            <p style="color: var(--text-secondary); font-size: 14px; line-height: 1.6;">Our Dialogue Engine leads you through a series of context-aware questions to extract core business logic and structure details.</p>
-        </div>
-
-        <div class="step-card glass-card" style="padding: 32px; border-radius: 12px; position: relative; overflow: hidden;">
-            <div class="step-number" style="font-size: 64px; font-weight: 800; font-family: 'Outfit', sans-serif; position: absolute; right: 20px; top: -10px; opacity: 0.05; color: var(--text-primary);">02</div>
-            <div class="feature-icon-wrapper gray-glow" style="margin-bottom: 20px; width: 50px; height: 50px; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
-                <i data-lucide="list-checks"></i>
-            </div>
-            <h3 style="font-size: 18px; margin-bottom: 12px;">2. Ambiguity Resolution</h3>
-            <p style="color: var(--text-secondary); font-size: 14px; line-height: 1.6;">No assumptions are made. If requirements are unclear or conflict, the system prompts you to resolve them on the spot.</p>
-        </div>
-
-        <div class="step-card glass-card" style="padding: 32px; border-radius: 12px; position: relative; overflow: hidden;">
-            <div class="step-number" style="font-size: 64px; font-weight: 800; font-family: 'Outfit', sans-serif; position: absolute; right: 20px; top: -10px; opacity: 0.05; color: var(--text-primary);">03</div>
-            <div class="feature-icon-wrapper gray-glow" style="margin-bottom: 20px; width: 50px; height: 50px; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
-                <i data-lucide="code-2"></i>
-            </div>
-            <h3 style="font-size: 18px; margin-bottom: 12px;">3. Collapsible Workspace</h3>
-            <p style="color: var(--text-secondary); font-size: 14px; line-height: 1.6;">As code is written, review it in a dynamic side-by-side workspace. Keep it open or hide it with a single click.</p>
-        </div>
-
-        <div class="step-card glass-card" style="padding: 32px; border-radius: 12px; position: relative; overflow: hidden;">
-            <div class="step-number" style="font-size: 64px; font-weight: 800; font-family: 'Outfit', sans-serif; position: absolute; right: 20px; top: -10px; opacity: 0.05; color: var(--text-primary);">04</div>
-            <div class="feature-icon-wrapper gray-glow" style="margin-bottom: 20px; width: 50px; height: 50px; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
-                <i data-lucide="download"></i>
-            </div>
-            <h3 style="font-size: 18px; margin-bottom: 12px;">4. Multi-File Export</h3>
-            <p style="color: var(--text-secondary); font-size: 14px; line-height: 1.6;">Download your generated workspace as a cohesive archive of files ready to run on your local machine.</p>
-        </div>
-    </div>
-</section>
-
-<!-- Section 3: Summary of System Capabilities -->
-<section class="capabilities-section" style="padding: 100px 24px; background: rgba(255,255,255,0.01); border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); min-height: 80vh; display: flex; flex-direction: column; justify-content: center;">
-    <div class="capabilities-container" style="max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center;">
-        <div>
-            <div class="badge">Platform Engine</div>
-            <h2 style="font-size: 36px; margin-bottom: 24px;">Advanced Code Generation Capabilities</h2>
-            <p style="color: var(--text-secondary); line-height: 1.8; margin-bottom: 30px; font-size: 16px;">DevDialogue AI is not just a chatbot wrapper. It is a complete development environment integrated with an intelligent supervisor engine that constructs applications component-by-component.</p>
+    <!-- Signature 3D Product Perspective Composition (§7.2) -->
+    <div class="product-frame-viewport" style="perspective: 2000px; max-width: 1100px; margin: 0 auto; padding: 20px 0;">
+        <div id="hero-product-group" style="transform: rotateX(15deg) rotateY(-6deg); transform-style: preserve-3d; transition: transform 0.2s ease-out; position: relative;">
             
-            <div style="display: flex; flex-direction: column; gap: 20px;">
-                <div style="display: flex; gap: 16px; align-items: flex-start;">
-                    <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; color: var(--accent);"><i data-lucide="zap"></i></div>
-                    <div>
-                        <h4 style="font-size: 16px; margin-bottom: 4px;">Incremental Refinements</h4>
-                        <p style="color: var(--text-secondary); font-size: 14px;">Review and modify individual components before compiling the rest of the application.</p>
+            <!-- Main Workspace Product Frame (HTML/CSS) -->
+            <div class="product-frame-main" style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-xl); box-shadow: var(--shadow-lg); overflow: hidden; text-align: left; display: grid; grid-template-columns: 200px 1fr 1fr; height: 520px; position: relative;">
+                
+                <!-- Sidebar Fragment -->
+                <div style="background: var(--surface-sunken); border-right: 1px solid var(--border); padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+                    <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 13px; color: var(--ink); margin-bottom: 8px;">
+                        <div style="width: 20px; height: 20px; background: var(--brand); border-radius: 4px; color: white; display: flex; align-items: center; justify-content: center; font-size: 11px;">D</div>
+                        DevDialogue AI
+                    </div>
+                    <div style="font-size: 11px; font-weight: 600; color: var(--ink-3); text-transform: uppercase;">Recent Projects</div>
+                    <div style="background: var(--brand-tint); color: var(--brand); font-size: 13px; padding: 6px 10px; border-radius: 6px; font-weight: 500;">
+                        clinic-booking-api
+                    </div>
+                    <div style="color: var(--ink-2); font-size: 13px; padding: 6px 10px;">
+                        library-management
+                    </div>
+                    <div style="color: var(--ink-2); font-size: 13px; padding: 6px 10px;">
+                        payment-gateway-v2
                     </div>
                 </div>
-                <div style="display: flex; gap: 16px; align-items: flex-start;">
-                    <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; color: var(--accent);"><i data-lucide="git-branch"></i></div>
-                    <div>
-                        <h4 style="font-size: 16px; margin-bottom: 4px;">Clean Structure Isolation</h4>
-                        <p style="color: var(--text-secondary); font-size: 14px;">Generates separate files for models, views, forms, and html templates to follow MVC best practices.</p>
+
+                <!-- Chat Thread Fragment -->
+                <div style="background: var(--surface); border-right: 1px solid var(--border); padding: 20px; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                        <div style="align-self: flex-end; background: var(--brand-tint); color: var(--ink); border: 1px solid var(--brand-tint-2); padding: 10px 14px; border-radius: 12px 12px 2px 12px; font-size: 13px; max-width: 85%;">
+                            Build a REST API for appointment booking with doctor schedules and SMS notifications.
+                        </div>
+                        <div style="align-self: flex-start; background: var(--surface-sunken); color: var(--ink); border: 1px solid var(--border); padding: 12px 16px; border-radius: 12px 12px 12px 2px; font-size: 13px; max-width: 90%;">
+                            <div style="font-weight: 600; font-size: 12px; color: var(--brand); margin-bottom: 4px;">DevDialogue Assistant</div>
+                            I've structured a 4-model Django schema (`Doctor`, `Patient`, `Appointment`, `Notification`). Should appointments require pre-payment confirmation?
+                        </div>
+                    </div>
+                    <div style="border: 1px solid var(--border-strong); border-radius: 8px; padding: 10px 14px; background: var(--surface); display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--ink-3);">
+                        Type requirement refinement…
+                        <span class="btn btn-primary btn-sm" style="padding: 4px 8px;">Send</span>
                     </div>
                 </div>
-                <div style="display: flex; gap: 16px; align-items: flex-start;">
-                    <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; color: var(--accent);"><i data-lucide="shield"></i></div>
-                    <div>
-                        <h4 style="font-size: 16px; margin-bottom: 4px;">Built-in Session Protections</h4>
-                        <p style="color: var(--text-secondary); font-size: 14px;">Secure SMTP OTP dispatch ensures the development console is only accessible to authenticated users.</p>
+
+                <!-- Workspace Code & Checks Fragment -->
+                <div style="background: var(--surface-sunken); padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
+                        <div style="font-family: var(--font-mono); font-size: 13px; font-weight: 500; color: var(--ink);">
+                            appointments/models.py
+                        </div>
+                        <span class="badge badge-success">✓ 12/12 Checks Passed</span>
                     </div>
+                    <pre style="font-family: var(--font-mono); font-size: 12px; line-height: 1.6; color: var(--ink); background: var(--surface); padding: 16px; border-radius: 8px; border: 1px solid var(--border); overflow: hidden;">
+<span style="color: var(--code-keyword);">class</span> <span style="color: var(--code-type);">Appointment</span>(models.Model):
+    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE)
+    scheduled_at = models.DateTimeField()
+    status = models.CharField(max_length=20, default=<span style="color: var(--code-string);">'pending'</span>)
+    created_at = models.DateTimeField(auto_now_add=<span style="color: var(--code-keyword);">True</span>)
+</pre>
                 </div>
             </div>
-        </div>
-        
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
-            <div class="glass-card" style="padding: 30px; border-radius: 12px; text-align: center;">
-                <div style="font-size: 40px; font-weight: 800; color: var(--text-primary); margin-bottom: 8px;">2</div>
-                <h4 style="font-size: 15px; margin-bottom: 8px;">Workflow Modes</h4>
-                <p style="color: var(--text-secondary); font-size: 13px;">Choose between Dialogue-Driven or Incremental generator runs.</p>
+
+            <!-- Floating UI Card 1: Chat Message Card -->
+            <div class="floating-card" style="position: absolute; top: -20px; left: -30px; transform: translateZ(60px); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 16px 20px; box-shadow: var(--shadow-lg); width: 280px; text-align: left;">
+                <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--brand); margin-bottom: 6px;">
+                    <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--brand);"></span> Natural Dialogue Interview
+                </div>
+                <div style="font-size: 13px; color: var(--ink); line-height: 1.4;">"Select Django REST Framework + PostgreSQL for high transaction concurrency."</div>
             </div>
-            <div class="glass-card" style="padding: 30px; border-radius: 12px; text-align: center; margin-top: 24px;">
-                <div style="font-size: 40px; font-weight: 800; color: var(--text-primary); margin-bottom: 8px;">100%</div>
-                <h4 style="font-size: 15px; margin-bottom: 8px;">Monochrome Dark Mode</h4>
-                <p style="color: var(--text-secondary); font-size: 13px;">Technical high-contrast grey and black styling.</p>
+
+            <!-- Floating UI Card 2: Blueprint Node Card -->
+            <div class="floating-card" style="position: absolute; bottom: -20px; right: -20px; transform: translateZ(80px); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 16px 20px; box-shadow: var(--shadow-lg); width: 260px; text-align: left;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                    <span style="font-size: 12px; font-weight: 600; color: var(--ink);">System Architecture</span>
+                    <span class="badge badge-brand">SRS Spec</span>
+                </div>
+                <div style="font-size: 12px; font-family: var(--font-mono); color: var(--ink-2);">
+                    • models.py (4 Schemas)<br>
+                    • views.py (6 ViewSets)<br>
+                    • urls.py (Router Config)
+                </div>
             </div>
-            <div class="glass-card" style="padding: 30px; border-radius: 12px; text-align: center; margin-top: -24px;">
-                <div style="font-size: 40px; font-weight: 800; color: var(--text-primary); margin-bottom: 8px;">3</div>
-                <h4 style="font-size: 15px; margin-bottom: 8px;">Subscription Plans</h4>
-                <p style="color: var(--text-secondary); font-size: 13px;">Flexible Basic, Pro, and Premium subscription tiers.</p>
-            </div>
-            <div class="glass-card" style="padding: 30px; border-radius: 12px; text-align: center;">
-                <div style="font-size: 40px; font-weight: 800; color: var(--text-primary); margin-bottom: 8px;">99%</div>
-                <h4 style="font-size: 15px; margin-bottom: 8px;">Spec Accuracy</h4>
-                <p style="color: var(--text-secondary); font-size: 13px;">Pre-generation interactive reviews prevent coding issues.</p>
-            </div>
+
         </div>
     </div>
 </section>
 
-<!-- Section 4: Target Audience & CTA -->
-<section class="cta-section" style="padding: 120px 24px; text-align: center; min-height: 60vh; display: flex; flex-direction: column; justify-content: center; align-items: center;">
-    <div style="max-width: 800px; margin: 0 auto;">
-        <div class="badge">Get Started</div>
-        <h2 style="font-size: 44px; margin-bottom: 20px;">Ready to Elicit Specifications & Generate Code?</h2>
-        <p style="color: var(--text-secondary); font-size: 16px; line-height: 1.8; margin-bottom: 40px;">Create a free account to experience Mode 1 Dialogue-driven interviews, or upgrade to a Pro plan to enable step-by-step modular code generation and custom model selection.</p>
-        
-        <div style="display: flex; gap: 20px; justify-content: center; flex-wrap: wrap;">
-            {% if user.is_authenticated %}
-                <a href="{% url 'dashboard' %}" class="btn btn-primary btn-lg">Open Console <i data-lucide="arrow-right" class="icon-inline"></i></a>
-            {% else %}
-                <a href="{% url 'signup' %}" class="btn btn-primary btn-lg">Sign Up Now <i data-lucide="sparkles" class="icon-inline"></i></a>
-                <a href="{% url 'pricing' %}" class="btn btn-secondary btn-lg">View Subscription Plans</a>
-            {% endif %}
+<!-- Scroll Story Sections (§7.2) -->
+<section style="padding: 100px 24px; max-width: 1200px; margin: 0 auto;">
+    <div style="text-align: center; margin-bottom: 60px;">
+        <span class="badge badge-brand" style="margin-bottom: 12px;">4-Stage Pipeline</span>
+        <h2 style="font-size: var(--text-hero); color: var(--ink); font-weight: 700;">How DevDialogue AI Works</h2>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px;">
+        <div style="background: var(--surface); border: 1px solid var(--border); padding: 32px 24px; border-radius: var(--r-lg); box-shadow: var(--shadow-sm);">
+            <div style="font-size: 28px; font-weight: 800; color: var(--brand); margin-bottom: 12px;">01</div>
+            <h3 style="font-size: var(--text-title-md); font-weight: 600; color: var(--ink); margin-bottom: 10px;">Interactive Interview</h3>
+            <p style="color: var(--ink-2); font-size: 14px; line-height: 1.6;">Our Dialogue Engine asks clarifying questions to reveal hidden assumptions before generating code.</p>
+        </div>
+
+        <div style="background: var(--surface); border: 1px solid var(--border); padding: 32px 24px; border-radius: var(--r-lg); box-shadow: var(--shadow-sm);">
+            <div style="font-size: 28px; font-weight: 800; color: var(--brand); margin-bottom: 12px;">02</div>
+            <h3 style="font-size: var(--text-title-md); font-weight: 600; color: var(--ink); margin-bottom: 10px;">Blueprint Synthesis</h3>
+            <p style="color: var(--ink-2); font-size: 14px; line-height: 1.6;">Compiles an interactive 3D architecture graph and SRS specification for review.</p>
+        </div>
+
+        <div style="background: var(--surface); border: 1px solid var(--border); padding: 32px 24px; border-radius: var(--r-lg); box-shadow: var(--shadow-sm);">
+            <div style="font-size: 28px; font-weight: 800; color: var(--brand); margin-bottom: 12px;">03</div>
+            <h3 style="font-size: var(--text-title-md); font-weight: 600; color: var(--ink); margin-bottom: 10px;">Verified Compilation</h3>
+            <p style="color: var(--ink-2); font-size: 14px; line-height: 1.6;">Executes static analysis and unit tests in an autonomous loop before presenting the codebase.</p>
+        </div>
+
+        <div style="background: var(--surface); border: 1px solid var(--border); padding: 32px 24px; border-radius: var(--r-lg); box-shadow: var(--shadow-sm);">
+            <div style="font-size: 28px; font-weight: 800; color: var(--success-solid); margin-bottom: 12px;">04</div>
+            <h3 style="font-size: var(--text-title-md); font-weight: 600; color: var(--ink); margin-bottom: 10px;">Export Repository</h3>
+            <p style="color: var(--ink-2); font-size: 14px; line-height: 1.6;">Download a complete ZIP package with README, requirements.txt, models, views, and tests.</p>
         </div>
     </div>
 </section>
+
+<!-- 3D Perspective Tilt Mouse Script -->
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const productGroup = document.getElementById('hero-product-group');
+        if (!productGroup) return;
+
+        window.addEventListener('mousemove', (e) => {
+            const rotY = (e.clientX / window.innerWidth - 0.5) * 8;
+            const rotX = (e.clientY / window.innerHeight - 0.5) * -8 + 15;
+            productGroup.style.transform = `rotateX(${rotX}deg) rotateY(${rotY}deg)`;
+        });
+    });
+</script>
 {% endblock %}

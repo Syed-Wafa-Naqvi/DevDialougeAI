@@ -1,165 +1,118 @@
 {% extends 'base.html' %}
-{% block title %}Account Settings - DevDialogue AI{% endblock %}
+{% load static %}
+
+{% block title %}Settings — DevDialogue AI{% endblock %}
+{% block page_namespace %}settings{% endblock %}
 
 {% block content %}
-<div class="settings-container">
-    <!-- Sidebar Navigation -->
-    <div class="settings-sidebar glass-card">
-        <h3 class="sidebar-title">Settings</h3>
-        <ul class="sidebar-menu">
-            <li class="menu-item active">
-                <a href="#account" class="menu-link"><i data-lucide="user" class="menu-icon"></i> Account</a>
-            </li>
-            <li class="menu-item disabled">
-                <span class="menu-link"><i data-lucide="users" class="menu-icon"></i> Team <span class="badge-disabled">Coming Soon</span></span>
-            </li>
-            <li class="menu-item disabled">
-                <span class="menu-link"><i data-lucide="credit-card" class="menu-icon"></i> Subscription <span class="badge-disabled">Coming Soon</span></span>
-            </li>
-            <li class="menu-item disabled">
-                <span class="menu-link"><i data-lucide="bot" class="menu-icon"></i> Bot settings <span class="badge-disabled">Coming Soon</span></span>
-            </li>
-            <li class="menu-item disabled">
-                <span class="menu-link"><i data-lucide="database" class="menu-icon"></i> Data management <span class="badge-disabled">Coming Soon</span></span>
-            </li>
-            <li class="menu-item disabled">
-                <span class="menu-link"><i data-lucide="terminal" class="menu-icon"></i> Developers <span class="badge-disabled">Coming Soon</span></span>
-            </li>
-        </ul>
-    </div>
-
-    <!-- Main Content Area -->
-    <div class="settings-content glass-card">
-        <!-- Account Tab Content -->
-        <div id="account-tab" class="tab-panel active">
-            <h2 class="panel-title">Account</h2>
-            
-            <form id="account-form" method="POST" enctype="multipart/form-data" action="{% url 'settings' %}">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="update_profile">
-                <input type="hidden" name="remove_profile_picture" id="remove-pic-flag" value="false">
-                
-                <!-- Profile Pic & Info Header -->
-                <div class="profile-header-section">
-                    <div class="avatar-upload-container">
-                        {% if profile.profile_picture %}
-                            <img src="{{ profile.profile_picture.url }}" alt="{{ request.user.username }}" id="avatar-preview" class="avatar-preview-img">
-                        {% else %}
-                            <div id="avatar-initials-preview" class="avatar-preview-initials">{{ request.user.username|slice:":1"|upper }}</div>
-                        {% endif %}
-                        <button type="button" class="avatar-edit-btn" onclick="document.getElementById('profile-pic-input').click()" title="Upload Profile Picture">
-                            <i data-lucide="pencil" class="edit-icon"></i>
-                        </button>
-                        <input type="file" name="profile_picture" id="profile-pic-input" accept="image/*" style="display: none;" onchange="previewAvatar(this)">
-                    </div>
-                    
-                    <div class="profile-header-info">
-                        <div class="role-badge">Owner</div>
-                        <h3 class="profile-display-name">{{ request.user.username }}</h3>
-                        {% if profile.profile_picture %}
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="removeAvatar()" style="margin-top: 8px; font-size: 11px; padding: 4px 8px;">Remove Photo</button>
-                        {% endif %}
-                    </div>
-                </div>
-
-                <!-- Form Fields -->
-                <div class="form-fields-grid">
-                    <div class="form-group">
-                        <label for="{{ user_form.username.id_for_label }}">Name</label>
-                        {{ user_form.username }}
-                        {% if user_form.username.errors %}
-                            <span class="field-error">{{ user_form.username.errors.0 }}</span>
-                        {% endif %}
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="id_email">Email Address</label>
-                        <input type="email" id="id_email" class="form-control" value="{{ request.user.email }}" readonly disabled style="opacity: 0.6; cursor: not-allowed;">
-                    </div>
-                </div>
-
-                <div style="display: flex; justify-content: flex-end; margin-top: 10px;">
-                    <button type="submit" class="btn btn-primary">
-                        Save Profile Changes <i data-lucide="save" class="icon-inline"></i>
-                    </button>
-                </div>
-            </form>
-
-            <div class="settings-divider"></div>
-
-            <!-- Cards Row -->
-            <div class="cards-grid">
-                <!-- Change Password Card -->
-                <div class="settings-action-card" onclick="togglePasswordForm()">
-                    <div class="card-icon-wrapper">
-                        <i data-lucide="lock" class="card-icon"></i>
-                    </div>
-                    <div class="card-content">
-                        <h4>Change password</h4>
-                        <p>Update your password to keep your account secure.</p>
-                    </div>
-                    <i data-lucide="chevron-right" class="card-chevron"></i>
-                </div>
-
-                <!-- Transfer Ownership Card -->
-                <div class="settings-action-card disabled">
-                    <div class="card-icon-wrapper">
-                        <i data-lucide="user-minus" class="card-icon"></i>
-                    </div>
-                    <div class="card-content">
-                        <h4>Transfer ownership</h4>
-                        <p>Transfer this account ownership to another user.</p>
-                    </div>
-                    <span class="card-status-badge">Disabled</span>
-                </div>
+<div style="max-width: 1100px; margin: 0 auto; padding: 40px 24px;">
+    <div style="display: grid; grid-template-columns: 240px 1fr; gap: 32px;">
+        <!-- Left Navigation Bar -->
+        <div style="background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 16px; height: fit-content;">
+            <h3 style="font-size: var(--text-xs); color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 12px; padding: 0 12px;">Settings</h3>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+                <button type="button" class="btn btn-ghost" style="justify-content: flex-start; background: var(--electric-soft); color: var(--electric); font-weight: 600;" onclick="switchSettingsTab('profile', this)">
+                    <i data-lucide="user"></i> Profile
+                </button>
+                <button type="button" class="btn btn-ghost" style="justify-content: flex-start;" onclick="switchSettingsTab('appearance', this)">
+                    <i data-lucide="sliders"></i> Appearance & Motion
+                </button>
+                <button type="button" class="btn btn-ghost" style="justify-content: flex-start;" onclick="switchSettingsTab('models', this)">
+                    <i data-lucide="key"></i> Models & Keys
+                </button>
+                <button type="button" class="btn btn-ghost" style="justify-content: flex-start;" onclick="switchSettingsTab('usage', this)">
+                    <i data-lucide="bar-chart-2"></i> Usage
+                </button>
             </div>
+        </div>
 
-            <div class="settings-divider"></div>
-
-            <!-- Hidden/Expandable Password Change Form -->
-            <div id="password-change-panel" class="password-panel glass-card hidden">
-                <div class="password-panel-header">
-                    <h4>Change Your Password</h4>
-                    <button type="button" class="btn-close" onclick="togglePasswordForm()">&times;</button>
-                </div>
-                <form method="POST" action="{% url 'settings' %}">
+        <!-- Right Content Panels -->
+        <div>
+            <!-- Profile Tab -->
+            <div id="tab-profile" class="settings-tab-panel" style="background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-xl); padding: 32px;">
+                <h2 style="font-size: var(--text-title-lg); margin-bottom: 24px;">Profile Settings</h2>
+                <form method="POST" enctype="multipart/form-data" action="{% url 'settings' %}">
                     {% csrf_token %}
-                    <input type="hidden" name="action" value="change_password">
+                    <input type="hidden" name="action" value="update_profile">
                     
-                    {% for field in password_form %}
-                        <div class="form-group">
-                            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-                            {{ field }}
-                            {% if field.name == 'new_password1' or field.name == 'new_password' %}
-                                <small class="form-hint" style="display: block; margin-top: 5px; color: var(--text-muted, #888); font-size: 0.82rem;">Must be at least 8 characters, start with a Capital letter, and contain lowercase, digit & special character.</small>
-                            {% endif %}
-                            {% if field.errors %}
-                                {% for error in field.errors %}
-                                    <span class="field-error" style="display: block;">{{ error }}</span>
-                                {% endfor %}
-                            {% endif %}
-                        </div>
-                    {% endfor %}
-                    
-                    <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px;">
-                        <button type="button" class="btn btn-secondary" onclick="togglePasswordForm()">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Change Password</button>
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; font-size: var(--text-xs); font-weight: 600; color: var(--text-2); margin-bottom: 6px;">Username</label>
+                        {{ user_form.username }}
                     </div>
+
+                    <div style="margin-bottom: 24px;">
+                        <label style="display: block; font-size: var(--text-xs); font-weight: 600; color: var(--text-2); margin-bottom: 6px;">Email Address</label>
+                        <input type="email" value="{{ request.user.email }}" disabled readonly style="opacity: 0.6; cursor: not-allowed;">
+                    </div>
+
+                    <button type="submit" class="btn btn-primary magnetic-btn">Save Profile Changes</button>
                 </form>
             </div>
 
-            <!-- Delete Account Panel -->
-            <div class="settings-danger-zone">
-                <div class="danger-header">
-                    <i data-lucide="trash-2" class="danger-icon"></i>
-                    <div class="danger-title-desc">
-                        <h4>Delete account</h4>
-                        <p>Contact our support team to process the deletion of your account.</p>
+            <!-- Appearance & Motion Quality Tab (§7.5) -->
+            <div id="tab-appearance" class="settings-tab-panel" style="display: none; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-xl); padding: 32px;">
+                <h2 style="font-size: var(--text-title-lg); margin-bottom: 24px;">Appearance & Animation Quality</h2>
+                
+                <div style="margin-bottom: 32px;">
+                    <h3 style="font-size: var(--text-title-sm); margin-bottom: 12px;">Theme Preference</h3>
+                    <div style="display: flex; gap: 16px;">
+                        <button type="button" class="btn btn-secondary" onclick="document.documentElement.setAttribute('data-theme', 'dark'); localStorage.setItem('devdialogue_theme', 'dark');">
+                            <i data-lucide="moon"></i> Nebula Dark (Default)
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="document.documentElement.setAttribute('data-theme', 'light'); localStorage.setItem('devdialogue_theme', 'light');">
+                            <i data-lucide="sun"></i> Light Mode
+                        </button>
                     </div>
                 </div>
-                <button type="button" class="btn btn-secondary disabled" style="border-color: rgba(239, 68, 68, 0.4); color: #ef4444;">
-                    Request Deletion
-                </button>
+
+                <div>
+                    <h3 style="font-size: var(--text-title-sm); margin-bottom: 8px;">Animation Quality Tier</h3>
+                    <p style="color: var(--text-2); font-size: var(--text-sm); margin-bottom: 20px;">Control WebGL 3D rendering density, GSAP motion effects, and particle complexity.</p>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
+                        <div class="tilt-card" style="background: var(--bg-2); border: 1px solid var(--line); padding: 20px; border-radius: var(--r-md); cursor: pointer;" onclick="window.qualityManager?.setTier('Ultra')">
+                            <h4 style="font-size: var(--text-body); margin-bottom: 4px;">Ultra</h4>
+                            <p style="font-size: var(--text-xs); color: var(--text-3);">Full WebGL 3D, bloom, 2000+ star particles, custom cursor overlay.</p>
+                        </div>
+                        <div class="tilt-card" style="background: var(--bg-2); border: 1px solid var(--line); padding: 20px; border-radius: var(--r-md); cursor: pointer;" onclick="window.qualityManager?.setTier('High')">
+                            <h4 style="font-size: var(--text-body); margin-bottom: 4px;">High</h4>
+                            <p style="font-size: var(--text-xs); color: var(--text-3);">3D WebGL without post-processing, smooth Lenis scrolling.</p>
+                        </div>
+                        <div class="tilt-card" style="background: var(--bg-2); border: 1px solid var(--line); padding: 20px; border-radius: var(--r-md); cursor: pointer;" onclick="window.qualityManager?.setTier('Lite')">
+                            <h4 style="font-size: var(--text-body); margin-bottom: 4px;">Lite</h4>
+                            <p style="font-size: var(--text-xs); color: var(--text-3);">CSS 3D depth, smooth transitions (no WebGL canvas loops).</p>
+                        </div>
+                        <div class="tilt-card" style="background: var(--bg-2); border: 1px solid var(--line); padding: 20px; border-radius: var(--r-md); cursor: pointer;" onclick="window.qualityManager?.setTier('Reduced')">
+                            <h4 style="font-size: var(--text-body); margin-bottom: 4px;">Reduced</h4>
+                            <p style="font-size: var(--text-xs); color: var(--text-3);">No parallax, simple fades, accessible static layouts.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Models Tab -->
+            <div id="tab-models" class="settings-tab-panel" style="display: none; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-xl); padding: 32px;">
+                <h2 style="font-size: var(--text-title-lg); margin-bottom: 24px;">Models & Provider Keys</h2>
+                <p style="color: var(--text-2); font-size: var(--text-sm); margin-bottom: 24px;">Configure custom API keys for Google Gemini, OpenAI, Anthropic, or DeepSeek.</p>
+                <div style="background: var(--bg-2); border: 1px solid var(--line); padding: 24px; border-radius: var(--r-lg);">
+                    <label style="display: block; font-size: var(--text-xs); font-weight: 600; color: var(--text-2); margin-bottom: 8px;">Google Gemini API Key</label>
+                    <input type="password" value="••••••••••••••••••••••••" placeholder="AIzaSy..." />
+                    <button type="button" class="btn btn-secondary btn-sm" style="margin-top: 12px;">Test Connection</button>
+                </div>
+            </div>
+
+            <!-- Usage Tab -->
+            <div id="tab-usage" class="settings-tab-panel" style="display: none; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-xl); padding: 32px;">
+                <h2 style="font-size: var(--text-title-lg); margin-bottom: 24px;">Usage & Quota</h2>
+                <div style="background: var(--bg-2); border: 1px solid var(--line); padding: 24px; border-radius: var(--r-lg); margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span>Monthly Token Usage</span>
+                        <strong>142,500 / 1,000,000 Tokens</strong>
+                    </div>
+                    <div style="height: 8px; background: var(--line); border-radius: 4px; overflow: hidden;">
+                        <div style="width: 14.25%; height: 100%; background: var(--g-brand);"></div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -168,67 +121,20 @@
 
 {% block extra_js %}
 <script>
-    function previewAvatar(input) {
-        if (input.files && input.files[0]) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                let previewImg = document.getElementById('avatar-preview');
-                const initialsDiv = document.getElementById('avatar-initials-preview');
-                
-                if (!previewImg) {
-                    // Create image preview element if it doesn't exist
-                    previewImg = document.createElement('img');
-                    previewImg.id = 'avatar-preview';
-                    previewImg.className = 'avatar-preview-img';
-                    initialsDiv.parentNode.insertBefore(previewImg, initialsDiv);
-                    initialsDiv.style.display = 'none';
-                }
-                
-                previewImg.src = e.target.result;
-                document.getElementById('remove-pic-flag').value = 'false';
-            };
-            reader.readAsDataURL(input.files[0]);
-        }
-    }
+    function switchSettingsTab(tabName, btn) {
+        document.querySelectorAll('.settings-tab-panel').forEach(panel => panel.style.display = 'none');
+        const target = document.getElementById(`tab-${tabName}`);
+        if (target) target.style.display = 'block';
 
-    function removeAvatar() {
-        const previewImg = document.getElementById('avatar-preview');
-        const initialsDiv = document.getElementById('avatar-initials-preview');
-        
-        if (previewImg) {
-            previewImg.remove();
-        }
-        
-        if (initialsDiv) {
-            initialsDiv.style.display = 'flex';
-        } else {
-            const container = document.querySelector('.avatar-upload-container');
-            const newInitials = document.createElement('div');
-            newInitials.id = 'avatar-initials-preview';
-            newInitials.className = 'avatar-preview-initials';
-            newInitials.textContent = '{{ request.user.username|slice:":1"|upper }}';
-            container.insertBefore(newInitials, container.firstChild);
-        }
-        
-        document.getElementById('remove-pic-flag').value = 'true';
-        document.getElementById('profile-pic-input').value = '';
+        btn.parentElement.querySelectorAll('button').forEach(b => {
+            b.style.background = 'transparent';
+            b.style.color = 'var(--text-2)';
+            b.style.fontWeight = '400';
+        });
+        btn.style.background = 'var(--electric-soft)';
+        btn.style.color = 'var(--electric)';
+        btn.style.fontWeight = '600';
     }
-
-    function togglePasswordForm() {
-        const panel = document.getElementById('password-change-panel');
-        panel.classList.toggle('hidden');
-    }
-
-    // Auto-open password panel if password form contains errors or action was password
-    window.addEventListener('DOMContentLoaded', () => {
-        const urlParams = new URLSearchParams(window.location.search);
-        const actionParam = urlParams.get('action');
-        
-        // check if there are errors in fields or if URL requested change password
-        const passwordErrors = document.querySelectorAll('#password-change-panel .field-error');
-        if (passwordErrors.length > 0 || actionParam === 'password') {
-            togglePasswordForm();
-        }
-    });
 </script>
 {% endblock %}
+
