@@ -825,7 +825,12 @@
         // Toggle active tabs
         const tabs = fileTabsContainer.querySelectorAll('.file-tab');
         tabs.forEach(t => t.classList.remove('active'));
-        tabElement.classList.add('active');
+        if (tabElement) {
+            tabElement.classList.add('active');
+            if (typeof tabElement.scrollIntoView === 'function') {
+                tabElement.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+            }
+        }
         
         try {
             const response = await fetch(`/api/code/${codeId}/`);
@@ -838,9 +843,15 @@
                 const modName = data.module_name.toLowerCase();
                 let langClass = 'language-python';
                 if (modName.endsWith('.html') || modName.endsWith('.htm')) langClass = 'language-html';
-                else if (modName.endsWith('.js')) langClass = 'language-javascript';
+                else if (modName.endsWith('.js') || modName.endsWith('.ts') || modName.endsWith('.jsx') || modName.endsWith('.tsx')) langClass = 'language-javascript';
+                else if (modName.endsWith('.dart')) langClass = 'language-dart';
+                else if (modName.endsWith('.yaml') || modName.endsWith('.yml')) langClass = 'language-yaml';
+                else if (modName.endsWith('.go')) langClass = 'language-go';
+                else if (modName.endsWith('.rs')) langClass = 'language-rust';
+                else if (modName.endsWith('.sh') || modName.endsWith('.bat')) langClass = 'language-bash';
                 else if (modName.endsWith('.css')) langClass = 'language-css';
                 else if (modName.endsWith('.json')) langClass = 'language-json';
+                else if (modName.endsWith('.md')) langClass = 'language-markdown';
 
                 codeViewContainer.innerHTML = `
                     <pre class="code-block ${langClass}"><code id="code-output-block" class="${langClass}"></code></pre>
@@ -853,6 +864,7 @@
                 if (window.Prism) {
                     Prism.highlightElement(codeNode);
                 }
+
                 
                 // Make sure action buttons are visible
                 codeActionsBar.classList.remove('hidden');

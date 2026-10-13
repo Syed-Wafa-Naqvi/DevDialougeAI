@@ -102,7 +102,44 @@ class AIHarnessPackager:
         if not has_js_files and "package.json" in new_files:
             del new_files["package.json"]
 
+        has_dart_files = any(p.endswith('.dart') for p in existing_files) or "pubspec.yaml" in existing_files
+        if has_dart_files:
+            if "requirements.txt" in new_files:
+                del new_files["requirements.txt"]
+            # If runner contains python commands for a dart project, replace with flutter runner
+            if "run.sh" in new_files and ("python" in new_files["run.sh"] or "pip" in new_files["run.sh"]):
+                new_files["run.sh"] = (
+                    "#!/usr/bin/env bash\n"
+                    "set -e\n"
+                    f"echo '🚀 Starting Flutter Project: {display_title}...'\n"
+                    "if ! command -v flutter >/dev/null 2>&1; then\n"
+                    "    echo '❌ Flutter SDK not found in PATH. Install from https://flutter.dev/docs/get-started/install'\n"
+                    "    exit 1\n"
+                    "fi\n"
+                    "echo '📦 Fetching Flutter dependencies...'\n"
+                    "flutter pub get\n"
+                    "echo '⚡ Launching Flutter App...'\n"
+                    "flutter run\n"
+                )
+            if "run.bat" in new_files and ("python" in new_files["run.bat"] or "pip" in new_files["run.bat"]):
+                new_files["run.bat"] = (
+                    "@echo off\n"
+                    f"echo Starting Flutter Project: {display_title}...\n"
+                    "where flutter >nul 2>nul\n"
+                    "if %errorlevel% neq 0 (\n"
+                    "    echo [ERROR] Flutter SDK not found in PATH. Install from https://flutter.dev\n"
+                    "    pause\n"
+                    "    exit /b 1\n"
+                    ")\n"
+                    "echo Fetching Flutter dependencies...\n"
+                    "call flutter pub get\n"
+                    "echo Launching Flutter App...\n"
+                    "call flutter run\n"
+                    "pause\n"
+                )
+
         return new_files
+
 
     @classmethod
     def _parse_json_response(cls, text: str) -> dict:
@@ -205,7 +242,7 @@ class AIHarnessPackager:
 
 
         # 1. Node.js / JavaScript / TypeScript
-        if has_js and not has_py:
+        elif has_js and not has_py:
             if "package.json" not in all_files:
                 new_files["package.json"] = json.dumps({
                     "name": project_name.lower(),
