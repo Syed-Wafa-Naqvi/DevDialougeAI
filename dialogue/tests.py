@@ -7,8 +7,16 @@ from dialogue.ambiguity import AmbiguityChecker
 class DialogueEngineTestCase(TestCase):
     def test_completeness_triggers(self):
         history = [{'role': 'user', 'content': 'I want a Python API'}]
-        self.assertTrue(CompletenessEngine.should_synthesize_summary(history, 'summary'))
-        self.assertFalse(CompletenessEngine.should_synthesize_summary(history, 'hello'))
+        self.assertTrue(CompletenessEngine.should_synthesize_summary(history, 'summary', provider_name='free'))
+        self.assertFalse(CompletenessEngine.should_synthesize_summary(history, 'hello', provider_name='free'))
+
+    def test_offtopic_does_not_trigger_summary(self):
+        history = [
+            {'role': 'user', 'content': 'Which Model are u using'},
+            {'role': 'assistant', 'content': 'I am DevDialogue AI'},
+            {'role': 'user', 'content': "Who's the president of INDIA"}
+        ]
+        self.assertFalse(CompletenessEngine.should_synthesize_summary(history, "Who's the president of INDIA", provider_name='free'))
 
     def test_calculate_score(self):
         history = [{'role': 'user', 'content': 'Python backend'}]

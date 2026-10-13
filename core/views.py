@@ -66,6 +66,10 @@ def pricing_view(request):
 def about_view(request):
     return render(request, 'about.html')
 
+@login_required
+def welcome_view(request):
+    return render(request, 'welcome.html')
+
 # 2. User Sign Up
 def signup_view(request):
     if request.user.is_authenticated:

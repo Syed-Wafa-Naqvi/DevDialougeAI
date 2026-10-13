@@ -49,6 +49,12 @@ def pricing_view(request):
 def about_view(request):
     return render(request, 'about.html')
 
+def styleguide_view(request):
+    return render(request, 'styleguide.html')
+
+def welcome_view(request):
+    return render(request, 'welcome.html')
+
 @verification_required
 def dashboard_view(request):
     sessions = request.user.sessions.all().order_by('-started_at')
@@ -113,6 +119,17 @@ def chat_view(request, session_id):
     older_sessions = [s for s in all_sessions if s.started_at < seven_days_ago]
     
     is_first_load = messages_list.count() == 0
+    history = list(messages_list.values('role', 'content'))
+    
+    completeness_score = 0
+    rubric_cats = {}
+    if history:
+        try:
+            eval_res = CompletenessEngine.evaluate_rubric(history)
+            completeness_score = eval_res.get('score', 0)
+            rubric_cats = eval_res.get('categories', {})
+        except Exception:
+            completeness_score = CompletenessEngine._calculate_keyword_fallback_score(history)
             
     return render(request, 'chat.html', {
         'session': session,
@@ -123,6 +140,8 @@ def chat_view(request, session_id):
         'last_7_days_sessions': last_7_days_sessions,
         'older_sessions': older_sessions,
         'is_first_load': is_first_load,
+        'completeness_score': completeness_score,
+        'rubric_cats': rubric_cats,
     })
 
 @verification_required
@@ -157,8 +176,40 @@ def send_message_api(request, session_id):
     
     if has_summary:
         confirmation_msg = user_content.lower().strip()
+        user_words = set(re.findall(r'\b\w+\b', confirmation_msg))
+        is_approval = any(w in user_words for w in ['yes', 'y', 'proceed', 'generate', 'approve', 'build', 'ok', 'sure'])
+        
         if session.mode == 'mode1':
-            if any(word in confirmation_msg for word in ['yes', 'y', 'proceed', 'generate', 'approve', 'build', 'ok']):
+            if session.status == 'completed' or session.generated_codes.exists():
+                edit_triggers = ['modify', 'update', 'change', 'refactor', 'edit', 'rewrite', 'fix code', 'add field', 'add model', 'fix bug']
+                wants_edit = any(trig in user_content.lower() for trig in edit_triggers)
+                existing_codes = list(session.generated_codes.all())
+                
+                if wants_edit and existing_codes:
+                    target_mod = existing_codes[-1]
+                    for mod in existing_codes:
+                        if mod.module_name.lower() in user_content.lower():
+                            target_mod = mod
+                            break
+                    summary = SRSSynthesizer.synthesize_summary(history, provider_name=provider_name)
+                    updated_code = CodeBuilder.generate_code_for_module(target_mod.module_name, summary, modifications=user_content, provider_name=provider_name)
+                    target_mod.code_content = updated_code
+                    target_mod.save()
+                    response_text = f"### ✏️ Updated Module `{target_mod.module_name}`\n\nI have updated `{target_mod.module_name}` based on your request. You can inspect the updated code in the right panel and download the project ZIP."
+                else:
+                    summary = SRSSynthesizer.synthesize_summary(history, provider_name=provider_name)
+                    post_prompt = (
+                        f"Project Specification:\n{summary}\n\n"
+                        f"User Question: \"{user_content}\"\n\n"
+                        "The user's project codebase has already been generated and packaged into a ZIP. "
+                        "Answer their question directly with clear, practical steps (e.g., exact commands to run the project, how to open in an IDE like VS Code or PyCharm, how to start the development server, how to access admin, etc.)."
+                    )
+                    post_system = (
+                        "You are DevDialogue AI — Lead Systems Architect. "
+                        "Guide the user on running, testing, or understanding their generated project clearly, step-by-step, with practical terminal commands and IDE instructions."
+                    )
+                    response_text = LLMRouter.generate(prompt=post_prompt, system_prompt=post_system, provider_name=provider_name)
+            elif is_approval:
                 session.status = 'completed'
                 session.save()
                 
@@ -172,30 +223,88 @@ def send_message_api(request, session_id):
                         
                 response_text = (
                     "### 🎉 Codebase Generated Successfully!\n\n"
-                    "I have generated the codebase based on your requirements. You can inspect the code in the right panel and download the project ZIP."
+                    "I have generated the complete codebase based on your requirements. You can inspect the code in the right panel and download the turnkey project ZIP."
                 )
             else:
                 response_text = InterviewerService.generate_next_question(history, provider_name=provider_name)
         else:
+            # Mode 2: Incremental Module-by-Module Generation
             summary = SRSSynthesizer.synthesize_summary(history, provider_name=provider_name)
             modules = FilePlanner.get_module_list(summary)
             existing_codes = list(session.generated_codes.all())
             
-            if len(existing_codes) < len(modules):
-                current_mod = modules[len(existing_codes)]
-                code = CodeBuilder.generate_code_for_module(current_mod, summary, provider_name=provider_name)
-                GeneratedCode.objects.create(session=session, module_name=current_mod, code_content=code)
+            # Check if all modules have already been generated and approved
+            if session.status == 'completed' or (len(existing_codes) >= len(modules) and len(modules) > 0):
+                edit_triggers = ['modify', 'update', 'change', 'refactor', 'edit', 'rewrite', 'fix code', 'add field', 'add model', 'fix bug']
+                wants_edit = any(trig in user_content.lower() for trig in edit_triggers)
+                
+                if wants_edit and existing_codes:
+                    target_mod = existing_codes[-1]
+                    for mod in existing_codes:
+                        if mod.module_name.lower() in user_content.lower():
+                            target_mod = mod
+                            break
+                    updated_code = CodeBuilder.generate_code_for_module(
+                        target_mod.module_name,
+                        summary,
+                        modifications=user_content,
+                        provider_name=provider_name
+                    )
+                    target_mod.code_content = updated_code
+                    target_mod.save()
+                    response_text = (
+                        f"### ✏️ Updated Module `{target_mod.module_name}`\n\n"
+                        f"I have modified `{target_mod.module_name}` based on your request: *\"{user_content}\"*\n\n"
+                        f"You can review the updated code in the right panel and download the project ZIP anytime."
+                    )
+                else:
+                    # User is asking a post-generation question (e.g. "Okay now how to run it")
+                    post_prompt = (
+                        f"Project Specification:\n{summary}\n\n"
+                        f"User Question: \"{user_content}\"\n\n"
+                        "The user's project codebase has already been generated and packaged into a ZIP. "
+                        "Answer their question directly with clear, practical steps (e.g., exact commands to run the project, how to open in an IDE like VS Code or PyCharm, how to start the development server, how to access admin, etc.)."
+                    )
+                    post_system = (
+                        "You are DevDialogue AI — Lead Systems Architect. "
+                        "Guide the user on running, testing, or understanding their generated project clearly, step-by-step, with practical terminal commands and IDE instructions."
+                    )
+                    response_text = LLMRouter.generate(prompt=post_prompt, system_prompt=post_system, provider_name=provider_name)
+            elif len(existing_codes) > 0 and not is_approval:
+                # User wants to modify the current module based on feedback during review
+                last_mod = existing_codes[-1]
+                updated_code = CodeBuilder.generate_code_for_module(
+                    last_mod.module_name, 
+                    summary, 
+                    modifications=user_content, 
+                    provider_name=provider_name
+                )
+                last_mod.code_content = updated_code
+                last_mod.save()
                 
                 response_text = (
-                    f"### Module {len(existing_codes)+1}/{len(modules)}: `{current_mod}` Generated!\n\n"
-                    f"You can view `{current_mod}` in the right panel. Say **yes** to proceed to the next module."
+                    f"### ✏️ Updated Module `{last_mod.module_name}`\n\n"
+                    f"I have modified `{last_mod.module_name}` based on your feedback: *\"{user_content}\"*\n\n"
+                    f"You can inspect the updated code in the right panel. Do you approve this module? (Say **yes** to approve and proceed, or specify further changes)."
                 )
             else:
-                session.status = 'completed'
-                session.save()
-                response_text = "### 🚀 Incremental Generation Complete!\nAll modules have been approved and generated."
+                # User approved or starting next module
+                if len(existing_codes) < len(modules):
+                    current_mod = modules[len(existing_codes)]
+                    code = CodeBuilder.generate_code_for_module(current_mod, summary, provider_name=provider_name)
+                    GeneratedCode.objects.create(session=session, module_name=current_mod, code_content=code)
+                    
+                    response_text = (
+                        f"### Module {len(existing_codes)+1}/{len(modules)}: `{current_mod}`\n\n"
+                        f"I have generated the code for `{current_mod}`. Inspect it in the right panel.\n\n"
+                        f"Do you approve this module? (Say **yes** to move to the next module, or describe what changes you want)."
+                    )
+                else:
+                    session.status = 'completed'
+                    session.save()
+                    response_text = "### 🚀 Incremental Generation Complete!\nAll project modules have been approved and generated. You can download the complete project ZIP from the sidebar."
     else:
-        if CompletenessEngine.should_synthesize_summary(history, user_content):
+        if CompletenessEngine.should_synthesize_summary(history, user_content, provider_name=provider_name):
             response_text = SRSSynthesizer.synthesize_summary(history, is_mode2=(session.mode == 'mode2'), provider_name=provider_name)
         else:
             response_text = InterviewerService.generate_next_question(history, provider_name=provider_name)
@@ -208,11 +317,23 @@ def send_message_api(request, session_id):
         session.save()
         
     codes = list(session.generated_codes.values('id', 'module_name'))
+    
+    # Calculate live updated completeness score & categories
+    try:
+        updated_eval = CompletenessEngine.evaluate_rubric(history)
+        comp_score = updated_eval.get('score', 0)
+        rubric_cats = updated_eval.get('categories', {})
+    except Exception:
+        comp_score = CompletenessEngine._calculate_keyword_fallback_score(history)
+        rubric_cats = {}
+
     return JsonResponse({
         'response': response_text,
         'status': session.status,
         'codes': codes,
-        'title': session.title
+        'title': session.title,
+        'completeness_score': comp_score,
+        'rubric_cats': rubric_cats
     })
 
 @verification_required
@@ -250,3 +371,81 @@ def get_code_file_api(request, code_id):
         'module_name': code_obj.module_name,
         'code_content': code_obj.code_content
     })
+
+@verification_required
+def get_job_events_api(request, job_id):
+    from chat.models import Job
+    job = get_object_or_404(Job, id=job_id, user=request.user)
+    
+    after_seq = int(request.GET.get('after', 0))
+    events = list(job.events.filter(sequence_number__gt=after_seq).values(
+        'sequence_number', 'kind', 'message', 'data', 'created_at'
+    ))
+    
+    return JsonResponse({
+        'job_id': job.id,
+        'status': job.status,
+        'progress_current': job.progress_current,
+        'progress_total': job.progress_total,
+        'result_summary': job.result_summary,
+        'error_message': job.error_message,
+        'cancel_requested': job.cancel_requested,
+        'events': events
+    })
+
+@verification_required
+def cancel_job_api(request, job_id):
+    from chat.models import Job
+    if request.method == 'POST':
+        job = get_object_or_404(Job, id=job_id, user=request.user)
+        job.cancel_requested = True
+        job.save(update_fields=['cancel_requested'])
+        return JsonResponse({'status': 'cancellation_requested', 'job_id': job.id})
+    return JsonResponse({'status': 'error', 'message': 'Invalid method'}, status=400)
+
+@verification_required
+def get_plan_api(request, session_id):
+    from chat.models import ProjectPlan
+    session = get_object_or_404(Session, id=session_id, user=request.user)
+    plan = session.plans.order_by('-version').first()
+    if not plan:
+        return JsonResponse({'has_plan': False})
+    return JsonResponse({
+        'has_plan': True,
+        'id': plan.id,
+        'version': plan.version,
+        'status': plan.status,
+        'plan_data': plan.plan_data,
+        'generation_order': plan.generation_order
+    })
+
+@verification_required
+def get_verification_api(request, session_id):
+    from chat.models import VerificationRun
+    session = get_object_or_404(Session, id=session_id, user=request.user)
+    verif = session.verification_runs.order_by('-created_at').first()
+    if not verif:
+        return JsonResponse({'has_verification': False})
+    return JsonResponse({
+        'has_verification': True,
+        'level': verif.level,
+        'passed': verif.passed,
+        'error_count': verif.error_count,
+        'warning_count': verif.warning_count,
+        'issues': verif.issues,
+        'created_at': verif.created_at.strftime('%Y-%m-%d %H:%M:%S UTC')
+    })
+
+@verification_required
+def get_file_tree_api(request, session_id):
+    from chat.models import ProjectFile, GeneratedCode
+    session = get_object_or_404(Session, id=session_id, user=request.user)
+    p_files = list(session.project_files.values('id', 'path', 'status', 'current_version', 'updated_at'))
+    g_codes = list(session.generated_codes.values('id', 'module_name'))
+    
+    return JsonResponse({
+        'project_files': p_files,
+        'generated_codes': g_codes
+    })
+
+

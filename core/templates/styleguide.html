@@ -1,0 +1,133 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}DevDialogue AI — Studio Light Styleguide{% endblock %}
+
+{% block content %}
+<div class="styleguide-page" style="max-width: 1200px; margin: 0 auto; padding: 40px 24px;">
+    <!-- Header -->
+    <div style="border-bottom: 1px solid var(--border); padding-bottom: 24px; margin-bottom: 40px;">
+        <span class="badge badge-brand" style="margin-bottom: 12px;">Studio Light v4</span>
+        <h1 style="font-size: var(--text-hero); font-weight: 700; color: var(--ink);">Design System Styleguide</h1>
+        <p style="font-size: var(--text-lead); color: var(--ink-2); max-width: 68ch;">
+            High-contrast, restrained color, precise 1px borders, elevation shadows, and human-crafted product typography.
+        </p>
+    </div>
+
+    <!-- 1. Color Palette -->
+    <section style="margin-bottom: 48px;">
+        <h2 style="font-size: var(--text-heading); font-weight: 600; margin-bottom: 20px;">1. Color Palette</h2>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px;">
+            <div style="background: var(--canvas); border: 1px solid var(--border); border-radius: 8px; padding: 16px;">
+                <div style="height: 48px; background: #F6F7F9; border-radius: 6px; border: 1px solid #E2E5EA; margin-bottom: 12px;"></div>
+                <div style="font-weight: 600; font-size: 14px; color: var(--ink);">--canvas</div>
+                <div style="font-size: 12px; color: var(--ink-3);">#F6F7F9 • Page canvas</div>
+            </div>
+            <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px;">
+                <div style="height: 48px; background: #FFFFFF; border-radius: 6px; border: 1px solid #E2E5EA; margin-bottom: 12px;"></div>
+                <div style="font-weight: 600; font-size: 14px; color: var(--ink);">--surface</div>
+                <div style="font-size: 12px; color: var(--ink-3);">#FFFFFF • Surface card</div>
+            </div>
+            <div style="background: var(--surface-sunken); border: 1px solid var(--border); border-radius: 8px; padding: 16px;">
+                <div style="height: 48px; background: #EFF1F4; border-radius: 6px; border: 1px solid #E2E5EA; margin-bottom: 12px;"></div>
+                <div style="font-weight: 600; font-size: 14px; color: var(--ink);">--surface-sunken</div>
+                <div style="font-size: 12px; color: var(--ink-3);">#EFF1F4 • Sidebar / well</div>
+            </div>
+            <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px;">
+                <div style="height: 48px; background: #2548E8; border-radius: 6px; margin-bottom: 12px;"></div>
+                <div style="font-weight: 600; font-size: 14px; color: var(--ink);">--brand (Cobalt)</div>
+                <div style="font-size: 12px; color: var(--ink-3);">#2548E8 • Primary Brand</div>
+            </div>
+            <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px;">
+                <div style="height: 48px; background: #FF6A2B; border-radius: 6px; margin-bottom: 12px;"></div>
+                <div style="font-weight: 600; font-size: 14px; color: var(--ink);">--accent (Tangerine)</div>
+                <div style="font-size: 12px; color: var(--ink-3);">#FF6A2B • Accent pulse</div>
+            </div>
+            <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px;">
+                <div style="height: 48px; background: #0B1220; border-radius: 6px; margin-bottom: 12px;"></div>
+                <div style="font-weight: 600; font-size: 14px; color: var(--ink);">--ink</div>
+                <div style="font-size: 12px; color: var(--ink-3);">#0B1220 • High Contrast (18:1)</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 2. Typography -->
+    <section style="margin-bottom: 48px;">
+        <h2 style="font-size: var(--text-heading); font-weight: 600; margin-bottom: 20px;">2. Typography (Instrument Sans & JetBrains Mono)</h2>
+        <div style="display: flex; flex-direction: column; gap: 16px; background: var(--surface); padding: 24px; border: 1px solid var(--border); border-radius: 12px;">
+            <div style="font-size: 48px; font-weight: 700; color: var(--ink); line-height: 1.1;">Autonomous AI Software Builder (48px)</div>
+            <div style="font-size: 30px; font-weight: 600; color: var(--ink);">Blueprint & Verification Architecture (30px)</div>
+            <div style="font-size: 20px; font-weight: 600; color: var(--ink);">Multi-File Code Synthesis & Live Diffs (20px)</div>
+            <p style="font-size: 16px; color: var(--ink-2); line-height: 1.6; max-width: 68ch;">
+                DevDialogue AI turns natural language specifications into complete, verified software repositories through structured requirements dialogue and executable verification suites. (16px body text)
+            </p>
+            <div style="font-family: var(--font-mono); font-size: 14px; background: var(--surface-sunken); padding: 12px; border-radius: 6px; border: 1px solid var(--border);">
+                def synthesize_code(context: SessionContext) -> List[GeneratedFile]:
+            </div>
+        </div>
+    </section>
+
+    <!-- 3. Components & Buttons -->
+    <section style="margin-bottom: 48px;">
+        <h2 style="font-size: var(--text-heading); font-weight: 600; margin-bottom: 20px;">3. Interactive Components & Buttons</h2>
+        <div style="display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 24px;">
+            <button class="btn btn-primary">Primary Cobalt Action</button>
+            <button class="btn btn-secondary">Secondary Surface Button</button>
+            <button class="btn btn-ghost">Ghost Link</button>
+            <button class="btn btn-danger">Danger Action</button>
+            <button class="btn btn-primary btn-sm">Small Button</button>
+        </div>
+
+        <h3 style="font-size: var(--text-title-lg); font-weight: 600; margin-bottom: 16px;">Presence Indicator Status Pills (§7.3)</h3>
+        <div style="display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 24px;">
+            <div class="presence-status-pill" data-state="idle">
+                <span class="presence-status-icon"></span>
+                <span>Ready</span>
+            </div>
+            <div class="presence-status-pill" data-state="thinking">
+                <span class="presence-status-icon">
+                    <span class="presence-status-dot"></span>
+                    <span class="presence-status-dot"></span>
+                    <span class="presence-status-dot"></span>
+                </span>
+                <span>Thinking…</span>
+            </div>
+            <div class="presence-status-pill" data-state="building">
+                <span class="presence-status-icon"></span>
+                <span>Writing views.py…</span>
+            </div>
+            <div class="presence-status-pill" data-state="verified">
+                <span class="presence-status-icon"></span>
+                <span>Checks passed</span>
+            </div>
+        </div>
+
+        <h3 style="font-size: var(--text-title-lg); font-weight: 600; margin-bottom: 16px;">Badges</h3>
+        <div style="display: flex; flex-wrap: wrap; gap: 12px;">
+            <span class="badge badge-brand">Cobalt Brand</span>
+            <span class="badge badge-success">Verified ✓</span>
+            <span class="badge badge-warning">Review Needed</span>
+            <span class="badge badge-error">Build Error</span>
+        </div>
+    </section>
+
+    <!-- 4. Form Controls -->
+    <section style="margin-bottom: 48px;">
+        <h2 style="font-size: var(--text-heading); font-weight: 600; margin-bottom: 20px;">4. Form Inputs</h2>
+        <div style="max-width: 500px; display: flex; flex-direction: column; gap: 16px; background: var(--surface); padding: 24px; border: 1px solid var(--border); border-radius: 12px;">
+            <div>
+                <label style="display: block; font-size: 14px; font-weight: 500; margin-bottom: 6px; color: var(--ink);">Project Title</label>
+                <input type="text" value="clinic-booking-api" placeholder="Enter project name..." />
+            </div>
+            <div>
+                <label style="display: block; font-size: 14px; font-weight: 500; margin-bottom: 6px; color: var(--ink);">Primary Stack</label>
+                <select>
+                    <option>Django + PostgreSQL (REST API)</option>
+                    <option>FastAPI + React</option>
+                    <option>Express.js + MongoDB</option>
+                </select>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}

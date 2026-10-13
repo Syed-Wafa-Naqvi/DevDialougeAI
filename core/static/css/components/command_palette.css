@@ -1,0 +1,83 @@
+/* ==========================================================================
+   DevDialogue AI — Command Palette (`Ctrl/Cmd+K` v3 Rebuild)
+   ========================================================================== */
+
+dialog.command-palette-dialog {
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    background-color: var(--surface);
+    color: var(--text);
+    padding: 0;
+    max-width: 620px;
+    width: calc(100% - 32px);
+    margin: 80px auto auto;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.7);
+    overflow: hidden;
+    transform-style: preserve-3d;
+}
+
+dialog.command-palette-dialog::backdrop {
+    background: rgba(5, 7, 15, 0.75);
+    backdrop-filter: blur(12px);
+}
+
+.palette-input-row {
+    display: flex;
+    align-items: center;
+    padding: var(--s4);
+    border-bottom: 1px solid var(--line);
+    gap: var(--s3);
+    background-color: var(--surface-2);
+}
+
+.palette-search-input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-family: var(--font-sans);
+    font-size: var(--text-lead);
+    color: var(--text);
+    outline: none;
+}
+
+.palette-results-list {
+    max-height: 360px;
+    overflow-y: auto;
+    padding: var(--s2);
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.palette-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--s3) var(--s4);
+    border-radius: var(--r-md);
+    cursor: pointer;
+    font-size: var(--text-sm);
+    color: var(--text-2);
+    transition: all var(--t-micro) ease;
+}
+
+.palette-item:hover, .palette-item.selected {
+    background-color: var(--electric-soft);
+    color: var(--text);
+}
+
+.palette-item.selected {
+    border-left: 3px solid var(--electric);
+}
+
+.palette-shortcut-badge {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--text-3);
+    background-color: var(--bg-2);
+    padding: 2px 8px;
+    border-radius: var(--r-xs);
+    border: 1px solid var(--line);
+}
+

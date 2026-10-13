@@ -1,0 +1,259 @@
+/* ==========================================================================
+   DevDialogue AI — Visual Direction v4: "Studio Light" Design Tokens
+   High-End, High-Visibility, Ultra-Clean Developer Workspace
+   ========================================================================== */
+
+@property --accent {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: #FF6A2B;
+}
+
+:root {
+    /* Fonts (§4) */
+    --font-sans: 'Instrument Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+    /* Type Scale (px: 12, 13, 14, 16, 18, 20, 24, 30, 38, 48, 64) */
+    --text-xs: 0.75rem;       /* 12px */
+    --text-meta: 0.8125rem;   /* 13px */
+    --text-sm: 0.875rem;      /* 14px */
+    --text-body: 1rem;        /* 16px */
+    --text-lead: 1.125rem;    /* 18px */
+    --text-title-sm: 1.25rem; /* 20px */
+    --text-title-md: 1.5rem;  /* 24px */
+    --text-title-lg: 1.875rem;/* 30px */
+    --text-heading: 2.375rem; /* 38px */
+    --text-hero: 3rem;        /* 48px */
+    --text-display: 4rem;     /* 64px tight tracking */
+
+    /* Line Heights */
+    --lh-heading: 1.15;
+    --lh-body: 1.6;
+    --lh-code: 1.6;
+
+    /* 8px Base Grid Spacing Scale (§5) */
+    --s1: 4px;
+    --s2: 8px;
+    --s3: 12px;
+    --s4: 16px;
+    --s5: 24px;
+    --s6: 32px;
+    --s7: 40px;
+    --s8: 48px;
+    --s9: 64px;
+    --s10: 80px;
+    --s11: 96px;
+    --s12: 128px;
+
+    /* Legacy Spacing Aliases */
+    --space-1: var(--s1);
+    --space-2: var(--s2);
+    --space-3: var(--s3);
+    --space-4: var(--s4);
+    --space-5: var(--s5);
+    --space-6: var(--s6);
+    --space-7: var(--s7);
+    --space-8: var(--s8);
+
+    /* Radii Hierarchy (§5) */
+    --r-xs: 4px;
+    --r-sm: 6px;
+    --r-md: 8px;
+    --r-lg: 12px;
+    --r-xl: 16px;
+    --r-full: 9999px;
+
+    /* Motion Durations (§7.1) */
+    --t-micro: 150ms;
+    --t-short: 250ms;
+    --t-medium: 350ms;
+    --t-long: 500ms;
+    --t-hero: 800ms;
+
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+    --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+    --ease-spring: cubic-bezier(0.34, 1.3, 0.64, 1);
+}
+
+/* ==========================================================================
+   3.1 Studio Light Theme (DEFAULT)
+   ========================================================================== */
+:root, [data-theme="light"] {
+    /* Neutrals */
+    --canvas: #F6F7F9;
+    --surface: #FFFFFF;
+    --surface-sunken: #EFF1F4;
+    --surface-hover: #F2F4F7;
+    --border: #E2E5EA;
+    --border-strong: #C9CED6;
+    --ink: #0B1220;
+    --ink-2: #374151;
+    --ink-3: #5B6472;
+    --ink-disabled: #9AA1AC;
+
+    /* Brand & Accent */
+    --brand: #2548E8;          /* Cobalt */
+    --brand-hover: #1C3BCC;
+    --brand-tint: #EEF2FF;
+    --brand-tint-2: #DCE4FF;
+    --accent: #FF6A2B;          /* Tangerine */
+
+    /* Status Colors */
+    --success-solid: #16A34A;
+    --success-text: #15803D;
+    --success-tint: #EAF7EE;
+
+    --warning-solid: #F59E0B;
+    --warning-text: #A35C00;
+    --warning-tint: #FFF6E5;
+
+    --error-solid: #E5484D;
+    --error-text: #C62A30;
+    --error-tint: #FDECEC;
+
+    --info-solid: #2548E8;
+    --info-text: #2548E8;
+    --info-tint: #EEF2FF;
+
+    /* Shadows (§5) */
+    --shadow-sm: 0 1px 2px rgba(11, 18, 32, 0.06);
+    --shadow-md: 0 4px 12px rgba(11, 18, 32, 0.08), 0 1px 3px rgba(11, 18, 32, 0.06);
+    --shadow-lg: 0 20px 48px rgba(11, 18, 32, 0.14), 0 4px 12px rgba(11, 18, 32, 0.06);
+
+    /* Light Code Theme (§3.1) */
+    --code-bg: #FFFFFF;
+    --code-gutter: #F6F7F9;
+    --code-line-num: #8A93A1;
+    --code-text: #0B1220;
+    --code-keyword: #2548E8;
+    --code-string: #0F7B45;
+    --code-function: #7A3FD1;
+    --code-number: #B45309;
+    --code-comment: #6B7280;
+    --code-type: #0E7490;
+    --code-tag: #C62A30;
+    --code-attribute: #A35C00;
+
+    /* Light Diffs (§3.1) */
+    --diff-add-bg: #EAF7EE;
+    --diff-add-text: #15803D;
+    --diff-remove-bg: #FDECEC;
+    --diff-remove-text: #C62A30;
+
+    /* Backward-Compatibility Variables Mapping */
+    --void: var(--canvas);
+    --bg: var(--canvas);
+    --bg-2: var(--surface-sunken);
+    --text: var(--ink);
+    --text-2: var(--ink-2);
+    --text-3: var(--ink-3);
+    --line: var(--border);
+    --line-glow: rgba(37, 72, 232, 0.2);
+    --electric: var(--brand);
+    --electric-soft: var(--brand-tint);
+    --violet: var(--brand);
+    --violet-soft: var(--brand-tint);
+    --cyan: var(--brand);
+    --cyan-soft: var(--brand-tint);
+    --ok: var(--success-solid);
+    --ok-soft: var(--success-tint);
+    --warn: var(--warning-solid);
+    --warn-soft: var(--warning-tint);
+    --err: var(--error-solid);
+    --err-soft: var(--error-tint);
+}
+
+/* ==========================================================================
+   3.2 Dim Theme (Optional Toggle, "Dim", not black)
+   ========================================================================== */
+[data-theme="dim"], [data-theme="dark"] {
+    /* Neutrals */
+    --canvas: #16181D;
+    --surface: #1E2128;
+    --surface-sunken: #1A1C22;
+    --surface-hover: #262932;
+    --border: #2E323B;
+    --border-strong: #3D434E;
+    --ink: #F1F3F6;
+    --ink-2: #C4C9D2;
+    --ink-3: #9AA1AC;
+    --ink-disabled: #5B6472;
+
+    /* Brand & Accent */
+    --brand: #7B95FF;
+    --brand-hover: #617EFF;
+    --brand-tint: #1E2338;
+    --brand-tint-2: rgba(123, 149, 255, 0.25);
+    --accent: #FF7E47;
+
+    /* Status Colors (Lightened for Dim Surface) */
+    --success-solid: #22C55E;
+    --success-text: #4ADE80;
+    --success-tint: rgba(34, 197, 94, 0.14);
+
+    --warning-solid: #F59E0B;
+    --warning-text: #FBBF24;
+    --warning-tint: rgba(245, 158, 11, 0.14);
+
+    --error-solid: #F87171;
+    --error-text: #FCA5A5;
+    --error-tint: rgba(239, 68, 68, 0.14);
+
+    --info-solid: #6B85FF;
+    --info-text: #93C5FD;
+    --info-tint: rgba(107, 133, 255, 0.14);
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
+    --shadow-lg: 0 20px 48px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.25);
+
+    /* Dim Code Theme */
+    --code-bg: #1A1C22;
+    --code-gutter: #16181D;
+    --code-line-num: #5B6472;
+    --code-text: #F1F3F6;
+    --code-keyword: #6B85FF;
+    --code-string: #4ADE80;
+    --code-function: #C084FC;
+    --code-number: #FBBF24;
+    --code-comment: #9AA1AC;
+    --code-type: #38BDF8;
+    --code-tag: #F87171;
+    --code-attribute: #FBBF24;
+
+    /* Dim Diffs */
+    --diff-add-bg: rgba(34, 197, 94, 0.16);
+    --diff-add-text: #4ADE80;
+    --diff-remove-bg: rgba(239, 68, 68, 0.16);
+    --diff-remove-text: #FCA5A5;
+
+    /* Backward-Compatibility Variables Mapping */
+    --void: var(--canvas);
+    --bg: var(--canvas);
+    --bg-2: var(--surface-sunken);
+    --text: var(--ink);
+    --text-2: var(--ink-2);
+    --text-3: var(--ink-3);
+    --line: var(--border);
+    --line-glow: rgba(107, 133, 255, 0.25);
+    --electric: var(--brand);
+    --electric-soft: var(--brand-tint);
+    --violet: var(--brand);
+    --violet-soft: var(--brand-tint);
+    --cyan: var(--brand);
+    --cyan-soft: var(--brand-tint);
+    --ok: var(--success-solid);
+    --ok-soft: var(--success-tint);
+    --warn: var(--warning-solid);
+    --warn-soft: var(--warning-tint);
+    --err: var(--error-solid);
+    --err-soft: var(--error-tint);
+}
+
+::selection {
+    background: var(--brand-tint-2);
+    color: var(--ink);
+}

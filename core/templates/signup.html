@@ -1,75 +1,98 @@
 {% extends 'base.html' %}
-{% block title %}Create Your Account - DevDialogue AI{% endblock %}
+{% load static %}
+
+{% block title %}Create Your Account — DevDialogue AI{% endblock %}
+{% block page_namespace %}auth{% endblock %}
 
 {% block content %}
-<div class="auth-wrapper">
-    <div class="auth-card glass-card">
-        <div class="auth-header">
-            <h2>Create Account</h2>
-            <p>Start your AI dialogue and write complete codebases.</p>
-        </div>
-        
-        <form method="POST" action="{% url 'signup' %}" class="auth-form">
-            {% csrf_token %}
+<div style="min-height: calc(100vh - 60px); display: grid; grid-template-columns: 1fr 1fr; background: var(--canvas);">
+    <!-- Left Column: Form -->
+    <div style="display: flex; align-items: center; justify-content: center; padding: 48px 32px; background: var(--surface); overflow-y: auto;">
+        <div style="width: 100%; max-width: 440px;">
+            <div style="margin-bottom: 28px;">
+                <div style="width: 36px; height: 36px; background: var(--brand); border-radius: 8px; margin-bottom: 16px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 16px;">D</div>
+                <h2 style="font-size: var(--text-heading); font-weight: 700; color: var(--ink); margin-bottom: 6px;">Create Account</h2>
+                <p style="color: var(--ink-2); font-size: 14px;">Start your AI dialogue and compile complete codebases.</p>
+            </div>
             
-            {% if form.non_field_errors %}
-                <div class="form-errors">
-                    {% for error in form.non_field_errors %}
-                        <p class="error-msg">{{ error }}</p>
-                    {% endfor %}
+            <form method="POST" action="{% url 'signup' %}" style="display: flex; flex-direction: column; gap: 16px;">
+                {% csrf_token %}
+                
+                {% if form.non_field_errors %}
+                    <div style="background: var(--error-tint); border: 1px solid var(--error-text); border-radius: 6px; padding: 12px; color: var(--error-text); font-size: 13px;">
+                        {% for error in form.non_field_errors %}
+                            <p style="margin: 0;">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                
+                <div>
+                    <label for="{{ form.username.id_for_label }}" style="display: block; font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 6px;">Username</label>
+                    {{ form.username }}
+                    {% if form.username.errors %}
+                        <span style="color: var(--error-text); font-size: 12px; margin-top: 4px; display: block;">{{ form.username.errors.0 }}</span>
+                    {% endif %}
                 </div>
-            {% endif %}
+                
+                <div>
+                    <label for="{{ form.email.id_for_label }}" style="display: block; font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 6px;">Email Address</label>
+                    {{ form.email }}
+                    {% if form.email.errors %}
+                        <span style="color: var(--error-text); font-size: 12px; margin-top: 4px; display: block;">{{ form.email.errors.0 }}</span>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="{{ form.plan.id_for_label }}" style="display: block; font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 6px;">Choose a Plan</label>
+                    {{ form.plan }}
+                    {% if form.plan.errors %}
+                        <span style="color: var(--error-text); font-size: 12px; margin-top: 4px; display: block;">{{ form.plan.errors.0 }}</span>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="{{ form.password.id_for_label }}" style="display: block; font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 6px;">Password</label>
+                    {{ form.password }}
+                    <small style="display: block; margin-top: 4px; color: var(--ink-3); font-size: 12px;">Must be at least 8 chars, uppercase, lowercase, digit & symbol.</small>
+                    {% if form.password.errors %}
+                        {% for error in form.password.errors %}
+                            <span style="color: var(--error-text); font-size: 12px; margin-top: 4px; display: block;">{{ error }}</span>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="{{ form.confirm_password.id_for_label }}" style="display: block; font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 6px;">Confirm Password</label>
+                    {{ form.confirm_password }}
+                    {% if form.confirm_password.errors %}
+                        <span style="color: var(--error-text); font-size: 12px; margin-top: 4px; display: block;">{{ form.confirm_password.errors.0 }}</span>
+                    {% endif %}
+                </div>
+                
+                <button type="submit" class="btn btn-primary btn-lg" style="width: 100%; margin-top: 8px;">
+                    Register & Send OTP
+                </button>
+            </form>
             
-            <div class="form-group">
-                <label for="{{ form.username.id_for_label }}">Username</label>
-                {{ form.username }}
-                {% if form.username.errors %}
-                    <span class="field-error">{{ form.username.errors.0 }}</span>
-                {% endif %}
+            <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); font-size: 14px; color: var(--ink-2); text-align: center;">
+                Already have an account? <a href="{% url 'login' %}" style="color: var(--brand); font-weight: 600; text-decoration: none;">Log In here</a>
             </div>
-            
-            <div class="form-group">
-                <label for="{{ form.email.id_for_label }}">Email Address</label>
-                {{ form.email }}
-                {% if form.email.errors %}
-                    <span class="field-error">{{ form.email.errors.0 }}</span>
-                {% endif %}
+        </div>
+    </div>
+
+    <!-- Right Column: Product Preview Panel -->
+    <div style="background: var(--surface-sunken); border-left: 1px solid var(--border); padding: 48px; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; box-shadow: var(--shadow-md); max-width: 440px; width: 100%;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                <span class="badge badge-brand">Requirement Dialogue</span>
+                <span style="font-size: 12px; color: var(--ink-3);">Stage 1: Discover</span>
             </div>
-            
-            <div class="form-group">
-                <label for="{{ form.plan.id_for_label }}">Choose a Plan</label>
-                {{ form.plan }}
-                {% if form.plan.errors %}
-                    <span class="field-error">{{ form.plan.errors.0 }}</span>
-                {% endif %}
+            <div style="background: var(--brand-tint); border: 1px solid var(--brand-tint-2); border-radius: 8px; padding: 12px; font-size: 13px; color: var(--ink); margin-bottom: 12px;">
+                "I need a library management system with book reservations, fine rules, and user roles."
             </div>
-            
-            <div class="form-group">
-                <label for="{{ form.password.id_for_label }}">Password</label>
-                {{ form.password }}
-                <small class="form-hint" style="display: block; margin-top: 5px; color: var(--text-muted, #888); font-size: 0.82rem;">Must be at least 8 characters, start with a Capital letter, and contain lowercase, digit & special character.</small>
-                {% if form.password.errors %}
-                    {% for error in form.password.errors %}
-                        <span class="field-error" style="display: block;">{{ error }}</span>
-                    {% endfor %}
-                {% endif %}
+            <div style="background: var(--surface-sunken); border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-size: 13px; color: var(--ink);">
+                <strong>DevDialogue AI:</strong> "I've logged 3 core entities. Should overdue fines calculate daily or weekly?"
             </div>
-            
-            <div class="form-group">
-                <label for="{{ form.confirm_password.id_for_label }}">Confirm Password</label>
-                {{ form.confirm_password }}
-                {% if form.confirm_password.errors %}
-                    <span class="field-error">{{ form.confirm_password.errors.0 }}</span>
-                {% endif %}
-            </div>
-            
-            <button type="submit" class="btn btn-primary btn-full btn-lg">
-                Register & Send Verification Code
-            </button>
-        </form>
-        
-        <div class="auth-footer">
-            <p>Already have an account? <a href="{% url 'login' %}">Log In here</a></p>
         </div>
     </div>
 </div>

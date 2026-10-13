@@ -1,0 +1,96 @@
+/* ==========================================================================
+   DevDialogue AI — Unified & Side-by-Side Diff Viewer (§4.9)
+   ========================================================================== */
+
+.diff-viewer-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background-color: var(--sheet);
+}
+
+.diff-header-bar {
+    padding: var(--space-3) var(--space-4);
+    background-color: var(--paper);
+    border-bottom: 1px solid var(--rule);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.diff-reason-text {
+    font-size: var(--text-sm);
+    color: var(--ink);
+    font-weight: 500;
+}
+
+.diff-content-pane {
+    flex: 1;
+    overflow: auto;
+    padding: var(--space-3);
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    line-height: var(--lh-code);
+}
+
+.diff-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.diff-row {
+    font-family: var(--font-mono);
+    font-size: 13px;
+}
+
+.diff-row-added {
+    background-color: var(--ok-bg);
+    color: var(--ink);
+}
+
+.diff-row-removed {
+    background-color: var(--err-bg);
+    color: var(--ink);
+}
+
+.diff-num {
+    width: 44px;
+    padding: 2px 8px;
+    color: var(--pencil);
+    text-align: right;
+    user-select: none;
+    border-right: 1px solid var(--rule);
+    vertical-align: top;
+}
+
+.diff-marker {
+    width: 24px;
+    text-align: center;
+    font-weight: 700;
+    user-select: none;
+    vertical-align: top;
+}
+
+.diff-row-added .diff-marker { color: var(--ok); }
+.diff-row-removed .diff-marker { color: var(--err); }
+
+.diff-line-code {
+    padding: 2px 8px;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.diff-unchanged-fold {
+    padding: var(--space-2);
+    text-align: center;
+    background-color: var(--paper);
+    color: var(--pencil);
+    font-size: var(--text-meta);
+    cursor: pointer;
+    border-y: 1px solid var(--rule);
+}
+
+.diff-unchanged-fold:hover {
+    color: var(--ink);
+    background-color: var(--rule);
+}

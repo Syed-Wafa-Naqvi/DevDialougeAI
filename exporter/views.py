@@ -9,8 +9,8 @@ def download_project_zip_api(request, session_id):
     session = get_object_or_404(Session, id=session_id, user=request.user)
     zip_bytes = ZipArchiver.create_project_zip(session)
     
-    clean_title = "".join([c if c.isalnum() else "_" for c in session.title]).strip("_") or "Project"
-    filename = f"DevDialogue_{clean_title}.zip"
+    project_name = ZipArchiver.get_project_name(session)
+    filename = f"{project_name}.zip"
     
     response = HttpResponse(zip_bytes, content_type='application/zip')
     response['Content-Disposition'] = f'attachment; filename="{filename}"'

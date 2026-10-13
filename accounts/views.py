@@ -147,6 +147,10 @@ def resend_otp_view(request):
     profile = getattr(user, 'profile', None)
     if not profile:
         profile = Profile.objects.create(user=user)
+
+    can_resend, reason = profile.can_resend_otp()
+    if not can_resend:
+        return JsonResponse({'error': reason}, status=429)
     
     otp = profile.generate_otp()
     print(f"\n==========================================")
@@ -163,6 +167,7 @@ def resend_otp_view(request):
         if settings.DEBUG:
             return JsonResponse({'success': True, 'message': f'For local testing, your new OTP is: {otp}'})
         return JsonResponse({'error': f'Error sending email: {str(e)}'}, status=500)
+
 
 
 def login_view(request):
