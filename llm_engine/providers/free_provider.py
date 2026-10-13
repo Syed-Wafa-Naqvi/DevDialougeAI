@@ -29,7 +29,13 @@ class FreeAIProvider(BaseLLMProvider):
         req = urllib.request.Request(url, data=json.dumps(payload).encode('utf-8'), headers=headers, method='POST')
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
-                result = resp.read().decode('utf-8').strip()
-                return result
+                raw = resp.read().decode('utf-8').strip()
+                try:
+                    data = json.loads(raw)
+                    if isinstance(data, dict):
+                        return data.get('content') or data.get('text') or data.get('message') or raw
+                except Exception:
+                    pass
+                return raw
         except Exception as e:
             raise RuntimeError(f"Free AI Provider Error: {str(e)}")

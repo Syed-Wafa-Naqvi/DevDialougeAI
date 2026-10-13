@@ -24,13 +24,26 @@ def generate_title_from_user_msg(user_msg):
             break
             
     words = [w for w in cleaned.split() if w.strip()]
+    vowels = set("aeiouy")
+    
+    # Filter out gibberish / non-words
+    if words:
+        first_word = words[0].lower()
+        if len(first_word) >= 4 and not any(v in first_word for v in vowels):
+            return "New Chat"
+        if len(first_word) >= 6 and sum(c in vowels for c in first_word) <= 1:
+            return "New Chat"
+
     if words:
         title_words = words[:5]
         title = " ".join(title_words)
         title = re.sub(r'[^\w\s-]', '', title)
         if len(title) > 40:
             title = title[:37] + "..."
-        return title.strip().title()
+        clean_title = title.strip().title()
+        if clean_title.lower() in ["hey", "hello", "hi", "test", "what"]:
+            return "New Chat"
+        return clean_title
     return "New Chat"
 
 def home_view(request):
@@ -312,9 +325,11 @@ def send_message_api(request, session_id):
     Message.objects.create(session=session, role='assistant', content=response_text)
     
     if not session.has_custom_title:
-        session.title = generate_title_from_user_msg(user_content)
-        session.has_custom_title = True
-        session.save()
+        new_title = generate_title_from_user_msg(user_content)
+        if new_title != "New Chat":
+            session.title = new_title
+            session.has_custom_title = True
+            session.save()
         
     codes = list(session.generated_codes.values('id', 'module_name'))
     
