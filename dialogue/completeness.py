@@ -37,6 +37,20 @@ class CompletenessEngine:
 
         try:
             resp = LLMRouter.generate(prompt=prompt, system_prompt=system_prompt, provider_name=provider_name, purpose='completeness')
+            clean_resp = str(resp).strip()
+            
+            # If the model returned an integer number directly (e.g. "100" or "85")
+            num_match = re.search(r'\b([0-9]{1,3})\b', clean_resp)
+            if num_match and '{' not in clean_resp:
+                score = min(max(int(num_match.group(1)), 0), 100)
+                return {
+                    'score': score,
+                    'categories': {},
+                    'next_questions': [],
+                    'contradictions': [],
+                    'is_estimated': False
+                }
+
             from generator.protocol import EditProtocolEngine
             data = EditProtocolEngine.parse_payload(resp)
 
@@ -98,8 +112,21 @@ class CompletenessEngine:
             if user_msgs:
                 return True
 
+        # Check if the assistant asked whether to proceed or generate files, and user responded affirmatively
+        assist_msgs = [m.get('content', '').lower() for m in conversation_history if m.get('role') == 'assistant']
+        if assist_msgs:
+            last_assist = assist_msgs[-1]
+            asked_to_proceed = any(p in last_assist for p in [
+                "proceed", "generate the files", "generate the complete", "ready to proceed", 
+                "generate your", "shall i generate", "should i proceed", "bring this architecture"
+            ])
+            user_words = set(re.findall(r'\b\w+\b', msg_lower))
+            is_affirmative = any(w in user_words for w in ['sure', 'yes', 'yup', 'yeah', 'ok', 'okay', 'proceed', 'build', 'generate', 'go ahead'])
+            if asked_to_proceed and is_affirmative:
+                return True
 
         threshold = getattr(settings, 'COMPLETENESS_THRESHOLD', 70)
         score = cls.calculate_score(conversation_history, provider_name=provider_name)
         return score >= threshold
+
 

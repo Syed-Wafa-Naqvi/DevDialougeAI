@@ -50,22 +50,39 @@ def extract_code_files_from_markdown(content: str) -> list:
     """Extracts file paths and source code blocks formatted in markdown."""
     files = []
     seen = set()
-    # Pattern 1: Heading / label followed by fenced code block
+    exts = r'(?:dart|py|js|jsx|ts|tsx|html|css|json|yaml|yml|go|rs|sh|bat|sql|toml|env|md)'
+
+    # Pattern 1: Heading/Label containing a file path, followed by a fenced code block
+    # Matches: "### 2. Core Game Model & 2D Grid (`lib/features/game/models/point.dart`)"
+    # Matches: "### `lib/main.dart`"
+    # Matches: "**pubspec.yaml**"
     p1 = re.compile(
-        r'(?:###|\*\*)\s*(?:\d+\.\s*)?`?([a-zA-Z0-9_\-\./\\]+\.[a-zA-Z0-9]+)`?\s*(?:\*\*)?\s*\n+```(?:\w+)?\n(.*?)```',
+        r'(?:^|\n)(?:#{1,6}|\*\*|[0-9]+\.)[^\n]*?`?([a-zA-Z0-9_\-\./\\]+\.' + exts + r')`?[^\n]*\n+```(?:\w+)?\n(.*?)```',
         re.DOTALL
     )
     for match in p1.finditer(content):
-        fn = match.group(1).strip()
+        fn = match.group(1).strip().lstrip('/')
         code = match.group(2).strip()
         if fn not in seen and fn.lower() not in ('bash', 'sh', 'text', 'markdown', 'json'):
             seen.add(fn)
             files.append((fn, code))
 
     # Pattern 2: ```lang:filepath \n code \n ```
-    p2 = re.compile(r'```[a-zA-Z0-9_]+:([a-zA-Z0-9_\-\./\\]+\.[a-zA-Z0-9]+)\n(.*?)```', re.DOTALL)
+    p2 = re.compile(r'```[a-zA-Z0-9_]+:([a-zA-Z0-9_\-\./\\]+\.' + exts + r')\n(.*?)```', re.DOTALL)
     for match in p2.finditer(content):
-        fn = match.group(1).strip()
+        fn = match.group(1).strip().lstrip('/')
+        code = match.group(2).strip()
+        if fn not in seen:
+            seen.add(fn)
+            files.append((fn, code))
+
+    # Pattern 3: Top-line comment in code block with file path (e.g. "// lib/main.dart" or "# app/models.py")
+    p3 = re.compile(
+        r'```(?:\w+)?\n(?://|#|/\*|<!--)\s*([a-zA-Z0-9_\-\./\\]+\.' + exts + r')[^\n]*\n(.*?)```',
+        re.DOTALL
+    )
+    for match in p3.finditer(content):
+        fn = match.group(1).strip().lstrip('/')
         code = match.group(2).strip()
         if fn not in seen:
             seen.add(fn)
@@ -345,13 +362,24 @@ def send_message_api(request, session_id):
                     session.save()
                     response_text = "### 🚀 Incremental Generation Complete!\nAll project modules have been approved and generated. You can download the complete project ZIP from the sidebar."
     else:
-        # Check if user explicitly demanded code/files (e.g. "provide me all files at once don't ask more questions")
+        # Check if user explicitly demanded code/files or agreed to generation prompt
         code_demand_triggers = [
             "provide me all files", "provide all files", "give me all files", "give me the files",
             "don't ask more questions", "no more questions", "all files at once", "give me the code",
             "give code", "generate files", "just code", "stop asking questions"
         ]
         is_direct_code_demand = any(trig in user_content.lower() for trig in code_demand_triggers)
+
+        # Also detect if assistant previously offered to generate files and user said yes/sure
+        if not is_direct_code_demand and assist_msgs:
+            last_assist_text = assist_msgs[-1]['content'].lower()
+            asked_to_proceed = any(p in last_assist_text for p in [
+                "proceed", "generate the files", "generate the complete", "ready to proceed", 
+                "generate your", "shall i generate", "should i proceed", "bring this architecture"
+            ])
+            user_words = set(re.findall(r'\b\w+\b', user_content.lower()))
+            if asked_to_proceed and any(w in user_words for w in ['sure', 'yes', 'yup', 'yeah', 'ok', 'okay', 'proceed', 'build', 'generate', 'go ahead']):
+                is_direct_code_demand = True
 
         historical_files = []
         for m in assist_msgs:
@@ -396,6 +424,15 @@ def send_message_api(request, session_id):
             obj.save()
         session.status = 'completed'
         session.save(update_fields=['status'])
+
+        # Clean up response_text so it does not dump raw code in the chat window
+        file_bullets = "\n".join([f"- 📄 `{fn}`" for fn, _ in newly_extracted])
+        response_text = (
+            "### 🎉 Project Codebase Generated!\n\n"
+            "I have generated and packaged your project files directly into the **Workspace File Tree** on the right:\n\n"
+            f"{file_bullets}\n\n"
+            "You can inspect each file in the editor tabs and download your complete turnkey project anytime via **Export ZIP**."
+        )
 
     Message.objects.create(session=session, role='assistant', content=response_text)
 
