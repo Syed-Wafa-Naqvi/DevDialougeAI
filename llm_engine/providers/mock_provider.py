@@ -176,27 +176,33 @@ class MockProvider:
         # Interview questions simulation
         if any(k in prompt_lower for k in ["interview", "question", "elicit", "requirement"]) or "software architect" in sys_lower:
             # Check latest user message for direct confusion, questions, or unintelligible input
-            latest_user = ""
             if "latest user input:" in prompt_lower:
+                latest_user = ""
                 try:
                     latest_user = prompt_lower.split("latest user input:")[1].split("\n")[0].strip().strip('"\'')
                 except Exception:
                     pass
 
-            vowels = set("aeiouy")
-            user_words = [w for w in latest_user.split() if w.strip()]
-            if user_words:
-                first_word = user_words[0].lower()
-                if (len(first_word) >= 4 and not any(v in first_word for v in vowels)) or (len(first_word) >= 6 and sum(c in vowels for c in first_word) <= 1):
-                    return f"I didn't quite catch '{latest_user}'. Could you describe what kind of software application or system you would like to build?"
+                vowels = set("aeiouy")
+                user_words = [w for w in latest_user.split() if w.strip()]
+                if user_words:
+                    first_word = user_words[0].lower()
+                    if (len(first_word) >= 4 and not any(v in first_word for v in vowels)) or (len(first_word) >= 6 and sum(c in vowels for c in first_word) <= 1):
+                        return f"I didn't quite catch '{latest_user}'. Could you describe what kind of software application or system you would like to build?"
 
-            if any(w in latest_user for w in ["?", "lost", "confused", "who are you", "what are you"]):
-                if any(w in latest_user for w in ["lost", "confused", "??", "what", "where"]):
-                    return "I'm right here with you! We are specifying your software application step by step. What tech stack or main feature would you like to build?"
+                if any(w in latest_user for w in ["?", "lost", "confused", "who are you", "what are you"]):
+                    if any(w in latest_user for w in ["lost", "confused", "??", "what", "where"]):
+                        return "I'm right here with you! We are specifying your software application step by step. What tech stack or main feature would you like to build?"
 
-            # If user hasn't specified any project concept yet
-            if len(user_words) <= 2 and not any(k in prompt_lower for k in ["app", "tool", "system", "web", "api", "platform", "store", "bot", "engine", "service", "dashboard"]):
-                return f"Welcome! What kind of software project or application are you planning to create today?"
+                if latest_user and latest_user.strip():
+                    clean_name = latest_user.strip().title()
+                    if "stack" not in prompt_lower and "framework" not in prompt_lower:
+                        return f"Great! What kind of software system is **{clean_name}**, and what preferred tech stack (e.g. Python, Node.js, React) would you like to use?"
+                    return f"Got it for **{clean_name}**! What are the core features and modules you want to build into this project?"
+
+                if not user_words:
+                    return "Welcome! What kind of software project or application are you planning to create today?"
+
 
             if "stack" not in prompt_lower and "framework" not in prompt_lower:
                 return "Great concept! What is your preferred tech stack (e.g., Python/Django, Node.js/React, FastAPI, SQLite, PostgreSQL)?"

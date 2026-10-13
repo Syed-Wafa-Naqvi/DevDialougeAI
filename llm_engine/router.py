@@ -22,25 +22,30 @@ class LLMRouter:
     @staticmethod
     def get_provider(provider_name: str = None, purpose: str = 'chat'):
         if getattr(settings, 'USE_MOCK_LLM', False):
-            return MockProvider(provider_name='mock', model_name='mock-v1')
+            return MockProvider()
 
-        provider_name = (provider_name or os.environ.get('DEFAULT_AI_PROVIDER', 'free')).lower().strip()
+        requested = (provider_name or "").lower().strip()
         
         openai_key = os.environ.get('OPENAI_API_KEY')
         claude_key = os.environ.get('ANTHROPIC_API_KEY')
         gemini_key = os.environ.get('GEMINI_API_KEY')
         deepseek_key = os.environ.get('DEEPSEEK_API_KEY')
 
-        if provider_name == 'openai' and openai_key:
-            return OpenAIProvider(api_key=openai_key)
-        elif provider_name == 'claude' and claude_key:
-            return ClaudeProvider(api_key=claude_key)
-        elif provider_name == 'gemini' and gemini_key:
+        # 1. Explicitly requested provider
+        if requested == 'free':
+            return FreeAIProvider()
+        elif requested == 'mock':
+            return MockProvider()
+        elif requested == 'gemini' and gemini_key:
             return GeminiProvider(api_key=gemini_key)
-        elif provider_name == 'deepseek' and deepseek_key:
+        elif requested == 'openai' and openai_key:
+            return OpenAIProvider(api_key=openai_key)
+        elif requested == 'claude' and claude_key:
+            return ClaudeProvider(api_key=claude_key)
+        elif requested == 'deepseek' and deepseek_key:
             return DeepSeekProvider(api_key=deepseek_key)
 
-        # Automatic key resolution
+        # 2. Automatic key resolution if not explicitly specified or key was missing
         if gemini_key:
             return GeminiProvider(api_key=gemini_key)
         if openai_key:
@@ -50,7 +55,7 @@ class LLMRouter:
         if claude_key:
             return ClaudeProvider(api_key=claude_key)
 
-        # Default to Free Keyless AI Provider (LLaMA 3.3 / Qwen Coder)
+        # 3. Default to Free Keyless AI Provider (LLaMA 3.3 / Qwen Coder)
         return FreeAIProvider()
 
     @classmethod
@@ -74,8 +79,8 @@ class LLMRouter:
 
         start_time = time.time()
         provider = cls.get_provider(provider_name=provider_name, purpose=purpose)
-        p_name = getattr(provider, 'provider_name', provider_name or 'free')
-        m_name = getattr(provider, 'model_name', 'default')
+        p_name = getattr(provider, 'provider_name', None) or (provider_name or 'free').lower()
+        m_name = getattr(provider, 'model', getattr(provider, 'model_name', 'default'))
 
         in_tokens = len(prompt) // 4
         fallback_used = False
@@ -88,18 +93,34 @@ class LLMRouter:
         except Exception as e:
             err_msg = str(e)[:500]
             fallback_used = True
-            if p_name != 'free':
+
+            # Fallback 1: Try Gemini if primary was not Gemini and Gemini key is available
+            gemini_key = os.environ.get('GEMINI_API_KEY')
+            if not isinstance(provider, GeminiProvider) and gemini_key:
+                try:
+                    gem_fallback = GeminiProvider(api_key=gemini_key)
+                    result = gem_fallback.generate_completion(prompt=prompt, system_prompt=system_prompt)
+                    if result:
+                        p_name = "gemini_fallback"
+                except Exception as e_gem:
+                    err_msg += f" | Gemini fallback error: {str(e_gem)[:200]}"
+
+            # Fallback 2: Try FreeAI if result still empty and primary was not FreeAI
+            if not result and not isinstance(provider, FreeAIProvider):
                 try:
                     free_fallback = FreeAIProvider()
                     result = free_fallback.generate_completion(prompt=prompt, system_prompt=system_prompt)
                     if result:
                         p_name = "free_fallback"
-                except Exception:
-                    pass
+                except Exception as e_free:
+                    err_msg += f" | FreeAI fallback error: {str(e_free)[:200]}"
+
+            # Fallback 3: MockProvider as last resort for offline continuity
             if not result:
                 fallback = MockProvider()
                 p_name = "mock_fallback"
                 result = fallback.generate_completion(prompt=prompt, system_prompt=system_prompt)
+
 
         latency_ms = int((time.time() - start_time) * 1000)
         out_tokens = len(result) // 4

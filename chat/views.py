@@ -46,6 +46,34 @@ def generate_title_from_user_msg(user_msg):
         return clean_title
     return "New Chat"
 
+def extract_code_files_from_markdown(content: str) -> list:
+    """Extracts file paths and source code blocks formatted in markdown."""
+    files = []
+    seen = set()
+    # Pattern 1: Heading / label followed by fenced code block
+    p1 = re.compile(
+        r'(?:###|\*\*)\s*(?:\d+\.\s*)?`?([a-zA-Z0-9_\-\./\\]+\.[a-zA-Z0-9]+)`?\s*(?:\*\*)?\s*\n+```(?:\w+)?\n(.*?)```',
+        re.DOTALL
+    )
+    for match in p1.finditer(content):
+        fn = match.group(1).strip()
+        code = match.group(2).strip()
+        if fn not in seen and fn.lower() not in ('bash', 'sh', 'text', 'markdown', 'json'):
+            seen.add(fn)
+            files.append((fn, code))
+
+    # Pattern 2: ```lang:filepath \n code \n ```
+    p2 = re.compile(r'```[a-zA-Z0-9_]+:([a-zA-Z0-9_\-\./\\]+\.[a-zA-Z0-9]+)\n(.*?)```', re.DOTALL)
+    for match in p2.finditer(content):
+        fn = match.group(1).strip()
+        code = match.group(2).strip()
+        if fn not in seen:
+            seen.add(fn)
+            files.append((fn, code))
+
+    return files
+
+
 def home_view(request):
     if request.user.is_authenticated:
         if hasattr(request.user, 'profile') and request.user.profile.is_verified:
@@ -317,12 +345,60 @@ def send_message_api(request, session_id):
                     session.save()
                     response_text = "### 🚀 Incremental Generation Complete!\nAll project modules have been approved and generated. You can download the complete project ZIP from the sidebar."
     else:
-        if CompletenessEngine.should_synthesize_summary(history, user_content, provider_name=provider_name):
+        # Check if user explicitly demanded code/files (e.g. "provide me all files at once don't ask more questions")
+        code_demand_triggers = [
+            "provide me all files", "provide all files", "give me all files", "give me the files",
+            "don't ask more questions", "no more questions", "all files at once", "give me the code",
+            "give code", "generate files", "just code", "stop asking questions"
+        ]
+        is_direct_code_demand = any(trig in user_content.lower() for trig in code_demand_triggers)
+
+        historical_files = []
+        for m in assist_msgs:
+            historical_files.extend(extract_code_files_from_markdown(m['content']))
+
+        if is_direct_code_demand and historical_files:
+            for fn, code_content in historical_files:
+                obj, _ = GeneratedCode.objects.get_or_create(session=session, module_name=fn)
+                obj.code_content = code_content
+                obj.save()
+            session.status = 'completed'
+            session.save(update_fields=['status'])
+            response_text = (
+                "### 🎉 Complete Project Codebase Ready!\n\n"
+                "I have loaded all generated codebase files into your **Workspace File Tree** on the right.\n\n"
+                "You can inspect each file in the editor tabs and download the complete turnkey project anytime via **Export ZIP**."
+            )
+        elif is_direct_code_demand:
+            summary = SRSSynthesizer.synthesize_summary(history, provider_name=provider_name)
+            modules = FilePlanner.get_module_list(summary)
+            for mod in modules:
+                if not session.generated_codes.filter(module_name=mod).exists():
+                    code = CodeBuilder.generate_code_for_module(mod, summary, provider_name=provider_name)
+                    GeneratedCode.objects.create(session=session, module_name=mod, code_content=code)
+            session.status = 'completed'
+            session.save(update_fields=['status'])
+            response_text = (
+                "### 🎉 All Project Files Generated!\n\n"
+                "I have generated the complete codebase for your application. You can view all files in the right panel and download the turnkey project ZIP."
+            )
+        elif CompletenessEngine.should_synthesize_summary(history, user_content, provider_name=provider_name):
             response_text = SRSSynthesizer.synthesize_summary(history, is_mode2=(session.mode == 'mode2'), provider_name=provider_name)
         else:
             response_text = InterviewerService.generate_next_question(history, provider_name=provider_name)
                 
+    # Auto-extract any code blocks outputted in the assistant's response directly into GeneratedCode
+    newly_extracted = extract_code_files_from_markdown(response_text)
+    if newly_extracted:
+        for fn, code_content in newly_extracted:
+            obj, _ = GeneratedCode.objects.get_or_create(session=session, module_name=fn)
+            obj.code_content = code_content
+            obj.save()
+        session.status = 'completed'
+        session.save(update_fields=['status'])
+
     Message.objects.create(session=session, role='assistant', content=response_text)
+
     
     if not session.has_custom_title:
         new_title = generate_title_from_user_msg(user_content)
