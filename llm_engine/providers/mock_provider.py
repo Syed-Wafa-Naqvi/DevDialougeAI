@@ -102,6 +102,19 @@ class MockProvider:
         if "ambiguity" in sys_lower or "analyze this conversation for conflicting requirements" in prompt_lower:
             return "NO_AMBIGUITY"
 
+        # AI Harness Packager query
+        if "devops & build engineer" in prompt_lower or "harness" in prompt_lower:
+            return '''{
+              "detected_language": "python",
+              "files": [
+                {"path": "requirements.txt", "content": "django>=5.0,<6.0\\nrequests>=2.31.0\\n"},
+                {"path": "run.sh", "content": "#!/usr/bin/env bash\\nset -e\\necho 'Starting app...'\\npython manage.py runserver 127.0.0.1:8000\\n"},
+                {"path": "run.bat", "content": "@echo off\\npython manage.py runserver 127.0.0.1:8000\\npause\\n"},
+                {"path": "README.md", "content": "# Turnkey Project\\n\\nRun `./run.sh` to start.\\n"},
+                {"path": ".gitignore", "content": "venv/\\n__pycache__/\\n*.py[cod]\\n"}
+              ]
+            }'''
+
         # Code generation query (only triggered for actual code generator queries, not conversation history)
         is_code_gen = (
             "generate high-quality, production-ready source code" in prompt_lower
