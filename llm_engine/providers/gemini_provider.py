@@ -5,7 +5,7 @@ import urllib.error
 from llm_engine.providers.base import BaseLLMProvider
 
 class GeminiProvider(BaseLLMProvider):
-    def __init__(self, api_key: str = None, model: str = "gemini-2.5-flash-lite"):
+    def __init__(self, api_key: str = None, model: str = "gemini-flash-lite-latest"):
         super().__init__(api_key=api_key, model=model)
 
     def is_available(self) -> bool:
@@ -40,9 +40,9 @@ class GeminiProvider(BaseLLMProvider):
         if not self.is_available():
             raise ValueError("Google Gemini API key is missing.")
 
-        models_to_try = [self.model]
-        if "gemini-3-flash-preview" not in models_to_try:
-            models_to_try.append("gemini-3-flash-preview")
+        models_to_try = [self.model, "gemini-flash-lite-latest", "gemini-3.1-flash-lite", "gemini-3.1-flash-lite-preview"]
+        models_to_try = list(dict.fromkeys([m for m in models_to_try if m]))
+
 
         last_error = None
         for m in models_to_try:

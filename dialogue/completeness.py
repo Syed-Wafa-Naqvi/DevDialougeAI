@@ -88,12 +88,16 @@ class CompletenessEngine:
         explicit_triggers = [
             "generate", "summary", "summarize", "proceed", "ready", "build code",
             "compile", "build project", "create app", "lets start", "let's start",
-            "create project", "generate project", "generate now"
+            "create project", "generate project", "generate now", "all files",
+            "provide me all files", "provide all files", "give me all files", "give me the files",
+            "don't ask more questions", "no more questions", "all files at once", "give me the code",
+            "give code", "generate files", "just code", "stop asking questions"
         ]
         if any(trigger in msg_lower for trigger in explicit_triggers):
             user_msgs = [m for m in conversation_history if m.get('role') == 'user']
             if user_msgs:
                 return True
+
 
         threshold = getattr(settings, 'COMPLETENESS_THRESHOLD', 70)
         score = cls.calculate_score(conversation_history, provider_name=provider_name)

@@ -7,11 +7,24 @@ class PathSafetyError(ValueError):
 
 class PathSafetyManager:
     ALLOWED_EXTENSIONS = {
-        'py', 'js', 'ts', 'html', 'css', 'json', 'md', 'txt', 'yml', 'yaml',
-        'toml', 'cfg', 'ini', 'sql', 'sh', 'env.example', 'gitignore', 'dockerfile'
+        # Python
+        'py', 'pyi',
+        # JavaScript, TypeScript & Web
+        'js', 'jsx', 'ts', 'tsx', 'mjs', 'cjs', 'html', 'htm', 'css', 'scss', 'sass', 'vue', 'svelte',
+        # Mobile & Multiplatform (Flutter / Dart / Swift / Kotlin)
+        'dart', 'swift', 'kt', 'kts',
+        # Systems & Backend (Go, Rust, Java, C, C++, C#)
+        'go', 'mod', 'sum', 'rs', 'java', 'scala', 'c', 'cpp', 'cc', 'cxx', 'h', 'hpp', 'hxx', 'cs',
+        # Scripting & Web (PHP, Ruby)
+        'php', 'rb',
+        # Shell & Runners
+        'sh', 'bash', 'zsh', 'bat', 'cmd', 'ps1',
+        # Config, Manifests, Database & Docs
+        'json', 'jsonc', 'md', 'txt', 'yml', 'yaml', 'toml', 'cfg', 'ini', 'sql',
+        'xml', 'gradle', 'properties', 'env.example', 'gitignore', 'dockerfile', 'lock'
     }
 
-    ALLOWED_SPECIAL_FILES = {'dockerfile', '.gitignore', '.env.example'}
+    ALLOWED_SPECIAL_FILES = {'dockerfile', 'gitignore', 'env.example', 'makefile', 'procfile', 'gemfile', 'license', 'cname'}
 
     MAX_FILES_PER_PROJECT = 60
     MAX_FILE_SIZE_BYTES = 200 * 1024  # 200 KB
@@ -43,20 +56,21 @@ class PathSafetyManager:
         # Check hidden files / system directories
         parts = normalized.split('/')
         for part in parts:
-            if part.startswith('.') and part.lower() not in cls.ALLOWED_SPECIAL_FILES:
+            if part.startswith('.') and part.lower().lstrip('.') not in cls.ALLOWED_SPECIAL_FILES:
                 raise PathSafetyError(f"Hidden system paths or dotfiles are prohibited: '{path_str}'")
 
-        # Check file extension
+        # Check file extension or special file
         basename = parts[-1].lower()
-        if basename in cls.ALLOWED_SPECIAL_FILES:
-            ext = basename
-        else:
-            ext = basename.split('.')[-1] if '.' in basename else ''
+        if basename in cls.ALLOWED_SPECIAL_FILES or basename.lstrip('.') in cls.ALLOWED_SPECIAL_FILES:
+            return normalized
+
+        ext = basename.split('.')[-1] if '.' in basename else ''
 
         if ext not in cls.ALLOWED_EXTENSIONS:
             raise PathSafetyError(f"File extension '.{ext}' is not in the allowed extensions list.")
 
         return normalized
+
 
     @classmethod
     def validate_file_content(cls, content: str):

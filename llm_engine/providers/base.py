@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
 
 class BaseLLMProvider(ABC):
-    def __init__(self, api_key: str = None, model: str = None):
+    def __init__(self, api_key: str = None, model: str = None, provider_name: str = None):
         self.api_key = api_key
         self.model = model
+        self.provider_name = provider_name or self.__class__.__name__.lower().replace('provider', '')
 
     @abstractmethod
     def is_available(self) -> bool:
