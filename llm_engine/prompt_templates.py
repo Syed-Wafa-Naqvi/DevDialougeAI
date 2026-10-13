@@ -21,6 +21,7 @@ class PromptTemplates:
             "\n   - Software Idea Provided: Acknowledge key specifications, validate stack choices, and ask the single most important architectural question needed."
             "\n   - User Uncertain: Offer 2-3 inspiring software project domain examples to help them get started."
             "\n4. TONALITY: Authoritative, warm, highly intelligent, natural, and senior-level software architect."
+            "\n5. NO CODE DUMPING IN CHAT: NEVER dump raw source code, multi-file code blocks, or full file implementations into the chat dialogue during the interview phase. All code files are strictly generated and packaged into the workspace file tree by the automated code engine once specifications are approved. In the chat dialogue, focus strictly on architectural planning, domain modeling, and technical guidance."
             + PROMPT_INJECTION_DISCLAIMER
         )
 
