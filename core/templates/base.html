@@ -54,7 +54,9 @@
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
 
     <!-- App Entry -->
+    {% block app_scripts %}
     <script type="module" src="{% static 'js/app.js' %}"></script>
+    {% endblock %}
     {% block extra_head %}{% endblock %}
 </head>
 <body data-barba="wrapper" class="{% block body_class %}{% endblock %}">

@@ -7,7 +7,7 @@ from django.utils import timezone
 from django.conf import settings
 
 from accounts.decorators import verification_required
-from chat.models import Session, Message, GeneratedCode
+from chat.models import Session, Message, GeneratedCode, ProjectFile
 from dialogue.interviewer import InterviewerService
 from dialogue.synthesizer import SRSSynthesizer
 from dialogue.completeness import CompletenessEngine
@@ -161,17 +161,16 @@ def create_session_view(request):
 
 @verification_required
 def chat_view(request, session_id):
-    tzname = request.COOKIES.get('django_timezone')
-    if tzname:
-        try:
-            import zoneinfo
-            timezone.activate(zoneinfo.ZoneInfo(tzname))
-        except Exception:
-            pass
-
     session = get_object_or_404(Session, id=session_id, user=request.user)
     messages_list = session.messages.all()
-    codes = session.generated_codes.all()
+    
+    # ProjectFile is single source of truth; backfill if legacy GeneratedCode exists (#27)
+    from chat.models import ProjectFile
+    project_files = session.project_files.order_by('path')
+    if not project_files.exists() and session.generated_codes.exists():
+        for gc in session.generated_codes.all():
+            ProjectFile.objects.get_or_create(session=session, path=gc.module_name, defaults={'content': gc.code_content, 'status': 'verified'})
+        project_files = session.project_files.order_by('path')
     
     now = timezone.localtime()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -216,7 +215,8 @@ def chat_view(request, session_id):
     return render(request, 'chat.html', {
         'session': session,
         'chat_messages': messages_list,
-        'generated_codes': codes,
+        'project_files': project_files,
+        'generated_codes': project_files,
         'today_sessions': today_sessions,
         'yesterday_sessions': yesterday_sessions,
         'last_7_days_sessions': last_7_days_sessions,
@@ -334,14 +334,20 @@ def send_message_api(request, session_id):
         user_content = data.get('message', '').strip()
         provider_name = data.get('provider', None)
         action = data.get('action', None)
+        req_id = data.get('request_id', None)
     except Exception:
         user_content = request.POST.get('message', '').strip()
         provider_name = None
         action = request.POST.get('action', None)
+        req_id = request.POST.get('request_id', None)
         
     if not user_content:
         return JsonResponse({'error': 'Message content cannot be empty'}, status=400)
         
+    from django.core.cache import cache
+    # Clear any old session cancellation flag so future messages are never swallowed (#2)
+    cache.delete(f"cancel_session_{session.id}")
+
     Message.objects.create(session=session, role='user', content=user_content)
     history = list(session.messages.values('role', 'content'))
     
@@ -386,32 +392,31 @@ def send_message_api(request, session_id):
                         r'\bchange\s+(the\s+)?(code|module|file|function|class|model|view|schema|implementation)\b'
                     ]
                     wants_edit = (action == 'edit') or any(re.search(pat, user_content, re.IGNORECASE) for pat in edit_patterns)
-                    existing_codes = list(session.generated_codes.all())
-                    
-                    if wants_edit and existing_codes:
-                        target_mod = existing_codes[-1]
-                        for mod in existing_codes:
-                            if mod.module_name.lower() in user_content.lower():
-                                target_mod = mod
+                    existing_files = list(session.project_files.all())
+                    if wants_edit and existing_files:
+                        target_pf = existing_files[-1]
+                        for pf in existing_files:
+                            if pf.path.lower() in user_content.lower():
+                                target_pf = pf
                                 break
                         summary = session.summary_text or SRSSynthesizer.synthesize_summary(history, provider_name=provider_name, session=session, user=request.user)
                         updated_code = CodeBuilder.generate_code_for_module(
-                            target_mod.module_name,
+                            target_pf.path,
                             summary,
                             modifications=user_content,
                             provider_name=provider_name,
                             session=session,
                             user=request.user
                         )
-                        target_mod.code_content = updated_code
-                        target_mod.save()
+                        target_pf.create_new_version(updated_code, source='user_feedback')
 
-                        from chat.models import ProjectFile
-                        pf = session.project_files.filter(path=target_mod.module_name).first()
-                        if pf:
-                            pf.create_new_version(updated_code, source='user_feedback')
+                        # Keep GeneratedCode in sync as mirror
+                        gc = session.generated_codes.filter(module_name=target_pf.path).first()
+                        if gc:
+                            gc.code_content = updated_code
+                            gc.save()
                         else:
-                            pf = ProjectFile.objects.create(session=session, path=target_mod.module_name, content=updated_code, status='pending')
+                            GeneratedCode.objects.create(session=session, module_name=target_pf.path, code_content=updated_code)
 
                         from generator.verifier import StaticVerifier
                         from chat.models import VerificationRun
@@ -426,15 +431,14 @@ def send_message_api(request, session_id):
                             issues=verif_res.get('issues', [])
                         )
                         file_issues = {iss['file'] for iss in verif_res.get('issues', [])}
-                        if pf:
-                            pf.status = 'has_issues' if pf.path in file_issues else 'verified'
-                            pf.save(update_fields=['status'])
+                        target_pf.status = 'has_issues' if target_pf.path in file_issues else 'verified'
+                        target_pf.save(update_fields=['status'])
 
                         verif_msg = ""
                         if not verif_res.get('passed', True):
                             verif_msg = f"\n\n*Note: Static verification reported {verif_res.get('error_count', 0)} issue(s). Check the Verification panel for details.*"
 
-                        response_text = f"### ✏️ Updated Module `{target_mod.module_name}`\n\nI have updated `{target_mod.module_name}` based on your request. You can inspect the updated code in the right panel and download the project ZIP.{verif_msg}"
+                        response_text = f"### ✏️ Updated Module `{target_pf.path}`\n\nI have updated `{target_pf.path}` based on your request. You can inspect the updated code in the right panel and download the project ZIP.{verif_msg}"
                     else:
                         summary = session.summary_text or SRSSynthesizer.synthesize_summary(history, provider_name=provider_name, session=session, user=request.user)
                         post_prompt = (
@@ -463,39 +467,39 @@ def send_message_api(request, session_id):
                     except Exception:
                         plan_obj = None
                 modules = plan_obj.generation_order if plan_obj else FilePlanner.get_module_list(summary)
-                existing_codes = list(session.generated_codes.all())
+                existing_files = list(session.project_files.all())
                 
                 # Check if all modules have already been generated and approved
-                if session.status in ('completed', 'ready', 'needs_attention') or (len(existing_codes) >= len(modules) and len(modules) > 0):
+                if session.status in ('completed', 'ready', 'needs_attention') or (len(existing_files) >= len(modules) and len(modules) > 0):
                     edit_patterns = [
                         r'\b(modify|update|refactor|rewrite|edit|fix code|add field|add model|fix bug)\b',
                         r'\bchange\s+(the\s+)?(code|module|file|function|class|model|view|schema|implementation)\b'
                     ]
                     wants_edit = (action == 'edit') or any(re.search(pat, user_content, re.IGNORECASE) for pat in edit_patterns)
                     
-                    if wants_edit and existing_codes:
-                        target_mod = existing_codes[-1]
-                        for mod in existing_codes:
-                            if mod.module_name.lower() in user_content.lower():
-                                target_mod = mod
+                    if wants_edit and existing_files:
+                        target_pf = existing_files[-1]
+                        for pf in existing_files:
+                            if pf.path.lower() in user_content.lower():
+                                target_pf = pf
                                 break
                         updated_code = CodeBuilder.generate_code_for_module(
-                            target_mod.module_name,
+                            target_pf.path,
                             summary,
                             modifications=user_content,
                             provider_name=provider_name,
                             session=session,
                             user=request.user
                         )
-                        target_mod.code_content = updated_code
-                        target_mod.save()
+                        target_pf.create_new_version(updated_code, source='user_feedback')
 
-                        from chat.models import ProjectFile
-                        pf = session.project_files.filter(path=target_mod.module_name).first()
-                        if pf:
-                            pf.create_new_version(updated_code, source='user_feedback')
+                        # Keep GeneratedCode in sync
+                        gc = session.generated_codes.filter(module_name=target_pf.path).first()
+                        if gc:
+                            gc.code_content = updated_code
+                            gc.save()
                         else:
-                            pf = ProjectFile.objects.create(session=session, path=target_mod.module_name, content=updated_code, status='pending')
+                            GeneratedCode.objects.create(session=session, module_name=target_pf.path, code_content=updated_code)
 
                         from generator.verifier import StaticVerifier
                         from chat.models import VerificationRun
@@ -510,14 +514,13 @@ def send_message_api(request, session_id):
                             issues=verif_res.get('issues', [])
                         )
                         file_issues = {iss['file'] for iss in verif_res.get('issues', [])}
-                        if pf:
-                            pf.status = 'has_issues' if pf.path in file_issues else 'verified'
-                            pf.save(update_fields=['status'])
-                            verif_msg = f"\n\n*Note: Static verification reported {verif_res.get('error_count', 0)} issue(s). Check the Verification panel.*"
+                        target_pf.status = 'has_issues' if target_pf.path in file_issues else 'verified'
+                        target_pf.save(update_fields=['status'])
+                        verif_msg = f"\n\n*Note: Static verification reported {verif_res.get('error_count', 0)} issue(s). Check the Verification panel.*"
 
                         response_text = (
-                            f"### ✏️ Updated Module `{target_mod.module_name}`\n\n"
-                            f"I have modified `{target_mod.module_name}` based on your request: *\"{user_content}\"*\n\n"
+                            f"### ✏️ Updated Module `{target_pf.path}`\n\n"
+                            f"I have modified `{target_pf.path}` based on your request: *\"{user_content}\"*\n\n"
                             f"You can review the updated code in the right panel and download the project ZIP anytime.{verif_msg}"
                         )
                     else:
@@ -532,50 +535,48 @@ def send_message_api(request, session_id):
                             "Guide the user on running, testing, or understanding their generated project clearly, step-by-step, with practical terminal commands and IDE instructions."
                         )
                         response_text = LLMRouter.generate(prompt=post_prompt, system_prompt=post_system, provider_name=provider_name, purpose='chat', session=session, user=request.user)
-                elif len(existing_codes) > 0 and not is_approval:
+                elif len(existing_files) > 0 and not is_approval:
                     # User wants to modify the current module based on feedback during review
-                    last_mod = existing_codes[-1]
+                    last_pf = existing_files[-1]
                     updated_code = CodeBuilder.generate_code_for_module(
-                        last_mod.module_name, 
+                        last_pf.path, 
                         summary, 
                         modifications=user_content, 
                         provider_name=provider_name,
                         session=session,
                         user=request.user
                     )
-                    last_mod.code_content = updated_code
-                    last_mod.save()
-
-                    from chat.models import ProjectFile
-                    pf = session.project_files.filter(path=last_mod.module_name).first()
-                    if pf:
-                        pf.create_new_version(updated_code, source='user_feedback')
+                    last_pf.create_new_version(updated_code, source='user_feedback')
+                    
+                    gc = session.generated_codes.filter(module_name=last_pf.path).first()
+                    if gc:
+                        gc.code_content = updated_code
+                        gc.save()
                     
                     response_text = (
-                        f"### ✏️ Updated Module `{last_mod.module_name}`\n\n"
-                        f"I have modified `{last_mod.module_name}` based on your feedback: *\"{user_content}\"*\n\n"
+                        f"### ✏️ Updated Module `{last_pf.path}`\n\n"
+                        f"I have modified `{last_pf.path}` based on your feedback: *\"{user_content}\"*\n\n"
                         f"You can inspect the updated code in the right panel. Do you approve this module? (Say **yes** to approve and proceed, or specify further changes)."
                     )
                 else:
                     # User approved or starting next module
-                    if len(existing_codes) < len(modules):
-                        current_mod = modules[len(existing_codes)]
-                        existing_files = {pf.path: pf.content for pf in session.project_files.all()}
+                    if len(existing_files) < len(modules):
+                        current_mod = modules[len(existing_files)]
+                        existing_files_dict = {pf.path: pf.content for pf in session.project_files.all()}
                         code = CodeBuilder.generate_code_for_module(
                             current_mod, 
                             summary, 
                             all_files=modules,
-                            existing_files=existing_files,
+                            existing_files=existing_files_dict,
                             provider_name=provider_name,
                             session=session,
                             user=request.user
                         )
                         GeneratedCode.objects.create(session=session, module_name=current_mod, code_content=code)
-                        from chat.models import ProjectFile
-                        ProjectFile.objects.get_or_create(session=session, path=current_mod, defaults={'content': code, 'status': 'generated', 'current_version': 1})
+                        ProjectFile.objects.create(session=session, path=current_mod, content=code, status='generated')
                         
                         response_text = (
-                            f"### Module {len(existing_codes)+1}/{len(modules)}: `{current_mod}`\n\n"
+                            f"### Module {len(existing_files)+1}/{len(modules)}: `{current_mod}`\n\n"
                             f"I have generated the code for `{current_mod}`. Inspect it in the right panel.\n\n"
                             f"Do you approve this module? (Say **yes** to move to the next module, or describe what changes you want)."
                         )
@@ -657,8 +658,15 @@ def send_message_api(request, session_id):
         }, status=500)
 
     from django.core.cache import cache
-    if cache.get(f"cancel_session_{session.id}"):
+    is_cancelled = False
+    if req_id and cache.get(f"cancel_req_{req_id}"):
+        is_cancelled = True
+        cache.delete(f"cancel_req_{req_id}")
+    elif cache.get(f"cancel_session_{session.id}"):
+        is_cancelled = True
         cache.delete(f"cancel_session_{session.id}")
+
+    if is_cancelled:
         return JsonResponse({
             'cancelled': True,
             'response': '⚠️ Message generation was cancelled by user.',
@@ -675,7 +683,7 @@ def send_message_api(request, session_id):
             session.has_custom_title = True
             session.save()
         
-    codes = list(session.generated_codes.values('id', 'module_name'))
+    codes = [{'id': f.id, 'module_name': f.path} for f in session.project_files.order_by('path')]
     
     # Calculate live updated completeness score & categories
     if session.status in ('srs_ready', 'plan_draft', 'plan_approved', 'generating', 'ready', 'needs_attention', 'completed'):
@@ -736,18 +744,12 @@ def rename_session_api(request, session_id):
 @verification_required
 def get_code_file_api(request, code_id):
     from chat.models import ProjectFile
-    pf = ProjectFile.objects.filter(id=code_id, session__user=request.user).first()
-    if pf:
-        return JsonResponse({
-            'module_name': pf.path,
-            'code_content': pf.content,
-            'version': pf.current_version,
-            'status': pf.status
-        })
-    code_obj = get_object_or_404(GeneratedCode, id=code_id, session__user=request.user)
+    pf = get_object_or_404(ProjectFile, id=code_id, session__user=request.user)
     return JsonResponse({
-        'module_name': code_obj.module_name,
-        'code_content': code_obj.code_content
+        'module_name': pf.path,
+        'code_content': pf.content,
+        'version': pf.current_version,
+        'status': pf.status
     })
 
 @verification_required
@@ -801,8 +803,18 @@ def cancel_session_api(request, session_id):
     from django.core.cache import cache
     from django.utils import timezone
     session = get_object_or_404(Session, id=session_id, user=request.user)
-    cache.set(f"cancel_session_{session.id}", True, 60)
     
+    # Specific per-request cancellation (#2)
+    request_id = None
+    if request.body:
+        try:
+            data = json.loads(request.body)
+            request_id = data.get('request_id')
+        except Exception:
+            request_id = request.POST.get('request_id')
+    if request_id:
+        cache.set(f"cancel_req_{request_id}", True, 30)
+
     active_jobs = session.jobs.filter(status__in=['queued', 'running'])
     for j in active_jobs:
         j.cancel_requested = True
@@ -823,6 +835,9 @@ def cancel_session_api(request, session_id):
 def update_session_mode_api(request, session_id):
     session = get_object_or_404(Session, id=session_id, user=request.user)
     if request.method == 'POST':
+        # Lock mode switching if generation has started or files exist
+        if session.status not in ('active', 'interviewing') or session.project_files.exists() or session.jobs.filter(status__in=['running', 'queued', 'succeeded']).exists():
+            return JsonResponse({'error': 'Mode cannot be changed once generation has started or files exist.'}, status=400)
         try:
             data = json.loads(request.body)
             new_mode = data.get('mode')
@@ -889,14 +904,13 @@ def get_verification_api(request, session_id):
 
 @verification_required
 def get_file_tree_api(request, session_id):
-    from chat.models import ProjectFile, GeneratedCode
+    from chat.models import ProjectFile
     session = get_object_or_404(Session, id=session_id, user=request.user)
-    p_files = list(session.project_files.values('id', 'path', 'status', 'current_version', 'updated_at'))
-    g_codes = list(session.generated_codes.values('id', 'module_name'))
+    p_files = list(session.project_files.order_by('path').values('id', 'path', 'status', 'current_version', 'updated_at'))
     
     return JsonResponse({
         'project_files': p_files,
-        'generated_codes': g_codes
+        'generated_codes': [{'id': f['id'], 'module_name': f['path']} for f in p_files]
     })
 
 

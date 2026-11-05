@@ -25,6 +25,10 @@
 <!-- Three.js, GSAP, ScrollTrigger, Lenis, and Barba are bypassed on the chat workspace for optimal speed and lightweight page load -->
 {% endblock %}
 
+{% block app_scripts %}
+<!-- Custom cursor, landing page WebGL, and Barba transitions are bypassed on the chat workspace -->
+{% endblock %}
+
 {% block content %}
 <div class="chat-app-layout">
     <!-- Left Sidebar: Conversations History & Settings -->
@@ -194,9 +198,15 @@
                 </h3>
                 
                 <!-- Build Style Pill / Mode Toggle -->
-                <button type="button" class="badge badge-brand" id="mode-toggle-btn" onclick="toggleSessionMode()" style="font-size: 11px; font-weight: 500; cursor: pointer; border: none; background: rgba(255, 255, 255, 0.1); color: var(--ink); padding: 4px 8px; border-radius: 4px;" title="Click to toggle build style (All at once vs File by file)">
-                    <span id="mode-label">{% if session.mode == 'mode1' %}All at once{% else %}File by file{% endif %}</span> 🔄
-                </button>
+                {% if session.status == 'active' or session.status == 'interviewing' and not project_files %}
+                    <button type="button" class="badge badge-brand" id="mode-toggle-btn" onclick="toggleSessionMode()" style="font-size: 11px; font-weight: 500; cursor: pointer; border: none; background: rgba(255, 255, 255, 0.1); color: var(--ink); padding: 4px 8px; border-radius: 4px;" title="Click to toggle build style (All at once vs File by file)">
+                        <span id="mode-label">{% if session.mode == 'mode1' %}All at once{% else %}File by file{% endif %}</span> 🔄
+                    </button>
+                {% else %}
+                    <span class="badge badge-brand" id="mode-label" style="font-size: 11px; font-weight: 500;" title="Build style locked for this workspace">
+                        {% if session.mode == 'mode1' %}All at once{% else %}File by file{% endif %}
+                    </span>
+                {% endif %}
 
                 <!-- Model Picker Chip -->
                 <span class="badge badge-brand" style="font-size: 11px; font-weight: 500;">
@@ -374,7 +384,7 @@
                                             {% if not available_providers or 'auto' in available_providers %}<option value="auto" selected style="background: #1e1e1e; color: #fff;">Auto (Recommended)</option>{% endif %}
                                             {% if 'gemini' in available_providers %}<option value="gemini" style="background: #1e1e1e; color: #fff;">Google Gemini</option>{% endif %}
                                             {% if 'openai' in available_providers %}<option value="openai" style="background: #1e1e1e; color: #fff;">OpenAI (GPT-4o)</option>{% endif %}
-                                            {% if 'claude' in available_providers %}<option value="claude" style="background: #1e1e1e; color: #fff;">Claude 3.7 Sonnet</option>{% endif %}
+                                            {% if 'claude' in available_providers %}<option value="claude" style="background: #1e1e1e; color: #fff;">Claude Sonnet 5.5</option>{% endif %}
                                             {% if 'deepseek' in available_providers %}<option value="deepseek" style="background: #1e1e1e; color: #fff;">DeepSeek Coder</option>{% endif %}
                                             {% if not available_providers or 'free' in available_providers %}<option value="free" style="background: #1e1e1e; color: #fff;">Free Keyless AI</option>{% endif %}
                                         </select>
@@ -413,49 +423,65 @@
                 </div>
                 
                 <!-- File list tabs -->
-                <div class="file-tabs-bar" id="file-tabs-container">
-                    {% if generated_codes %}
-                        {% for code in generated_codes %}
-                            <button class="file-tab {% if forloop.first %}active{% endif %}" data-code-id="{{ code.id }}" onclick="loadCodeFile({{ code.id }}, this)">
-                                <i data-lucide="file-code" class="icon-inline"></i> {{ code.module_name }}
-                            </button>
-                        {% endfor %}
-                    {% else %}
-                        <div class="no-files-tab" id="no-files-notice-tab">No files generated yet</div>
-                    {% endif %}
+                <div class="file-tabs-bar" id="file-tabs-container" style="display: flex; align-items: center; gap: 8px;">
+                    <button type="button" class="btn btn-ghost btn-xs" id="btn-toggle-tree" onclick="toggleTreeExplorer()" style="padding: 4px 8px; font-size: 11px; white-space: nowrap; border: 1px solid var(--border); border-radius: 4px;" title="Toggle File Tree Explorer">
+                        <i data-lucide="folder-tree" class="icon-inline"></i> Tree
+                    </button>
+                    <div id="file-tabs-inner" style="display: flex; gap: 4px; overflow-x: auto; flex: 1; align-items: center;">
+                        {% if project_files %}
+                            {% for file in project_files %}
+                                <button class="file-tab {% if forloop.first %}active{% endif %}" data-code-id="{{ file.id }}" onclick="loadCodeFile({{ file.id }}, this)">
+                                    <i data-lucide="file-code" class="icon-inline"></i> {{ file.path }}
+                                </button>
+                            {% endfor %}
+                        {% else %}
+                            <div class="no-files-tab" id="no-files-notice-tab">No files generated yet</div>
+                        {% endif %}
+                    </div>
                 </div>
                 
-                <!-- Code Content Area -->
-                <div class="code-display-area">
-                    <div class="code-actions-header {% if not generated_codes %}hidden{% endif %}" id="code-actions-bar">
-                        <span id="active-file-title" class="file-title">
-                            {% if generated_codes %}
-                                {{ generated_codes.0.module_name }}
-                            {% endif %}
-                        </span>
-                        <div class="action-buttons">
-                            <button class="btn btn-secondary btn-sm" id="btn-copy-code" onclick="copyCodeContent()">
-                                <i data-lucide="copy" class="icon-inline"></i> Copy
-                            </button>
-                            <button class="btn btn-secondary btn-sm" id="btn-download-code" onclick="downloadCodeContent()">
-                                <i data-lucide="download" class="icon-inline"></i> Download File
-                            </button>
-                            <a href="{% url 'download_project_zip_api' session_id=session.id %}" class="btn btn-primary btn-sm" id="btn-download-zip" title="Download Full Project ZIP">
-                                <i data-lucide="archive" class="icon-inline"></i> Download ZIP
-                            </a>
+                <div class="code-workspace-body" style="display: flex; flex: 1; min-height: 0; overflow: hidden; position: relative;">
+                    <!-- Collapsible Tree Explorer Drawer/Sidebar -->
+                    <div id="file-tree-sidebar" class="file-tree-sidebar" style="width: 220px; min-width: 180px; border-right: 1px solid var(--border); overflow-y: auto; padding: 10px; font-size: 12px; background: var(--surface-sunken); display: none;">
+                        <div style="font-weight: 600; color: var(--ink-2); margin-bottom: 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; justify-content: space-between;">
+                            <span>Project Files</span>
+                            <button type="button" onclick="toggleTreeExplorer()" style="background: none; border: none; color: var(--ink-3); cursor: pointer;" title="Close Explorer">✕</button>
                         </div>
+                        <div id="hierarchical-file-tree"></div>
                     </div>
-                    
-                    <div class="code-pre-wrapper" id="code-view-container">
-                        {% if generated_codes %}
-                            <pre class="code-block"><code id="code-output-block">{{ generated_codes.0.code_content }}</code></pre>
-                        {% else %}
-                            <div class="empty-code-view" id="empty-code-notice">
-                                <i data-lucide="code-2" class="empty-code-icon"></i>
-                                <h4>Design Dialogue In Progress</h4>
-                                <p>Answer the AI questions on the left. The generated system code will appear here automatically as requirements are gathered.</p>
+
+                    <!-- Code Content Area -->
+                    <div class="code-display-area" style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
+                        <div class="code-actions-header {% if not project_files %}hidden{% endif %}" id="code-actions-bar">
+                            <span id="active-file-title" class="file-title">
+                                {% if project_files %}
+                                    {{ project_files.0.path }}
+                                {% endif %}
+                            </span>
+                            <div class="action-buttons">
+                                <button class="btn btn-secondary btn-sm" id="btn-copy-code" onclick="copyCodeContent()">
+                                    <i data-lucide="copy" class="icon-inline"></i> Copy
+                                </button>
+                                <button class="btn btn-secondary btn-sm" id="btn-download-code" onclick="downloadCodeContent()">
+                                    <i data-lucide="download" class="icon-inline"></i> Download File
+                                </button>
+                                <a href="{% url 'download_project_zip_api' session_id=session.id %}" class="btn btn-primary btn-sm" id="btn-download-zip" title="Download Full Project ZIP">
+                                    <i data-lucide="archive" class="icon-inline"></i> Download ZIP
+                                </a>
                             </div>
-                        {% endif %}
+                        </div>
+                        
+                        <div class="code-pre-wrapper" id="code-view-container" style="flex: 1; overflow: auto;">
+                            {% if project_files %}
+                                <pre class="code-block"><code id="code-output-block">{{ project_files.0.content }}</code></pre>
+                            {% else %}
+                                <div class="empty-code-view" id="empty-code-notice">
+                                    <i data-lucide="code-2" class="empty-code-icon"></i>
+                                    <h4>Design Dialogue In Progress</h4>
+                                    <p>Answer the AI questions on the left. The generated system code will appear here automatically as requirements are gathered.</p>
+                                </div>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -665,6 +691,22 @@
         document.querySelectorAll('.stage-step-btn').forEach(btn => {
             btn.classList.toggle('active', btn.getAttribute('data-stage') === stage);
         });
+
+        // Lock mode toggle once past discovery/interviewing stage
+        if (!['active', 'interviewing'].includes(status)) {
+            const modeBtn = document.getElementById('mode-toggle-btn');
+            if (modeBtn) {
+                const labelText = document.getElementById('mode-label')?.textContent || '';
+                const span = document.createElement('span');
+                span.className = 'badge badge-brand';
+                span.id = 'mode-label';
+                span.style.fontSize = '11px';
+                span.style.fontWeight = '500';
+                span.title = 'Build style locked for this workspace';
+                span.textContent = labelText.replace('🔄', '').trim();
+                modeBtn.replaceWith(span);
+            }
+        }
     }
 
     window.handleProviderChange = function(selectElem) {
@@ -716,9 +758,12 @@
                     currentAbortController.abort();
                     currentAbortController = null;
                 }
+                const reqToCancel = window.currentRequestId;
+                window.currentRequestId = null;
                 fetch("{% url 'cancel_session_api' session_id=session.id %}", {
                     method: 'POST',
-                    headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+                    headers: { 'X-CSRFToken': '{{ csrf_token }}', 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ request_id: reqToCancel })
                 }).catch(() => {});
                 typingIndicator.classList.add('hidden');
                 if (card) card.classList.remove('generating');
@@ -772,6 +817,8 @@
             }
             
             currentAbortController = new AbortController();
+            const thisRequestId = 'req_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8);
+            window.currentRequestId = thisRequestId;
 
             try {
                 const providerSelect = document.getElementById('provider-selector');
@@ -787,7 +834,7 @@
                         'Content-Type': 'application/json',
                         'X-CSRFToken': '{{ csrf_token }}'
                     },
-                    body: JSON.stringify({ message: messageText, provider: providerVal, action: actionToSend })
+                    body: JSON.stringify({ message: messageText, provider: providerVal, action: actionToSend, request_id: thisRequestId })
                 });
                 
                 let data;
@@ -900,9 +947,6 @@
             scrollToBottom();
         });
     }
-            scrollToBottom();
-        });
-    }
     
     // Append chat bubbles safely (§4.3, §7.3)
     function appendMessageBubble(role, content) {
@@ -946,16 +990,84 @@
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
     
+    // Hierarchical Tree Explorer Component
+    window.toggleTreeExplorer = function() {
+        const sidebar = document.getElementById('file-tree-sidebar');
+        if (!sidebar) return;
+        const isHidden = (sidebar.style.display === 'none' || !sidebar.style.display);
+        sidebar.style.display = isHidden ? 'block' : 'none';
+        if (isHidden) {
+            renderTreeExplorer();
+        }
+    };
+
+    function renderTreeExplorer() {
+        const container = document.getElementById('hierarchical-file-tree');
+        if (!container) return;
+        const inner = document.getElementById('file-tabs-inner') || fileTabsContainer;
+        const tabs = Array.from(inner ? inner.querySelectorAll('.file-tab') : []);
+        if (tabs.length === 0) {
+            container.innerHTML = '<span style="color:var(--ink-3); font-size:11px;">No files available yet</span>';
+            return;
+        }
+        const files = tabs.map(t => ({
+            id: t.getAttribute('data-code-id'),
+            path: t.textContent.trim(),
+            isActive: t.classList.contains('active')
+        }));
+
+        const root = {};
+        files.forEach(f => {
+            const parts = f.path.split('/');
+            let cur = root;
+            parts.forEach((p, idx) => {
+                if (idx === parts.length - 1) {
+                    cur[p] = { __file: true, id: f.id, fullPath: f.path, active: f.isActive };
+                } else {
+                    if (!cur[p]) cur[p] = {};
+                    cur = cur[p];
+                }
+            });
+        });
+
+        function renderNode(obj, depth = 0) {
+            let html = '';
+            for (const [key, val] of Object.entries(obj)) {
+                const indent = depth * 14;
+                if (val.__file) {
+                    html += `
+                        <div class="tree-file-row ${val.active ? 'active' : ''}" style="padding: 3px 6px 3px ${indent + 6}px; cursor: pointer; display: flex; align-items: center; gap: 6px; border-radius: 4px; ${val.active ? 'background: var(--brand-tint); color: var(--brand); font-weight: 600;' : 'color: var(--ink-2);'}" onclick="loadCodeFile(${val.id})">
+                            <i data-lucide="file-code" style="width: 12px; height: 12px; flex-shrink: 0;"></i>
+                            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(key)}</span>
+                        </div>
+                    `;
+                } else {
+                    html += `
+                        <div class="tree-folder-row" style="padding: 4px 6px 2px ${indent + 6}px; font-weight: 600; color: var(--ink); display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="folder" style="width: 12px; height: 12px; color: var(--brand);"></i>
+                            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(key)}</span>
+                        </div>
+                        ${renderNode(val, depth + 1)}
+                    `;
+                }
+            }
+            return html;
+        }
+
+        container.innerHTML = renderNode(root);
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
     // Dynamic tabs updating
     function updateCodeFilesPanel(codes) {
-        // Clear tab list and notice
+        const tabsBox = document.getElementById('file-tabs-inner') || fileTabsContainer;
         const noticeTab = document.getElementById('no-files-notice-tab');
         if (noticeTab) noticeTab.remove();
         
-        const existingTabs = fileTabsContainer.querySelectorAll('.file-tab');
+        const existingTabs = tabsBox.querySelectorAll('.file-tab');
         const activeId = existingTabs.length > 0 ? Array.from(existingTabs).find(t => t.classList.contains('active'))?.getAttribute('data-code-id') : null;
         
-        fileTabsContainer.innerHTML = '';
+        tabsBox.innerHTML = '';
         
         codes.forEach((code, index) => {
             const btn = document.createElement('button');
@@ -964,14 +1076,14 @@
             btn.setAttribute('onclick', `loadCodeFile(${code.id}, this)`);
             btn.innerHTML = '<i data-lucide="file-code" class="icon-inline"></i> ';
             btn.appendChild(document.createTextNode(code.module_name));
-            fileTabsContainer.appendChild(btn);
+            tabsBox.appendChild(btn);
         });
         
         // Show actions bar
         codeActionsBar.classList.remove('hidden');
         
         // Load first or active file content if not already showing
-        const activeTab = fileTabsContainer.querySelector('.file-tab.active');
+        const activeTab = tabsBox.querySelector('.file-tab.active');
         if (activeTab) {
             const activeCodeId = activeTab.getAttribute('data-code-id');
             if (document.getElementById('empty-code-notice')) {
@@ -979,13 +1091,17 @@
             }
         }
         
+        renderTreeExplorer();
         lucide.createIcons();
     }
     
     // Fetch file code content
     async function loadCodeFile(codeId, tabElement) {
-        // Toggle active tabs
-        const tabs = fileTabsContainer.querySelectorAll('.file-tab');
+        if (!tabElement) {
+            tabElement = document.querySelector(`.file-tab[data-code-id="${codeId}"]`);
+        }
+        const tabsBox = document.getElementById('file-tabs-inner') || fileTabsContainer;
+        const tabs = tabsBox ? tabsBox.querySelectorAll('.file-tab') : [];
         tabs.forEach(t => t.classList.remove('active'));
         if (tabElement) {
             tabElement.classList.add('active');
@@ -993,6 +1109,7 @@
                 tabElement.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
             }
         }
+        renderTreeExplorer();
         
         try {
             const response = await fetch(`/api/code/${codeId}/`);
@@ -1365,8 +1482,11 @@
                             fetch(`/api/session/{{ session.id }}/tree/`)
                                 .then(r => r.json())
                                 .then(treeData => {
-                                    if (treeData.generated_codes && treeData.generated_codes.length > 0) {
-                                        updateCodeFilesPanel(treeData.generated_codes);
+                                    const fileList = (treeData.project_files && treeData.project_files.length > 0)
+                                        ? treeData.project_files.map(f => ({ id: f.id, module_name: f.path }))
+                                        : (treeData.generated_codes || []);
+                                    if (fileList.length > 0) {
+                                        updateCodeFilesPanel(fileList);
                                         if (workspaceWrapper) workspaceWrapper.classList.remove('collapsed-code');
                                     }
                                 });
@@ -1555,7 +1675,8 @@
     // Phase 10: Jump to issue line in code editor
     window.jumpToIssueLine = function(filePath, lineNum) {
         switchRightPanel('tree');
-        const activeTab = Array.from(fileTabsContainer.querySelectorAll('.file-tab')).find(t => t.textContent.includes(filePath));
+        const tabsBox = document.getElementById('file-tabs-inner') || fileTabsContainer;
+        const activeTab = Array.from(tabsBox ? tabsBox.querySelectorAll('.file-tab') : []).find(t => t.textContent.includes(filePath));
         if (activeTab) {
             activeTab.click();
         }

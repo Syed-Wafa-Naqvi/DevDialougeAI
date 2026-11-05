@@ -348,3 +348,81 @@ class ChatTestCase(TestCase):
         self.assertEqual(response.json()['mode'], 'mode1')
         session.refresh_from_db()
         self.assertEqual(session.mode, 'mode1')
+
+    def test_get_code_file_api_reads_project_file_and_protects_isolation(self):
+        user_b = User.objects.create_user(username='otheruser', email='other@example.com', password='Password123!')
+        sess_b = Session.objects.create(user=user_b, mode='mode1', status='ready')
+        pf_b = ProjectFile.objects.create(session=sess_b, path='secret.py', content='secret_code')
+
+        sess_a = Session.objects.create(user=self.user, mode='mode1', status='ready')
+        pf_a = ProjectFile.objects.create(session=sess_a, path='my_app/views.py', content='my_code')
+
+        # User A cannot read User B's ProjectFile
+        resp_b = self.client.get(f'/api/code/{pf_b.id}/')
+        self.assertEqual(resp_b.status_code, 404)
+
+        # User A can read User A's ProjectFile
+        resp_a = self.client.get(f'/api/code/{pf_a.id}/')
+        self.assertEqual(resp_a.status_code, 200)
+        self.assertEqual(resp_a.json()['module_name'], 'my_app/views.py')
+        self.assertEqual(resp_a.json()['code_content'], 'my_code')
+
+    def test_stop_cancellation_does_not_swallow_next_message(self):
+        import json
+        session = Session.objects.create(user=self.user, mode='mode1', status='interviewing')
+        
+        # 1. User stops in-flight request
+        cancel_resp = self.client.post(
+            f'/api/session/{session.id}/cancel/',
+            data=json.dumps({'request_id': 'req_first_to_cancel'}),
+            content_type='application/json'
+        )
+        self.assertEqual(cancel_resp.status_code, 200)
+
+        # 2. User sends subsequent message right away
+        send_resp = self.client.post(
+            f'/api/chat/{session.id}/send/',
+            data=json.dumps({'message': 'Hello, can you help me build a blog?', 'request_id': 'req_second_fresh'}),
+            content_type='application/json'
+        )
+        self.assertEqual(send_resp.status_code, 200)
+        data = send_resp.json()
+        self.assertFalse(data.get('cancelled', False))
+        self.assertTrue(bool(data.get('response')))
+        self.assertNotIn('cancelled by user', data.get('response', ''))
+
+    def test_update_session_mode_api_locked_after_interviewing(self):
+        session = Session.objects.create(user=self.user, mode='mode1', status='generating')
+        response = self.client.post(f'/api/session/{session.id}/mode/')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Mode cannot be changed", response.json().get('error', ''))
+
+    def test_timezone_middleware_activates_and_deactivates(self):
+        from core.middleware import TimezoneMiddleware
+        from django.test.client import RequestFactory
+        from django.utils import timezone
+
+        factory = RequestFactory()
+        req = factory.get('/')
+        req.COOKIES['django_timezone'] = 'Asia/Tokyo'
+
+        active_tz_inside = []
+        def dummy_get_response(request):
+            active_tz_inside.append(timezone.get_current_timezone_name())
+            return None
+
+        middleware = TimezoneMiddleware(dummy_get_response)
+        middleware(req)
+
+        # Inside request, client timezone was active
+        self.assertEqual(active_tz_inside[0], 'Asia/Tokyo')
+        # After request finished, current timezone deactivated and did not leak
+        self.assertNotEqual(timezone.get_current_timezone_name(), 'Asia/Tokyo')
+
+    def test_claude_model_is_claude_sonnet_5_5(self):
+        from django.conf import settings
+        from llm_engine.providers.claude_provider import ClaudeProvider
+        provider = ClaudeProvider()
+        self.assertEqual(provider.model, 'claude-sonnet-5-5')
+        plan_models = dict(settings.LLM_PURPOSE_ROUTING['plan'])
+        self.assertEqual(plan_models.get('claude'), 'claude-sonnet-5-5')

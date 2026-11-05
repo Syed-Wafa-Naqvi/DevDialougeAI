@@ -66,6 +66,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'core.middleware.TimezoneMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -95,8 +96,23 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
+        'OPTIONS': {
+            'timeout': 20,
+        },
     }
 }
+
+# Ensure SQLite uses WAL mode and high busy timeout for concurrency in background worker threads (#26)
+from django.db.backends.signals import connection_created
+def _sqlite_configure(sender, connection, **kwargs):
+    if connection.vendor == 'sqlite':
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute('PRAGMA journal_mode=WAL;')
+                cursor.execute('PRAGMA busy_timeout=20000;')
+        except Exception:
+            pass
+connection_created.connect(_sqlite_configure)
 
 
 # Password validation
@@ -171,9 +187,9 @@ LLM_PURPOSE_ROUTING = {
     'chat': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o-mini'), ('free', 'llama-3.3-70b')],
     'completeness': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o-mini'), ('free', 'llama-3.3-70b')],
     'srs': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o'), ('free', 'llama-3.3-70b')],
-    'plan': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o'), ('claude', 'claude-3-7-sonnet-20250219'), ('deepseek', 'deepseek-chat'), ('free', 'qwen-2.5-coder')],
-    'codegen': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o'), ('claude', 'claude-3-7-sonnet-20250219'), ('deepseek', 'deepseek-chat'), ('free', 'qwen-2.5-coder')],
-    'repair': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o'), ('claude', 'claude-3-7-sonnet-20250219'), ('deepseek', 'deepseek-chat'), ('free', 'qwen-2.5-coder')],
+    'plan': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o'), ('claude', 'claude-sonnet-5-5'), ('deepseek', 'deepseek-chat'), ('free', 'qwen-2.5-coder')],
+    'codegen': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o'), ('claude', 'claude-sonnet-5-5'), ('deepseek', 'deepseek-chat'), ('free', 'qwen-2.5-coder')],
+    'repair': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o'), ('claude', 'claude-sonnet-5-5'), ('deepseek', 'deepseek-chat'), ('free', 'qwen-2.5-coder')],
     'summary': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o-mini'), ('free', 'llama-3.3-70b')],
 }
 
