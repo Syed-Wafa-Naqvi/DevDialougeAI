@@ -20,13 +20,14 @@ class JobExecutionEngine:
         from django.utils import timezone
         from datetime import timedelta
 
-        # Clear stale jobs older than 10 minutes
+        # Scope stale cleanup to this session's jobs, NOT all jobs across the database!
         stale_cutoff = timezone.now() - timedelta(minutes=10)
-        stale_jobs = Job.objects.filter(status__in=['queued', 'running'], updated_at__lt=stale_cutoff)
+        stale_jobs = session.jobs.filter(status__in=['queued', 'running'], updated_at__lt=stale_cutoff)
         for sj in stale_jobs:
             sj.status = 'failed'
             sj.error_message = "Job timed out after 10 minutes of inactivity."
-            sj.save(update_fields=['status', 'error_message'])
+            sj.updated_at = timezone.now()
+            sj.save(update_fields=['status', 'error_message', 'updated_at'])
             try:
                 if sj.session.status == 'generating':
                     sj.session.status = 'needs_attention'
@@ -41,6 +42,14 @@ class JobExecutionEngine:
         from django.conf import settings
         max_user_jobs = getattr(settings, 'MAX_CONCURRENT_JOBS_PER_USER', 2)
         if user and getattr(user, 'is_authenticated', False):
+            # Also clear any stale jobs for this user so abandoned jobs don't block user's budget
+            user_stale = Job.objects.filter(user=user, status__in=['queued', 'running'], updated_at__lt=stale_cutoff)
+            for uj in user_stale:
+                uj.status = 'failed'
+                uj.error_message = "Job timed out after 10 minutes of inactivity."
+                uj.updated_at = timezone.now()
+                uj.save(update_fields=['status', 'error_message', 'updated_at'])
+
             user_active = Job.objects.filter(user=user, status__in=['queued', 'running']).count()
             if user_active >= max_user_jobs:
                 raise JobConcurrencyError(f"User has reached the maximum allowed concurrent background jobs ({max_user_jobs}).")
@@ -61,13 +70,15 @@ class JobExecutionEngine:
         Executes the job pipeline based on job_type.
         Supports clean cancellation checks between execution phases.
         """
+        from django.utils import timezone
         try:
             job = Job.objects.get(id=job_id)
         except Job.DoesNotExist:
             raise ValueError(f"Job #{job_id} not found.")
 
         job.status = 'running'
-        job.save(update_fields=['status'])
+        job.updated_at = timezone.now()
+        job.save(update_fields=['status', 'updated_at'])
         job.log_event('info', f"Started background job #{job.id} [{job.job_type}].")
 
         try:
@@ -77,11 +88,13 @@ class JobExecutionEngine:
                 cls._execute_generation_job(job, provider_name)
             else:
                 job.status = 'succeeded'
-                job.save(update_fields=['status'])
+                job.updated_at = timezone.now()
+                job.save(update_fields=['status', 'updated_at'])
         except Exception as e:
             job.status = 'failed'
             job.error_message = str(e)
-            job.save(update_fields=['status', 'error_message'])
+            job.updated_at = timezone.now()
+            job.save(update_fields=['status', 'error_message', 'updated_at'])
             job.log_event('error', f"Job execution failed: {str(e)}")
             try:
                 if job.session.status == 'generating':
@@ -94,11 +107,13 @@ class JobExecutionEngine:
 
     @classmethod
     def _execute_plan_job(cls, job: Job, provider_name: str = None):
+        from django.utils import timezone
         session = job.session
         SessionStateMachine.transition_to(session, 'plan_draft')
 
         job.progress_current = 20
-        job.save(update_fields=['progress_current'])
+        job.updated_at = timezone.now()
+        job.save(update_fields=['progress_current', 'updated_at'])
         job.log_event('info', "Generating architecture plan contract...")
 
         # Fetch latest SRS summary from messages
@@ -109,7 +124,8 @@ class JobExecutionEngine:
         job.refresh_from_db()
         if job.cancel_requested:
             job.status = 'cancelled'
-            job.save(update_fields=['status'])
+            job.updated_at = timezone.now()
+            job.save(update_fields=['status', 'updated_at'])
             job.log_event('info', "Job cancelled by user.")
             return
 
@@ -117,13 +133,15 @@ class JobExecutionEngine:
         job.progress_current = 100
         job.status = 'succeeded'
         job.result_summary = f"Plan v{plan_obj.version} generated successfully with {len(plan_obj.generation_order)} target files."
-        job.save(update_fields=['progress_current', 'status', 'result_summary'])
+        job.updated_at = timezone.now()
+        job.save(update_fields=['progress_current', 'status', 'result_summary', 'updated_at'])
 
         job.log_event('info', f"Architecture plan v{plan_obj.version} created.", data=plan_obj.plan_data)
 
     @classmethod
     def _execute_generation_job(cls, job: Job, provider_name: str = None):
         import re
+        from django.utils import timezone
         session = job.session
         SessionStateMachine.transition_to(session, 'generating')
 
@@ -160,7 +178,8 @@ class JobExecutionEngine:
 
         total_files = len(gen_order)
         job.progress_total = total_files * 10
-        job.save(update_fields=['progress_total'])
+        job.updated_at = timezone.now()
+        job.save(update_fields=['progress_total', 'updated_at'])
 
         generated_files = dict(existing_files)
 
@@ -169,7 +188,8 @@ class JobExecutionEngine:
             job.refresh_from_db()
             if job.cancel_requested:
                 job.status = 'cancelled'
-                job.save(update_fields=['status'])
+                job.updated_at = timezone.now()
+                job.save(update_fields=['status', 'updated_at'])
                 job.log_event('info', f"Job cancelled by user while writing '{file_path}'.")
                 return
 
@@ -205,7 +225,8 @@ class JobExecutionEngine:
             )
 
             job.progress_current = (idx + 1) * 10
-            job.save(update_fields=['progress_current'])
+            job.updated_at = timezone.now()
+            job.save(update_fields=['progress_current', 'updated_at'])
             job.log_event('file_done', f"Completed '{file_path}'.")
 
         # Static Verification & Repair Loop Phase
@@ -229,6 +250,7 @@ class JobExecutionEngine:
         job.status = 'succeeded'
         job.progress_current = job.progress_total
         job.result_summary = repair_res['honest_message']
-        job.save(update_fields=['status', 'progress_current', 'result_summary'])
+        job.updated_at = timezone.now()
+        job.save(update_fields=['status', 'progress_current', 'result_summary', 'updated_at'])
 
         job.log_event('verify_result', repair_res['honest_message'], data=repair_res['verification'])

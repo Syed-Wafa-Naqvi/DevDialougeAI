@@ -25,9 +25,12 @@ def encrypt_api_key(raw_key: str) -> str:
 def decrypt_api_key(encrypted_key: str) -> str:
     if not encrypted_key:
         return ""
-    from cryptography.fernet import Fernet
-    f = Fernet(get_field_encryption_key())
-    return f.decrypt(encrypted_key.encode('utf-8')).decode('utf-8')
+    from cryptography.fernet import Fernet, InvalidToken
+    try:
+        f = Fernet(get_field_encryption_key())
+        return f.decrypt(encrypted_key.encode('utf-8')).decode('utf-8')
+    except (InvalidToken, Exception):
+        return ""
 
 def mask_api_key(raw_key: str) -> str:
     if not raw_key:

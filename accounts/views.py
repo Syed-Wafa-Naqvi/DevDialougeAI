@@ -11,10 +11,12 @@ from django.utils import timezone
 from django.core.cache import cache
 
 def get_client_ip(request):
-    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-    if x_forwarded_for:
-        return x_forwarded_for.split(',')[0].strip()
-    return request.META.get('REMOTE_ADDR', '127.0.0.1')
+    remote_addr = request.META.get('REMOTE_ADDR', '127.0.0.1')
+    if getattr(settings, 'USE_X_FORWARDED_HOST', False) or getattr(settings, 'TRUST_PROXY_HEADERS', False):
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            return x_forwarded_for.split(',')[0].strip()
+    return remote_addr
 
 def is_rate_limited(key: str, max_attempts: int, timeout_seconds: int) -> bool:
     attempts = cache.get(key, 0)
@@ -46,14 +48,9 @@ def signup_view(request):
 
             try:
                 with transaction.atomic():
-                    existing_unverified = User.objects.filter(
-                        models.Q(username=username) | models.Q(email=email),
-                        is_active=False
-                    ).first()
-                    if existing_unverified:
-                        request.session['pre_verified_user_id'] = existing_unverified.id
-                        messages.warning(request, "An unverified account with this username or email already exists. Please enter your verification code.")
-                        return redirect('verify_otp')
+                    if User.objects.filter(models.Q(username=username) | models.Q(email=email)).exists():
+                        messages.error(request, "An account with this username or email already exists. Please log in or use a different email.")
+                        return render(request, 'signup.html', {'form': form})
 
                     user = form.save(commit=False)
                     user.is_active = False

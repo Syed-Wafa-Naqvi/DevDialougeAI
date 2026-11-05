@@ -4,7 +4,7 @@ import urllib.error
 from llm_engine.providers.base import BaseLLMProvider
 
 class ClaudeProvider(BaseLLMProvider):
-    def __init__(self, api_key: str = None, model: str = "claude-3-5-sonnet-20241022"):
+    def __init__(self, api_key: str = None, model: str = "claude-3-7-sonnet-20250219"):
         super().__init__(api_key=api_key, model=model)
 
     def is_available(self) -> bool:

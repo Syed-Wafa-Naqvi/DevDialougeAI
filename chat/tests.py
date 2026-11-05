@@ -274,3 +274,77 @@ class ChatTestCase(TestCase):
         session = Session.objects.create(user=self.user, mode='mode1', status='active')
         with self.assertRaises(PathSafetyError):
             ProjectFile.objects.create(session=session, path='../../etc/passwd', content='bad')
+
+    def test_get_job_events_api_includes_session_status(self):
+        from generator.jobs import JobExecutionEngine
+        session = Session.objects.create(user=self.user, mode='mode1', status='needs_attention')
+        job = JobExecutionEngine.create_job(session=session, user=self.user, job_type='generate')
+        response = self.client.get(f'/api/jobs/{job.id}/events/')
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn('session_status', data)
+        self.assertEqual(data['session_status'], 'needs_attention')
+
+    def test_request_changes_does_not_misfire_generation(self):
+        session = Session.objects.create(user=self.user, mode='mode1', status='srs_ready', summary_text="SRS Summary")
+        response = self.client.post(
+            f'/api/chat/{session.id}/send/',
+            data={'message': 'Please modify the requirements to: also build an admin panel', 'provider': 'mock'},
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+        session.refresh_from_db()
+        # Session status should NOT have transitioned to generating or ready
+        self.assertNotEqual(session.status, 'generating')
+        self.assertNotEqual(session.status, 'ready')
+        self.assertFalse(session.jobs.exists())
+
+    def test_explicit_action_generate_triggers_approval(self):
+        session = Session.objects.create(user=self.user, mode='mode1', status='srs_ready', summary_text="SRS Summary")
+        response = self.client.post(
+            f'/api/chat/{session.id}/send/',
+            data={'message': 'Click generate button', 'action': 'generate', 'provider': 'mock'},
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+        session.refresh_from_db()
+        self.assertIn(session.status, ['ready', 'needs_attention'])
+        self.assertTrue(session.jobs.filter(status='succeeded').exists())
+
+    def test_get_project_name_does_not_mutate_session_title(self):
+        from exporter.archiver import ZipArchiver
+        session = Session.objects.create(user=self.user, title='Custom Workspace Title', mode='mode1', status='active')
+        name = ZipArchiver.get_project_name(session)
+        self.assertIsInstance(name, str)
+        session.refresh_from_db()
+        self.assertEqual(session.title, 'Custom Workspace Title')
+
+    def test_cancel_session_api_cancels_jobs_and_reverts_state(self):
+        from generator.jobs import JobExecutionEngine
+        session = Session.objects.create(user=self.user, mode='mode1', status='generating')
+        queued_job = JobExecutionEngine.create_job(session=session, user=self.user, job_type='generate')
+        self.assertEqual(queued_job.status, 'queued')
+        
+        response = self.client.post(f'/api/session/{session.id}/cancel/')
+        self.assertEqual(response.status_code, 200)
+        queued_job.refresh_from_db()
+        session.refresh_from_db()
+        self.assertEqual(queued_job.status, 'cancelled')
+        self.assertEqual(session.status, 'srs_ready')
+
+    def test_update_session_mode_api_toggles_mode(self):
+        session = Session.objects.create(user=self.user, mode='mode1', status='active')
+        
+        # Toggle without body: toggles mode1 -> mode2
+        response = self.client.post(f'/api/session/{session.id}/mode/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['mode'], 'mode2')
+        session.refresh_from_db()
+        self.assertEqual(session.mode, 'mode2')
+
+        # Toggle again: mode2 -> mode1
+        response = self.client.post(f'/api/session/{session.id}/mode/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['mode'], 'mode1')
+        session.refresh_from_db()
+        self.assertEqual(session.mode, 'mode1')

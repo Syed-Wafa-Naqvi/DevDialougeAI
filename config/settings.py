@@ -126,7 +126,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = os.environ.get('DJANGO_TIME_ZONE', 'Asia/Karachi')
 
 USE_I18N = True
 
@@ -171,11 +171,13 @@ LLM_PURPOSE_ROUTING = {
     'chat': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o-mini'), ('free', 'llama-3.3-70b')],
     'completeness': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o-mini'), ('free', 'llama-3.3-70b')],
     'srs': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o'), ('free', 'llama-3.3-70b')],
-    'plan': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o'), ('claude', 'claude-3-5-sonnet-20241022'), ('deepseek', 'deepseek-chat'), ('free', 'qwen-2.5-coder')],
-    'codegen': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o'), ('claude', 'claude-3-5-sonnet-20241022'), ('deepseek', 'deepseek-chat'), ('free', 'qwen-2.5-coder')],
-    'repair': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o'), ('claude', 'claude-3-5-sonnet-20241022'), ('deepseek', 'deepseek-chat'), ('free', 'qwen-2.5-coder')],
+    'plan': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o'), ('claude', 'claude-3-7-sonnet-20250219'), ('deepseek', 'deepseek-chat'), ('free', 'qwen-2.5-coder')],
+    'codegen': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o'), ('claude', 'claude-3-7-sonnet-20250219'), ('deepseek', 'deepseek-chat'), ('free', 'qwen-2.5-coder')],
+    'repair': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o'), ('claude', 'claude-3-7-sonnet-20250219'), ('deepseek', 'deepseek-chat'), ('free', 'qwen-2.5-coder')],
     'summary': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o-mini'), ('free', 'llama-3.3-70b')],
 }
+
+TRUST_PROXY_HEADERS = os.environ.get('TRUST_PROXY_HEADERS', 'False') == 'True'
 
 DEFAULT_AI_PROVIDER = os.environ.get('DEFAULT_AI_PROVIDER', 'auto')
 DEFAULT_CHAT_MODEL = os.environ.get('DEFAULT_CHAT_MODEL', 'gemini-2.5-flash-lite')

@@ -29,20 +29,14 @@ class SignUpForm(forms.ModelForm):
 
     def clean_username(self):
         username = self.cleaned_data.get('username')
-        user = User.objects.filter(username=username).first()
-        if user:
-            is_verified = getattr(getattr(user, 'profile', None), 'is_verified', False)
-            if is_verified or user.is_active:
-                raise forms.ValidationError("This username is already taken.")
+        if User.objects.filter(username=username).exists():
+            raise forms.ValidationError("This username is already taken.")
         return username
 
     def clean_email(self):
         email = self.cleaned_data.get('email')
-        user = User.objects.filter(email=email).first()
-        if user:
-            is_verified = getattr(getattr(user, 'profile', None), 'is_verified', False)
-            if is_verified or user.is_active:
-                raise forms.ValidationError("A user with this email already exists.")
+        if User.objects.filter(email=email).exists():
+            raise forms.ValidationError("A user with this email already exists.")
         return email
 
     def clean(self):

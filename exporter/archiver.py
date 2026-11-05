@@ -51,9 +51,6 @@ class ZipArchiver:
                         concept = line.split(":", 1)[-1].strip().strip("*# ")
                         clean_concept = re.sub(r'[^\w\s-]', '', concept).strip()
                         if clean_concept and len(clean_concept) <= 50:
-                            if session.title.lower() in generic_phrases:
-                                session.title = clean_concept.title()
-                                session.save(update_fields=['title'])
                             return clean_concept.replace(' ', '_')
 
         # 4. Use session title if specific

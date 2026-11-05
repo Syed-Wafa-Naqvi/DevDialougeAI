@@ -193,10 +193,10 @@
                     <i data-lucide="edit-2" style="width: 12px; color: var(--ink-3); margin-left: 6px;"></i>
                 </h3>
                 
-                <!-- Build Style Pill -->
-                <span class="badge badge-brand" style="font-size: 11px; font-weight: 500;">
-                    {% if session.mode == 'mode1' %}All at once{% else %}File by file{% endif %}
-                </span>
+                <!-- Build Style Pill / Mode Toggle -->
+                <button type="button" class="badge badge-brand" id="mode-toggle-btn" onclick="toggleSessionMode()" style="font-size: 11px; font-weight: 500; cursor: pointer; border: none; background: rgba(255, 255, 255, 0.1); color: var(--ink); padding: 4px 8px; border-radius: 4px;" title="Click to toggle build style (All at once vs File by file)">
+                    <span id="mode-label">{% if session.mode == 'mode1' %}All at once{% else %}File by file{% endif %}</span> 🔄
+                </button>
 
                 <!-- Model Picker Chip -->
                 <span class="badge badge-brand" style="font-size: 11px; font-weight: 500;">
@@ -371,12 +371,12 @@
                                 <div class="input-icon-left">
                                     <div class="toggle-chips-container">
                                         <select id="provider-selector" class="toggle-chip" onchange="handleProviderChange(this)" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); color: #e2e8f0; padding: 4px 8px; border-radius: 6px; font-size: 0.8rem; cursor: pointer;">
-                                            <option value="auto" selected style="background: #1e1e1e; color: #fff;">Auto (Recommended)</option>
-                                            <option value="gemini" style="background: #1e1e1e; color: #fff;">Google Gemini</option>
-                                            <option value="openai" style="background: #1e1e1e; color: #fff;">OpenAI (GPT-4o)</option>
-                                            <option value="claude" style="background: #1e1e1e; color: #fff;">Claude 3.5 Sonnet</option>
-                                            <option value="deepseek" style="background: #1e1e1e; color: #fff;">DeepSeek Coder</option>
-                                            <option value="free" style="background: #1e1e1e; color: #fff;">Free Keyless AI</option>
+                                            {% if not available_providers or 'auto' in available_providers %}<option value="auto" selected style="background: #1e1e1e; color: #fff;">Auto (Recommended)</option>{% endif %}
+                                            {% if 'gemini' in available_providers %}<option value="gemini" style="background: #1e1e1e; color: #fff;">Google Gemini</option>{% endif %}
+                                            {% if 'openai' in available_providers %}<option value="openai" style="background: #1e1e1e; color: #fff;">OpenAI (GPT-4o)</option>{% endif %}
+                                            {% if 'claude' in available_providers %}<option value="claude" style="background: #1e1e1e; color: #fff;">Claude 3.7 Sonnet</option>{% endif %}
+                                            {% if 'deepseek' in available_providers %}<option value="deepseek" style="background: #1e1e1e; color: #fff;">DeepSeek Coder</option>{% endif %}
+                                            {% if not available_providers or 'free' in available_providers %}<option value="free" style="background: #1e1e1e; color: #fff;">Free Keyless AI</option>{% endif %}
                                         </select>
                                     </div>
                                 </div>
@@ -391,12 +391,9 @@
                             ⚠️ Note: Free Keyless AI uses public inference endpoints with shared capacity. You can add your personal API keys in Settings.
                         </div>
                     </form>
-                                </div>
-                            </div>
-                        </form>
-                        <div class="helper-text">
-                            DevDialogue can make mistakes. Check important info.
-                        </div>
+                    <div class="helper-text">
+                        DevDialogue can make mistakes. Check important info.
+                    </div>
                 </div>
             </div>
 
@@ -681,8 +678,10 @@
         }
     };
 
+    let pendingAction = null;
     window.triggerAction = function(type) {
         if (type === 'generate') {
+            pendingAction = 'generate';
             if (inputField) {
                 inputField.value = "Proceed with code generation and build all project files.";
                 chatForm.dispatchEvent(new Event('submit'));
@@ -717,6 +716,10 @@
                     currentAbortController.abort();
                     currentAbortController = null;
                 }
+                fetch("{% url 'cancel_session_api' session_id=session.id %}", {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+                }).catch(() => {});
                 typingIndicator.classList.add('hidden');
                 if (card) card.classList.remove('generating');
                 sendBtn.classList.remove('generating');
@@ -774,6 +777,8 @@
                 const providerSelect = document.getElementById('provider-selector');
                 const selectedProvider = providerSelect ? providerSelect.value : 'auto';
                 const providerVal = (selectedProvider === 'auto' || !selectedProvider) ? null : selectedProvider;
+                const actionToSend = pendingAction;
+                pendingAction = null;
 
                 const response = await fetch("{% url 'send_message_api' session_id=session.id %}", {
                     method: 'POST',
@@ -782,7 +787,7 @@
                         'Content-Type': 'application/json',
                         'X-CSRFToken': '{{ csrf_token }}'
                     },
-                    body: JSON.stringify({ message: messageText, provider: providerVal })
+                    body: JSON.stringify({ message: messageText, provider: providerVal, action: actionToSend })
                 });
                 
                 let data;
@@ -1520,12 +1525,14 @@
                     return;
                 }
                 let issuesHTML = data.issues.map(iss => {
-                    const cleanFile = sanitizeText(iss.file);
-                    const cleanCheck = sanitizeText(iss.check);
-                    const cleanMsg = sanitizeText(iss.message);
+                    const cleanFile = sanitizeText(iss.file || '');
+                    const cleanCheck = sanitizeText(iss.check || '');
+                    const cleanMsg = sanitizeText(iss.message || '');
                     const lineNum = parseInt(iss.line, 10) || 1;
+                    const attrFile = escapeHtml(iss.file || '');
+                    const attrSeverity = escapeHtml(iss.severity || '');
                     return `
-                        <div class="verif-issue-card ${sanitizeText(iss.severity)}" onclick="jumpToIssueLine('${cleanFile.replace(/'/g, "\\'")}', ${lineNum})">
+                        <div class="verif-issue-card ${attrSeverity}" data-file="${attrFile}" data-line="${lineNum}" style="cursor: pointer;">
                             <div class="issue-file-line">📌 ${cleanFile} (Line ${lineNum}) [${cleanCheck}]</div>
                             <div class="issue-msg">${cleanMsg}</div>
                         </div>
@@ -1554,7 +1561,44 @@
         }
     };
 
+    if (codeViewContainer) {
+        codeViewContainer.addEventListener('click', (e) => {
+            const card = e.target.closest('.verif-issue-card');
+            if (card && card.dataset.file) {
+                window.jumpToIssueLine(card.dataset.file, parseInt(card.dataset.line, 10) || 1);
+            }
+        });
+    }
+
+    window.toggleSessionMode = async function() {
+        try {
+            const resp = await fetch("{% url 'update_session_mode_api' session_id=session.id %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            });
+            const data = await resp.json();
+            if (data.status === 'success') {
+                const label = document.getElementById('mode-label');
+                if (label) {
+                    label.textContent = data.mode === 'mode1' ? 'All at once' : 'File by file';
+                }
+            }
+        } catch (e) {
+            console.error("Failed to toggle mode:", e);
+        }
+    };
+
     document.addEventListener('DOMContentLoaded', () => {
+        try {
+            const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            if (tz) {
+                document.cookie = 'django_timezone=' + encodeURIComponent(tz) + ';path=/;max-age=31536000;SameSite=Lax';
+            }
+        } catch (e) {}
+
         {% if active_job %}
         pollActiveJobEvents({{ active_job.id }});
         {% endif %}

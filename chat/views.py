@@ -161,6 +161,14 @@ def create_session_view(request):
 
 @verification_required
 def chat_view(request, session_id):
+    tzname = request.COOKIES.get('django_timezone')
+    if tzname:
+        try:
+            import zoneinfo
+            timezone.activate(zoneinfo.ZoneInfo(tzname))
+        except Exception:
+            pass
+
     session = get_object_or_404(Session, id=session_id, user=request.user)
     messages_list = session.messages.all()
     codes = session.generated_codes.all()
@@ -187,7 +195,24 @@ def chat_view(request, session_id):
     rubric_cats = {}
     
     active_job = session.jobs.filter(status__in=['queued', 'running']).order_by('-created_at').first()
-            
+
+    # Determine available AI providers for dropdown
+    import os
+    available_providers = ['auto', 'free']
+    has_openai = bool(os.environ.get('OPENAI_API_KEY') or (hasattr(request.user, 'profile') and request.user.profile.get_openai_key()))
+    has_gemini = bool(os.environ.get('GEMINI_API_KEY') or (hasattr(request.user, 'profile') and request.user.profile.get_gemini_key()))
+    has_claude = bool(os.environ.get('ANTHROPIC_API_KEY'))
+    has_deepseek = bool(os.environ.get('DEEPSEEK_API_KEY'))
+
+    if has_gemini:
+        available_providers.append('gemini')
+    if has_openai:
+        available_providers.append('openai')
+    if has_claude:
+        available_providers.append('claude')
+    if has_deepseek:
+        available_providers.append('deepseek')
+
     return render(request, 'chat.html', {
         'session': session,
         'chat_messages': messages_list,
@@ -200,6 +225,7 @@ def chat_view(request, session_id):
         'completeness_score': completeness_score,
         'rubric_cats': rubric_cats,
         'active_job': active_job,
+        'available_providers': available_providers,
     })
 
 def _run_job_worker(job_id, provider_name):
@@ -307,9 +333,11 @@ def send_message_api(request, session_id):
         data = json.loads(request.body)
         user_content = data.get('message', '').strip()
         provider_name = data.get('provider', None)
+        action = data.get('action', None)
     except Exception:
         user_content = request.POST.get('message', '').strip()
         provider_name = None
+        action = request.POST.get('action', None)
         
     if not user_content:
         return JsonResponse({'error': 'Message content cannot be empty'}, status=400)
@@ -333,16 +361,31 @@ def send_message_api(request, session_id):
         ) or bool(session.summary_text) or session.status in ('srs_ready', 'plan_draft', 'plan_approved', 'generating', 'ready', 'needs_attention', 'completed')
         
         if has_summary:
-            confirmation_msg = user_content.lower().strip()
-            user_words = set(re.findall(r'\b\w+\b', confirmation_msg))
-            has_negation = bool(re.search(r'\b(no|not|don\'?t|never|wait|stop|hold|cancel|refuse)\b', confirmation_msg))
-            affirmative_words = {'yes', 'y', 'proceed', 'generate', 'approve', 'build', 'ok', 'sure', 'confirm', 'go ahead'}
-            is_approval = bool(user_words.intersection(affirmative_words)) and not has_negation
+            is_approval = False
+            if action == 'generate':
+                is_approval = True
+            else:
+                confirmation_msg = user_content.lower().strip()
+                has_negation = bool(re.search(r'\b(no|not|don\'?t|never|wait|stop|hold|cancel|refuse)\b', confirmation_msg))
+                if not has_negation:
+                    # Strict affirmative match: user's input is a dedicated approval command or affirmative phrase
+                    strict_approval_patterns = [
+                        r'^(yes|y|proceed|approve|confirm|ok|okay|sure|go ahead)[.!]?$',
+                        r'^(proceed|start|begin|go ahead)\s+(with\s+)?(generation|code|building|all files|project)[.!]?$',
+                        r'^(generate|build)\s+(the\s+)?(code|files|codebase|project|all files)[.!]?$',
+                        r'^(yes|sure|okay|yep|yup)[,\s]+(please\s+)?(proceed|generate|build|start|go ahead)(\s+(and|&)\s+(generate|build|proceed))?(\s+(with\s+)?(it|code|generation|the files|files|all files|the codebase|project))?[.!]?$',
+                        r'^proceed with code generation and build all project files[.!]?$'
+                    ]
+                    if any(re.match(pat, confirmation_msg) for pat in strict_approval_patterns):
+                        is_approval = True
             
             if session.mode == 'mode1':
                 if session.status in ('completed', 'ready', 'needs_attention') or session.generated_codes.exists() or session.project_files.exists():
-                    edit_triggers = ['modify', 'update', 'change', 'refactor', 'edit', 'rewrite', 'fix code', 'add field', 'add model', 'fix bug']
-                    wants_edit = any(trig in user_content.lower() for trig in edit_triggers)
+                    edit_patterns = [
+                        r'\b(modify|update|refactor|rewrite|edit|fix code|add field|add model|fix bug)\b',
+                        r'\bchange\s+(the\s+)?(code|module|file|function|class|model|view|schema|implementation)\b'
+                    ]
+                    wants_edit = (action == 'edit') or any(re.search(pat, user_content, re.IGNORECASE) for pat in edit_patterns)
                     existing_codes = list(session.generated_codes.all())
                     
                     if wants_edit and existing_codes:
@@ -368,11 +411,25 @@ def send_message_api(request, session_id):
                         if pf:
                             pf.create_new_version(updated_code, source='user_feedback')
                         else:
-                            ProjectFile.objects.create(session=session, path=target_mod.module_name, content=updated_code, status='verified')
+                            pf = ProjectFile.objects.create(session=session, path=target_mod.module_name, content=updated_code, status='pending')
 
                         from generator.verifier import StaticVerifier
+                        from chat.models import VerificationRun
                         files_dict = {f.path: f.content for f in session.project_files.all()}
                         verif_res = StaticVerifier.verify_project(files_dict)
+                        VerificationRun.objects.create(
+                            session=session,
+                            level='static',
+                            passed=verif_res.get('passed', True),
+                            error_count=verif_res.get('error_count', 0),
+                            warning_count=verif_res.get('warning_count', 0),
+                            issues=verif_res.get('issues', [])
+                        )
+                        file_issues = {iss['file'] for iss in verif_res.get('issues', [])}
+                        if pf:
+                            pf.status = 'has_issues' if pf.path in file_issues else 'verified'
+                            pf.save(update_fields=['status'])
+
                         verif_msg = ""
                         if not verif_res.get('passed', True):
                             verif_msg = f"\n\n*Note: Static verification reported {verif_res.get('error_count', 0)} issue(s). Check the Verification panel for details.*"
@@ -410,8 +467,11 @@ def send_message_api(request, session_id):
                 
                 # Check if all modules have already been generated and approved
                 if session.status in ('completed', 'ready', 'needs_attention') or (len(existing_codes) >= len(modules) and len(modules) > 0):
-                    edit_triggers = ['modify', 'update', 'change', 'refactor', 'edit', 'rewrite', 'fix code', 'add field', 'add model', 'fix bug']
-                    wants_edit = any(trig in user_content.lower() for trig in edit_triggers)
+                    edit_patterns = [
+                        r'\b(modify|update|refactor|rewrite|edit|fix code|add field|add model|fix bug)\b',
+                        r'\bchange\s+(the\s+)?(code|module|file|function|class|model|view|schema|implementation)\b'
+                    ]
+                    wants_edit = (action == 'edit') or any(re.search(pat, user_content, re.IGNORECASE) for pat in edit_patterns)
                     
                     if wants_edit and existing_codes:
                         target_mod = existing_codes[-1]
@@ -435,13 +495,24 @@ def send_message_api(request, session_id):
                         if pf:
                             pf.create_new_version(updated_code, source='user_feedback')
                         else:
-                            ProjectFile.objects.create(session=session, path=target_mod.module_name, content=updated_code, status='verified')
+                            pf = ProjectFile.objects.create(session=session, path=target_mod.module_name, content=updated_code, status='pending')
 
                         from generator.verifier import StaticVerifier
+                        from chat.models import VerificationRun
                         files_dict = {f.path: f.content for f in session.project_files.all()}
                         verif_res = StaticVerifier.verify_project(files_dict)
-                        verif_msg = ""
-                        if not verif_res.get('passed', True):
+                        VerificationRun.objects.create(
+                            session=session,
+                            level='static',
+                            passed=verif_res.get('passed', True),
+                            error_count=verif_res.get('error_count', 0),
+                            warning_count=verif_res.get('warning_count', 0),
+                            issues=verif_res.get('issues', [])
+                        )
+                        file_issues = {iss['file'] for iss in verif_res.get('issues', [])}
+                        if pf:
+                            pf.status = 'has_issues' if pf.path in file_issues else 'verified'
+                            pf.save(update_fields=['status'])
                             verif_msg = f"\n\n*Note: Static verification reported {verif_res.get('error_count', 0)} issue(s). Check the Verification panel.*"
 
                         response_text = (
@@ -585,6 +656,15 @@ def send_message_api(request, session_id):
             'status': session.status
         }, status=500)
 
+    from django.core.cache import cache
+    if cache.get(f"cancel_session_{session.id}"):
+        cache.delete(f"cancel_session_{session.id}")
+        return JsonResponse({
+            'cancelled': True,
+            'response': '⚠️ Message generation was cancelled by user.',
+            'status': session.status
+        })
+
     Message.objects.create(session=session, role='assistant', content=response_text)
 
     
@@ -655,6 +735,15 @@ def rename_session_api(request, session_id):
 
 @verification_required
 def get_code_file_api(request, code_id):
+    from chat.models import ProjectFile
+    pf = ProjectFile.objects.filter(id=code_id, session__user=request.user).first()
+    if pf:
+        return JsonResponse({
+            'module_name': pf.path,
+            'code_content': pf.content,
+            'version': pf.current_version,
+            'status': pf.status
+        })
     code_obj = get_object_or_404(GeneratedCode, id=code_id, session__user=request.user)
     return JsonResponse({
         'module_name': code_obj.module_name,
@@ -683,26 +772,69 @@ def get_job_events_api(request, job_id):
         'result_summary': job.result_summary,
         'error_message': job.error_message,
         'cancel_requested': job.cancel_requested,
+        'session_status': job.session.status,
         'events': events
     })
 
 @verification_required
 def cancel_job_api(request, job_id):
+    from django.utils import timezone
     from chat.models import Job
     if request.method == 'POST':
         job = get_object_or_404(Job, id=job_id, user=request.user)
         job.cancel_requested = True
+        job.updated_at = timezone.now()
         if job.status == 'queued':
             job.status = 'cancelled'
-            job.save(update_fields=['cancel_requested', 'status'])
+            job.save(update_fields=['cancel_requested', 'status', 'updated_at'])
             job.log_event('info', "Job cancelled while queued.")
             if job.session.status == 'generating':
                 job.session.status = 'srs_ready'
                 job.session.save(update_fields=['status'])
         else:
-            job.save(update_fields=['cancel_requested'])
+            job.save(update_fields=['cancel_requested', 'updated_at'])
         return JsonResponse({'status': 'cancellation_requested', 'job_id': job.id})
     return JsonResponse({'status': 'error', 'message': 'Invalid method'}, status=400)
+
+@verification_required
+def cancel_session_api(request, session_id):
+    from django.core.cache import cache
+    from django.utils import timezone
+    session = get_object_or_404(Session, id=session_id, user=request.user)
+    cache.set(f"cancel_session_{session.id}", True, 60)
+    
+    active_jobs = session.jobs.filter(status__in=['queued', 'running'])
+    for j in active_jobs:
+        j.cancel_requested = True
+        j.updated_at = timezone.now()
+        if j.status == 'queued':
+            j.status = 'cancelled'
+            j.save(update_fields=['cancel_requested', 'status', 'updated_at'])
+        else:
+            j.save(update_fields=['cancel_requested', 'updated_at'])
+            
+    if session.status == 'generating':
+        session.status = 'srs_ready'
+        session.save(update_fields=['status'])
+        
+    return JsonResponse({'status': 'cancelled', 'session_id': session.id})
+
+@verification_required
+def update_session_mode_api(request, session_id):
+    session = get_object_or_404(Session, id=session_id, user=request.user)
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            new_mode = data.get('mode')
+        except Exception:
+            new_mode = request.POST.get('mode')
+        if new_mode in ('mode1', 'mode2'):
+            session.mode = new_mode
+        else:
+            session.mode = 'mode2' if session.mode == 'mode1' else 'mode1'
+        session.save(update_fields=['mode'])
+        return JsonResponse({'status': 'success', 'mode': session.mode})
+    return JsonResponse({'error': 'POST required'}, status=400)
 
 @verification_required
 def approve_plan_api(request, session_id):
@@ -717,9 +849,8 @@ def approve_plan_api(request, session_id):
         plan.save(update_fields=['status'])
         try:
             SessionStateMachine.transition_to(session, 'plan_approved')
-        except Exception:
-            session.status = 'plan_approved'
-            session.save(update_fields=['status'])
+        except Exception as e:
+            return JsonResponse({'error': f"Cannot transition state: {str(e)}"}, status=400)
         return JsonResponse({'status': 'approved', 'plan_id': plan.id, 'version': plan.version})
     return JsonResponse({'error': 'POST required'}, status=400)
 

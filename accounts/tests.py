@@ -104,3 +104,36 @@ class AccountsTestCase(TestCase):
         })
         self.assertEqual(post_response.status_code, 200)
         self.assertContains(post_response, "Invalid or expired OTP")
+
+    def test_decrypt_api_key_invalid_token_returns_empty_string(self):
+        user = User.objects.create_user(username='decryptuser', email='decrypt@example.com', password='Password123!')
+        profile = user.profile
+        # Corrupted fernet token
+        profile.encrypted_gemini_key = b"gAAAAABinvalid_fernet_token_or_changed_secret_key"
+        profile.save()
+        # Should gracefully return empty string without raising InvalidToken exception
+        self.assertEqual(profile.get_gemini_key(), "")
+        self.assertEqual(profile.get_masked_gemini_key(), "")
+
+    def test_signup_duplicate_does_not_redirect_to_verify_otp(self):
+        User.objects.create_user(username='existinguser', email='existing@example.com', password='Password123!')
+        response = self.client.post('/signup/', {
+            'username': 'existinguser',
+            'email': 'different@example.com',
+            'password': 'Password123!',
+            'confirm_password': 'Password123!',
+            'plan': 'basic'
+        })
+        # Should not redirect to verify-otp
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "This username is already taken.")
+
+    def test_client_ip_proxy_spoofing_protection(self):
+        from accounts.views import get_client_ip
+        from django.test.client import RequestFactory
+        factory = RequestFactory()
+        
+        # When TRUST_PROXY_HEADERS is False, X-Forwarded-For should be ignored
+        request = factory.get('/', HTTP_X_FORWARDED_FOR='203.0.113.195', REMOTE_ADDR='198.51.100.1')
+        ip = get_client_ip(request)
+        self.assertEqual(ip, '198.51.100.1')
