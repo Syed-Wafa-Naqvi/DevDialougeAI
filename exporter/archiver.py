@@ -41,9 +41,6 @@ class ZipArchiver:
                 if any(k in lower for k in domain_matches) and len(text) <= 50:
                     clean = re.sub(r'[^\w\s-]', '', text).strip()
                     if clean:
-                        if session.title.lower() in generic_phrases:
-                            session.title = clean.title()
-                            session.save(update_fields=['title'])
                         return clean.replace(' ', '_')
 
         # 3. Check for Project Concept in SRS summary messages
@@ -99,8 +96,21 @@ class ZipArchiver:
             except Exception:
                 pass
 
-        # 2. Invoke AI Harness Packager Agent to generate dynamic runner, build, and manifest files
-        harness_files = AIHarnessPackager.generate_harness(session, existing_files, project_name)
+        # 2. Check if harness files already exist in project_files
+        has_readme = any(k.lower() == 'readme.md' for k in existing_files)
+        has_runner = any(k in ('run.sh', 'run.py', 'start.sh', 'main.py') for k in existing_files)
+
+        if has_readme and has_runner:
+            harness_files = {}
+        else:
+            harness_files = AIHarnessPackager.generate_harness(session, existing_files, project_name)
+            # Persist harness files so future downloads don't require an LLM call
+            for hpath, hcontent in harness_files.items():
+                if hpath not in existing_files:
+                    try:
+                        ProjectFile.objects.get_or_create(session=session, path=hpath, defaults={'content': hcontent, 'status': 'verified'})
+                    except Exception:
+                        pass
 
         # Merge files
         final_files = {**existing_files, **harness_files}

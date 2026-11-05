@@ -106,6 +106,20 @@ class ProjectFile(models.Model):
     def __str__(self):
         return f"{self.path} (v{self.current_version}) [{self.status}]"
 
+    def save(self, *args, **kwargs):
+        from generator.path_safety import PathSafetyManager
+        if self.path:
+            self.path = PathSafetyManager.validate_path(self.path)
+        is_new = self.pk is None
+        super().save(*args, **kwargs)
+        if is_new and self.content and not self.versions.exists():
+            FileVersion.objects.create(
+                project_file=self,
+                version_number=self.current_version or 1,
+                content=self.content,
+                source='generate'
+            )
+
     def create_new_version(self, content: str, source: str = 'generate') -> 'FileVersion':
         """Creates a new version record for this file and updates current content/version."""
         self.current_version += 1

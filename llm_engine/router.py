@@ -20,7 +20,7 @@ class UsageLimitExceededError(Exception):
 
 class LLMRouter:
     @staticmethod
-    def get_provider(provider_name: str = None, purpose: str = 'chat'):
+    def get_provider(provider_name: str = None, purpose: str = 'chat', user = None):
         if getattr(settings, 'USE_MOCK_LLM', False):
             return MockProvider()
 
@@ -30,6 +30,21 @@ class LLMRouter:
         claude_key = os.environ.get('ANTHROPIC_API_KEY')
         gemini_key = os.environ.get('GEMINI_API_KEY')
         deepseek_key = os.environ.get('DEEPSEEK_API_KEY')
+
+        # Allow authenticated users to use their personal BYOK keys saved in profile
+        if user and getattr(user, 'is_authenticated', False) and hasattr(user, 'profile'):
+            try:
+                user_openai = user.profile.get_openai_key()
+                if user_openai:
+                    openai_key = user_openai
+            except Exception:
+                pass
+            try:
+                user_gemini = user.profile.get_gemini_key()
+                if user_gemini:
+                    gemini_key = user_gemini
+            except Exception:
+                pass
 
         # 1. Explicitly requested provider
         if requested == 'free':
@@ -94,7 +109,7 @@ class LLMRouter:
                 )
 
         start_time = time.time()
-        provider = cls.get_provider(provider_name=provider_name, purpose=purpose)
+        provider = cls.get_provider(provider_name=provider_name, purpose=purpose, user=user)
         p_name = getattr(provider, 'provider_name', None) or (provider_name or 'free').lower()
         m_name = getattr(provider, 'model', getattr(provider, 'model_name', 'default'))
 

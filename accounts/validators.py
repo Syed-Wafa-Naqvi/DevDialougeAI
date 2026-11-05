@@ -30,10 +30,10 @@ class CapitalFirstPasswordValidator:
                 params={'min_length': self.min_length},
             ))
 
-        if not password[0].isupper():
+        if not re.search(r'[A-Z]', password):
             errors.append(ValidationError(
-                _("Password must start with a capital (uppercase) letter."),
-                code='password_no_capital_first',
+                _("Password must contain at least one uppercase letter."),
+                code='password_no_upper',
             ))
 
         if not re.search(r'[a-z]', password):
@@ -59,6 +59,6 @@ class CapitalFirstPasswordValidator:
 
     def get_help_text(self):
         return _(
-            "Your password must be at least %(min_length)d characters long, start with a capital letter, "
-            "and contain at least one lowercase letter, one digit, and one special character."
+            "Your password must be at least %(min_length)d characters long, "
+            "and contain at least one uppercase letter, one lowercase letter, one digit, and one special character."
         ) % {'min_length': self.min_length}

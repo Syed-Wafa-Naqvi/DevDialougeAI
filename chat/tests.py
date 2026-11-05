@@ -126,7 +126,6 @@ class ChatTestCase(TestCase):
         session = Session.objects.create(user=self.user, mode='mode1', status='ready')
         original_code = "def get_todos(): return ['item1']"
         pf = ProjectFile.objects.create(session=session, path='main.py', content=original_code, status='verified', current_version=1)
-        FileVersion.objects.create(project_file=pf, version_number=1, content=original_code, source='generate')
         GeneratedCode.objects.create(session=session, module_name='main.py', code_content=original_code)
         Message.objects.create(session=session, role='assistant', content='### Project Requirements Summary\n- Project Concept: Todo App')
 
@@ -190,3 +189,88 @@ class ChatTestCase(TestCase):
                 self.assertEqual(data.get('job_id'), 999)
                 self.assertIn("Generation Started", data.get('response'))
                 mock_thread_start.assert_called_once()
+
+    def test_run_job_worker_direct_execution(self):
+        from chat.views import _run_job_worker
+        from generator.jobs import JobExecutionEngine
+        session = Session.objects.create(user=self.user, mode='mode1', status='srs_ready')
+        Message.objects.create(session=session, role='assistant', content='### Project Requirements Summary\n- Concept: REST API')
+        job = JobExecutionEngine.create_job(session=session, user=self.user, job_type='generate')
+        
+        # Directly invoke _run_job_worker with (job.id, 'mock') - verifying no decorator crashes with AttributeError
+        _run_job_worker(job.id, 'mock')
+        job.refresh_from_db()
+        session.refresh_from_db()
+        self.assertEqual(job.status, 'succeeded')
+        self.assertIn(session.status, ['ready', 'needs_attention'])
+        self.assertTrue(session.messages.filter(role='assistant').filter(content__contains="Ready").exists())
+
+    def test_cancel_queued_job_cancels_immediately(self):
+        from generator.jobs import JobExecutionEngine
+        session = Session.objects.create(user=self.user, mode='mode1', status='generating')
+        job = JobExecutionEngine.create_job(session=session, user=self.user, job_type='generate')
+        self.assertEqual(job.status, 'queued')
+        
+        response = self.client.post(f'/api/jobs/{job.id}/cancel/')
+        self.assertEqual(response.status_code, 200)
+        job.refresh_from_db()
+        session.refresh_from_db()
+        self.assertEqual(job.status, 'cancelled')
+        self.assertEqual(session.status, 'srs_ready')
+
+    def test_approve_plan_api(self):
+        from chat.models import ProjectPlan
+        session = Session.objects.create(user=self.user, mode='mode1', status='plan_draft')
+        plan = ProjectPlan.objects.create(session=session, version=1, status='draft', plan_data={'files': []})
+        response = self.client.post(f'/api/session/{session.id}/plan/approve/')
+        self.assertEqual(response.status_code, 200)
+        plan.refresh_from_db()
+        session.refresh_from_db()
+        self.assertEqual(plan.status, 'approved')
+        self.assertEqual(session.status, 'plan_approved')
+
+    def test_get_job_events_api_safe_parsing(self):
+        from generator.jobs import JobExecutionEngine
+        session = Session.objects.create(user=self.user, mode='mode1', status='srs_ready')
+        job = JobExecutionEngine.create_job(session=session, user=self.user, job_type='generate')
+        
+        # Test with string / invalid 'after' parameter
+        response = self.client.get(f'/api/jobs/{job.id}/events/?after=not_a_number')
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn('events', data)
+        
+        # Test with negative 'after' parameter
+        response = self.client.get(f'/api/jobs/{job.id}/events/?after=-99')
+        self.assertEqual(response.status_code, 200)
+
+    def test_stale_jobs_cleaned_up_on_create_job(self):
+        from django.utils import timezone
+        from datetime import timedelta
+        from generator.jobs import JobExecutionEngine
+        from chat.models import Job
+        session = Session.objects.create(user=self.user, mode='mode1', status='generating')
+        old_time = timezone.now() - timedelta(minutes=20)
+        stale_job = Job.objects.create(session=session, user=self.user, status='running')
+        Job.objects.filter(id=stale_job.id).update(updated_at=old_time)
+        
+        # Calling create_job should detect stale job, mark it failed, and allow creating a new job
+        new_job = JobExecutionEngine.create_job(session=session, user=self.user, job_type='generate')
+        stale_job.refresh_from_db()
+        self.assertEqual(stale_job.status, 'failed')
+        self.assertIn("timed out", stale_job.error_message)
+        self.assertEqual(new_job.status, 'queued')
+
+    def test_chat_view_active_job_context(self):
+        from generator.jobs import JobExecutionEngine
+        session = Session.objects.create(user=self.user, mode='mode1', status='generating')
+        job = JobExecutionEngine.create_job(session=session, user=self.user, job_type='generate')
+        response = self.client.get(f'/chat/{session.id}/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['active_job'], job)
+
+    def test_project_file_save_path_safety_validation(self):
+        from generator.path_safety import PathSafetyError
+        session = Session.objects.create(user=self.user, mode='mode1', status='active')
+        with self.assertRaises(PathSafetyError):
+            ProjectFile.objects.create(session=session, path='../../etc/passwd', content='bad')

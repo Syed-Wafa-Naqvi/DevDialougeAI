@@ -165,23 +165,28 @@ def chat_view(request, session_id):
     messages_list = session.messages.all()
     codes = session.generated_codes.all()
     
-    now = timezone.now()
+    now = timezone.localtime()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     yesterday_start = today_start - timedelta(days=1)
     seven_days_ago = today_start - timedelta(days=7)
     
     all_sessions = Session.objects.filter(user=request.user).order_by('-started_at')
     
-    today_sessions = [s for s in all_sessions if s.started_at >= today_start]
-    yesterday_sessions = [s for s in all_sessions if today_start > s.started_at >= yesterday_start]
-    last_7_days_sessions = [s for s in all_sessions if yesterday_start > s.started_at >= seven_days_ago]
-    older_sessions = [s for s in all_sessions if s.started_at < seven_days_ago]
+    today_sessions = [s for s in all_sessions if timezone.localtime(s.started_at) >= today_start]
+    yesterday_sessions = [s for s in all_sessions if today_start > timezone.localtime(s.started_at) >= yesterday_start]
+    last_7_days_sessions = [s for s in all_sessions if yesterday_start > timezone.localtime(s.started_at) >= seven_days_ago]
+    older_sessions = [s for s in all_sessions if timezone.localtime(s.started_at) < seven_days_ago]
     
     is_first_load = messages_list.count() == 0
     history = list(messages_list.values('role', 'content'))
     
-    completeness_score = CompletenessEngine._calculate_keyword_fallback_score(history) if history else 0
+    if session.status in ('srs_ready', 'plan_draft', 'plan_approved', 'generating', 'ready', 'needs_attention', 'completed'):
+        completeness_score = 100
+    else:
+        completeness_score = CompletenessEngine._calculate_keyword_fallback_score(history) if history else 0
     rubric_cats = {}
+    
+    active_job = session.jobs.filter(status__in=['queued', 'running']).order_by('-created_at').first()
             
     return render(request, 'chat.html', {
         'session': session,
@@ -194,12 +199,13 @@ def chat_view(request, session_id):
         'is_first_load': is_first_load,
         'completeness_score': completeness_score,
         'rubric_cats': rubric_cats,
+        'active_job': active_job,
     })
 
-@verification_required
 def _run_job_worker(job_id, provider_name):
     from django.db import connection
     from generator.jobs import JobExecutionEngine
+    from chat.models import Job
     try:
         j = JobExecutionEngine.run_job(job_id, provider_name=provider_name)
         j.refresh_from_db()
@@ -224,6 +230,24 @@ def _run_job_worker(job_id, provider_name):
                 "You can inspect each file in the workspace file tree on the right, view the architecture plan and verification checks, and download your turnkey project ZIP."
             )
         Message.objects.create(session=sess, role='assistant', content=msg_text)
+    except Exception as worker_err:
+        try:
+            job_obj = Job.objects.filter(id=job_id).first()
+            if job_obj:
+                job_obj.status = 'failed'
+                job_obj.error_message = str(worker_err)
+                job_obj.save(update_fields=['status', 'error_message'])
+                sess = job_obj.session
+                if sess.status == 'generating':
+                    sess.status = 'needs_attention'
+                    sess.save(update_fields=['status'])
+                Message.objects.create(
+                    session=sess,
+                    role='assistant',
+                    content=f"### ⚠️ Generation Failed\n\nAn unexpected worker error occurred: {str(worker_err)}"
+                )
+        except Exception:
+            pass
     finally:
         connection.close()
 
@@ -327,7 +351,7 @@ def send_message_api(request, session_id):
                             if mod.module_name.lower() in user_content.lower():
                                 target_mod = mod
                                 break
-                        summary = SRSSynthesizer.synthesize_summary(history, provider_name=provider_name, session=session, user=request.user)
+                        summary = session.summary_text or SRSSynthesizer.synthesize_summary(history, provider_name=provider_name, session=session, user=request.user)
                         updated_code = CodeBuilder.generate_code_for_module(
                             target_mod.module_name,
                             summary,
@@ -346,9 +370,16 @@ def send_message_api(request, session_id):
                         else:
                             ProjectFile.objects.create(session=session, path=target_mod.module_name, content=updated_code, status='verified')
 
-                        response_text = f"### ✏️ Updated Module `{target_mod.module_name}`\n\nI have updated `{target_mod.module_name}` based on your request. You can inspect the updated code in the right panel and download the project ZIP."
+                        from generator.verifier import StaticVerifier
+                        files_dict = {f.path: f.content for f in session.project_files.all()}
+                        verif_res = StaticVerifier.verify_project(files_dict)
+                        verif_msg = ""
+                        if not verif_res.get('passed', True):
+                            verif_msg = f"\n\n*Note: Static verification reported {verif_res.get('error_count', 0)} issue(s). Check the Verification panel for details.*"
+
+                        response_text = f"### ✏️ Updated Module `{target_mod.module_name}`\n\nI have updated `{target_mod.module_name}` based on your request. You can inspect the updated code in the right panel and download the project ZIP.{verif_msg}"
                     else:
-                        summary = SRSSynthesizer.synthesize_summary(history, provider_name=provider_name, session=session, user=request.user)
+                        summary = session.summary_text or SRSSynthesizer.synthesize_summary(history, provider_name=provider_name, session=session, user=request.user)
                         post_prompt = (
                             f"Project Specification:\n{summary}\n\n"
                             f"User Question: \"{user_content}\"\n\n"
@@ -366,7 +397,7 @@ def send_message_api(request, session_id):
                     response_text = InterviewerService.generate_next_question(history, provider_name=provider_name, session=session, user=request.user)
             else:
                 # Mode 2: Incremental Module-by-Module Generation
-                summary = SRSSynthesizer.synthesize_summary(history, provider_name=provider_name, session=session, user=request.user)
+                summary = session.summary_text or SRSSynthesizer.synthesize_summary(history, provider_name=provider_name, session=session, user=request.user)
                 from generator.planner import PlanGenerator
                 plan_obj = session.plans.first()
                 if not plan_obj and summary:
@@ -403,11 +434,20 @@ def send_message_api(request, session_id):
                         pf = session.project_files.filter(path=target_mod.module_name).first()
                         if pf:
                             pf.create_new_version(updated_code, source='user_feedback')
+                        else:
+                            ProjectFile.objects.create(session=session, path=target_mod.module_name, content=updated_code, status='verified')
+
+                        from generator.verifier import StaticVerifier
+                        files_dict = {f.path: f.content for f in session.project_files.all()}
+                        verif_res = StaticVerifier.verify_project(files_dict)
+                        verif_msg = ""
+                        if not verif_res.get('passed', True):
+                            verif_msg = f"\n\n*Note: Static verification reported {verif_res.get('error_count', 0)} issue(s). Check the Verification panel.*"
 
                         response_text = (
                             f"### ✏️ Updated Module `{target_mod.module_name}`\n\n"
                             f"I have modified `{target_mod.module_name}` based on your request: *\"{user_content}\"*\n\n"
-                            f"You can review the updated code in the right panel and download the project ZIP anytime."
+                            f"You can review the updated code in the right panel and download the project ZIP anytime.{verif_msg}"
                         )
                     else:
                         post_prompt = (
@@ -534,6 +574,16 @@ def send_message_api(request, session_id):
             'response': err_msg,
             'status': session.status
         }, status=503)
+    except Exception as gen_err:
+        import logging
+        logging.getLogger(__name__).exception("Unhandled exception in send_message_api")
+        err_msg = "⚠️ An unexpected server error occurred while processing your message. Please try again."
+        Message.objects.create(session=session, role='assistant', content=err_msg)
+        return JsonResponse({
+            'error': str(gen_err),
+            'response': err_msg,
+            'status': session.status
+        }, status=500)
 
     Message.objects.create(session=session, role='assistant', content=response_text)
 
@@ -548,13 +598,22 @@ def send_message_api(request, session_id):
     codes = list(session.generated_codes.values('id', 'module_name'))
     
     # Calculate live updated completeness score & categories
-    try:
-        updated_eval = CompletenessEngine.evaluate_rubric(history, provider_name=provider_name)
-        comp_score = updated_eval.get('score', 0)
-        rubric_cats = updated_eval.get('categories', {})
-    except Exception:
-        comp_score = CompletenessEngine._calculate_keyword_fallback_score(history)
-        rubric_cats = {}
+    if session.status in ('srs_ready', 'plan_draft', 'plan_approved', 'generating', 'ready', 'needs_attention', 'completed'):
+        comp_score = 100
+        rubric_cats = {
+            'Core Functionality & Flow': 'Complete',
+            'Data & Architecture': 'Complete',
+            'Authentication & Security': 'Complete',
+            'UI & Integration': 'Complete'
+        }
+    else:
+        try:
+            updated_eval = CompletenessEngine.evaluate_rubric(history, provider_name=provider_name)
+            comp_score = updated_eval.get('score', 0)
+            rubric_cats = updated_eval.get('categories', {})
+        except Exception:
+            comp_score = CompletenessEngine._calculate_keyword_fallback_score(history)
+            rubric_cats = {}
 
     return JsonResponse({
         'response': response_text,
@@ -607,7 +666,11 @@ def get_job_events_api(request, job_id):
     from chat.models import Job
     job = get_object_or_404(Job, id=job_id, user=request.user)
     
-    after_seq = int(request.GET.get('after', 0))
+    try:
+        after_seq = int(request.GET.get('after', 0))
+    except (ValueError, TypeError):
+        after_seq = 0
+
     events = list(job.events.filter(sequence_number__gt=after_seq).values(
         'sequence_number', 'kind', 'message', 'data', 'created_at'
     ))
@@ -629,9 +692,36 @@ def cancel_job_api(request, job_id):
     if request.method == 'POST':
         job = get_object_or_404(Job, id=job_id, user=request.user)
         job.cancel_requested = True
-        job.save(update_fields=['cancel_requested'])
+        if job.status == 'queued':
+            job.status = 'cancelled'
+            job.save(update_fields=['cancel_requested', 'status'])
+            job.log_event('info', "Job cancelled while queued.")
+            if job.session.status == 'generating':
+                job.session.status = 'srs_ready'
+                job.session.save(update_fields=['status'])
+        else:
+            job.save(update_fields=['cancel_requested'])
         return JsonResponse({'status': 'cancellation_requested', 'job_id': job.id})
     return JsonResponse({'status': 'error', 'message': 'Invalid method'}, status=400)
+
+@verification_required
+def approve_plan_api(request, session_id):
+    from chat.models import ProjectPlan
+    from chat.state_machine import SessionStateMachine
+    if request.method == 'POST':
+        session = get_object_or_404(Session, id=session_id, user=request.user)
+        plan = session.plans.order_by('-version').first()
+        if not plan:
+            return JsonResponse({'error': 'No plan found for this session'}, status=404)
+        plan.status = 'approved'
+        plan.save(update_fields=['status'])
+        try:
+            SessionStateMachine.transition_to(session, 'plan_approved')
+        except Exception:
+            session.status = 'plan_approved'
+            session.save(update_fields=['status'])
+        return JsonResponse({'status': 'approved', 'plan_id': plan.id, 'version': plan.version})
+    return JsonResponse({'error': 'POST required'}, status=400)
 
 @verification_required
 def get_plan_api(request, session_id):

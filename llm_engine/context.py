@@ -11,6 +11,7 @@ class ContextBuilder:
         'gemini-1.5-pro': 32000,
         'gpt-4o': 16000,
         'gpt-4o-mini': 8000,
+        'claude-3-5-sonnet-20241022': 16000,
         'claude-3-5-sonnet-latest': 16000,
         'qwen-2.5-coder': 8000,
         'llama-3.3-70b': 8000,

@@ -74,7 +74,8 @@ class AIHarnessPackager:
                 prompt=prompt,
                 system_prompt=system_prompt,
                 purpose='harness_generation',
-                session=session
+                session=session,
+                user=getattr(session, 'user', None)
             )
             parsed = cls._parse_json_response(raw_response)
             if parsed and isinstance(parsed.get('files'), list):

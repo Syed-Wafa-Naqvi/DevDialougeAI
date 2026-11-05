@@ -10,6 +10,15 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markup.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-dart.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-go.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-rust.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<!-- DOMPurify for XSS Protection -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
 {% endblock %}
 
 {% block vendor_scripts %}
@@ -197,32 +206,32 @@
 
             <!-- 5-Stage Stepper Bar (§4) -->
             <div class="stage-stepper-container" id="stage-stepper-row">
-                <button type="button" class="stage-step-btn active" data-stage="discover" onclick="switchWorkspaceStage('discover')">
+                <button type="button" class="stage-step-btn {% if session.status == 'active' or session.status == 'interviewing' %}active{% endif %}" data-stage="discover" onclick="switchWorkspaceStage('discover')">
                     <span class="stage-step-num">1</span> Discover
                 </button>
                 <span class="stage-step-divider"></span>
-                <button type="button" class="stage-step-btn" data-stage="blueprint" onclick="switchWorkspaceStage('blueprint')">
+                <button type="button" class="stage-step-btn {% if session.status == 'srs_ready' or session.status == 'plan_draft' or session.status == 'plan_approved' %}active{% endif %}" data-stage="blueprint" onclick="switchWorkspaceStage('blueprint')">
                     <span class="stage-step-num">2</span> Blueprint
                 </button>
                 <span class="stage-step-divider"></span>
-                <button type="button" class="stage-step-btn" data-stage="build" onclick="switchWorkspaceStage('build')">
+                <button type="button" class="stage-step-btn {% if session.status == 'generating' %}active{% endif %}" data-stage="build" onclick="switchWorkspaceStage('build')">
                     <span class="stage-step-num">3</span> Build
                 </button>
                 <span class="stage-step-divider"></span>
-                <button type="button" class="stage-step-btn" data-stage="review" onclick="switchWorkspaceStage('review')">
+                <button type="button" class="stage-step-btn {% if session.status == 'ready' or session.status == 'needs_attention' %}active{% endif %}" data-stage="review" onclick="switchWorkspaceStage('review')">
                     <span class="stage-step-num">4</span> Review
                 </button>
                 <span class="stage-step-divider"></span>
-                <button type="button" class="stage-step-btn" data-stage="export" onclick="switchWorkspaceStage('export')">
+                <button type="button" class="stage-step-btn {% if session.status == 'completed' %}active{% endif %}" data-stage="export" onclick="switchWorkspaceStage('export')">
                     <span class="stage-step-num">5</span> Export
                 </button>
             </div>
             
             <div class="topbar-right" style="display: flex; align-items: center; gap: 14px;">
                 <!-- Living Presence Status Pill (§7.3) -->
-                <div class="presence-status-pill" id="header-presence-orb" data-state="idle" title="AI Architect Status">
+                <div class="presence-status-pill" id="header-presence-orb" data-state="{% if session.status == 'generating' %}building{% elif session.status == 'ready' or session.status == 'completed' %}verified{% else %}idle{% endif %}" title="AI Architect Status">
                     <span class="presence-status-icon"></span>
-                    <span class="status-pill-label">Ready</span>
+                    <span class="status-pill-label" id="session-status-badge">{{ session.get_status_display }}</span>
                 </div>
 
                 <a href="{% url 'download_project_zip_api' session_id=session.id %}" class="btn btn-primary btn-sm" id="btn-topbar-export">
@@ -332,48 +341,56 @@
                             <h2 class="first-load-greeting">What can we build today?</h2>
                             <p class="first-load-subheading">Start a new workspace or continue where you left off.</p>
                             <div class="suggested-prompts-container">
-                                <button type="button" class="suggested-prompt-chip" onclick="fillPromptText(this)">Build a REST API</button>
-                                <button type="button" class="suggested-prompt-chip" onclick="fillPromptText(this)">Debug my code</button>
-                                <button type="button" class="suggested-prompt-chip" onclick="fillPromptText(this)">Explain this error</button>
+                                <button type="button" class="suggested-prompt-chip" onclick="fillPromptText(this)">Django blog with comments and auth</button>
+                                <button type="button" class="suggested-prompt-chip" onclick="fillPromptText(this)">Flutter expense tracker with SQLite</button>
+                                <button type="button" class="suggested-prompt-chip" onclick="fillPromptText(this)">REST API for a digital library with JWT</button>
+                                <button type="button" class="suggested-prompt-chip" onclick="fillPromptText(this)">FastAPI real-time chat with WebSockets</button>
                             </div>
                         </div>
                     {% endif %}
-                        <form id="chat-input-form" class="input-form" enctype="multipart/form-data">
-                            {% csrf_token %}
-                            <div class="input-container-card" id="input-card">
-                                <!-- Attachment preview chip placeholder -->
-                                <div id="attachment-preview-area" class="hidden"></div>
-                                
-                                <textarea id="chat-input-field" placeholder="Message DevDialogue..." required></textarea>
-                                
-                                <div class="input-icon-row">
-                                    <div class="input-icon-left">
-                                        <!-- Hidden file input for attachment -->
-                                        <input type="file" id="chat-file-input" class="hidden" accept="image/*,application/pdf,text/*">
-                                        <button type="button" class="input-attach-btn" id="btn-attach-file" title="Attach file" onclick="document.getElementById('chat-file-input').click()">
-                                            <i data-lucide="paperclip"></i>
-                                        </button>
-                                        <div class="toggle-chips-container">
-                                            <select id="provider-selector" class="toggle-chip" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); color: #e2e8f0; padding: 4px 8px; border-radius: 6px; font-size: 0.8rem; cursor: pointer;">
-                                                <option value="free" selected style="background: #1e1e1e; color: #fff;">Free AI (LLaMA 3.3 / Qwen)</option>
-                                                <option value="gemini" style="background: #1e1e1e; color: #fff;">Google Gemini</option>
-                                                <option value="openai" style="background: #1e1e1e; color: #fff;">OpenAI (GPT-4o)</option>
-                                                <option value="claude" style="background: #1e1e1e; color: #fff;">Claude 3.5 Sonnet</option>
-                                                <option value="deepseek" style="background: #1e1e1e; color: #fff;">DeepSeek Coder</option>
-                                            </select>
-                                            <button type="button" class="toggle-chip" id="chip-search" onclick="toggleChip(this)">
-                                                <i data-lucide="search" class="chip-icon"></i>Search
-                                            </button>
-                                            <button type="button" class="toggle-chip" id="chip-tools" onclick="toggleChip(this)">
-                                                <i data-lucide="wrench" class="chip-icon"></i>Tools
-                                            </button>
-                                        </div>
+
+                    <!-- Explicit Action Buttons Bar for SRS / Plan Review States -->
+                    <div class="chat-action-bar {% if session.status != 'srs_ready' and session.status != 'plan_draft' and session.status != 'plan_approved' %}hidden{% endif %}" id="chat-action-bar" style="margin-bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button type="button" class="btn btn-primary btn-sm" id="btn-action-generate" onclick="triggerAction('generate')" style="background: linear-gradient(135deg, var(--brand), #8b5cf6); border: none; font-weight: 600;">
+                            <i data-lucide="zap" class="icon-inline"></i> 🚀 Generate Project Codebase
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-sm" id="btn-action-review-plan" onclick="switchRightPanel('plan')">
+                            <i data-lucide="map" class="icon-inline"></i> 📋 Review Plan
+                        </button>
+                        <button type="button" class="btn btn-ghost btn-sm" id="btn-action-changes" onclick="triggerAction('changes')">
+                            <i data-lucide="edit-3" class="icon-inline"></i> ✏️ Request Changes
+                        </button>
+                    </div>
+
+                    <form id="chat-input-form" class="input-form">
+                        {% csrf_token %}
+                        <div class="input-container-card" id="input-card">
+                            <textarea id="chat-input-field" placeholder="Message DevDialogue..." required></textarea>
+                            
+                            <div class="input-icon-row">
+                                <div class="input-icon-left">
+                                    <div class="toggle-chips-container">
+                                        <select id="provider-selector" class="toggle-chip" onchange="handleProviderChange(this)" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); color: #e2e8f0; padding: 4px 8px; border-radius: 6px; font-size: 0.8rem; cursor: pointer;">
+                                            <option value="auto" selected style="background: #1e1e1e; color: #fff;">Auto (Recommended)</option>
+                                            <option value="gemini" style="background: #1e1e1e; color: #fff;">Google Gemini</option>
+                                            <option value="openai" style="background: #1e1e1e; color: #fff;">OpenAI (GPT-4o)</option>
+                                            <option value="claude" style="background: #1e1e1e; color: #fff;">Claude 3.5 Sonnet</option>
+                                            <option value="deepseek" style="background: #1e1e1e; color: #fff;">DeepSeek Coder</option>
+                                            <option value="free" style="background: #1e1e1e; color: #fff;">Free Keyless AI</option>
+                                        </select>
                                     </div>
-                                    <div class="input-icon-right">
-                                        <button type="submit" class="btn-send-message" id="btn-send-message" disabled>
-                                            <i data-lucide="arrow-up" id="send-btn-icon"></i>
-                                        </button>
-                                    </div>
+                                </div>
+                                <div class="input-icon-right">
+                                    <button type="submit" class="btn-send-message" id="btn-send-message" disabled title="Send message">
+                                        <i data-lucide="arrow-up" id="send-btn-icon"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="free-provider-notice" class="hidden" style="font-size: 11px; color: #f59e0b; margin-top: 6px; padding: 0 4px;">
+                            ⚠️ Note: Free Keyless AI uses public inference endpoints with shared capacity. You can add your personal API keys in Settings.
+                        </div>
+                    </form>
                                 </div>
                             </div>
                         </form>
@@ -594,16 +611,123 @@
     }
     
     scrollToBottom();
+
+    let currentAbortController = null;
+
+    function escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function sanitizeText(str) {
+        if (window.DOMPurify) {
+            return window.DOMPurify.sanitize(str);
+        }
+        return escapeHtml(str);
+    }
+
+    const STATUS_LABELS = {
+        'active': 'Active',
+        'interviewing': 'Interviewing',
+        'srs_ready': 'SRS Ready',
+        'plan_draft': 'Plan Ready',
+        'plan_approved': 'Plan Approved',
+        'generating': 'Generating Code...',
+        'ready': 'Ready',
+        'needs_attention': 'Needs Attention',
+        'completed': 'Completed'
+    };
+
+    function updateStatusBadge(status) {
+        const badge = document.getElementById('session-status-badge');
+        if (badge) {
+            const label = STATUS_LABELS[status] || (status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' '));
+            badge.textContent = label;
+            badge.className = `status-pill-label status-${status}`;
+        }
+        const orb = document.getElementById('header-presence-orb');
+        if (orb) {
+            if (status === 'generating') orb.setAttribute('data-state', 'building');
+            else if (status === 'ready' || status === 'completed') orb.setAttribute('data-state', 'verified');
+            else orb.setAttribute('data-state', 'idle');
+        }
+    }
+
+    function updateStepperStage(status) {
+        let stage = 'discover';
+        if (['srs_ready', 'plan_draft', 'plan_approved'].includes(status)) stage = 'blueprint';
+        else if (status === 'generating') stage = 'build';
+        else if (['ready', 'needs_attention'].includes(status)) stage = 'review';
+        else if (status === 'completed') stage = 'export';
+        
+        document.querySelectorAll('.stage-step-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.getAttribute('data-stage') === stage);
+        });
+    }
+
+    window.handleProviderChange = function(selectElem) {
+        const notice = document.getElementById('free-provider-notice');
+        if (notice) {
+            if (selectElem.value === 'free') {
+                notice.classList.remove('hidden');
+            } else {
+                notice.classList.add('hidden');
+            }
+        }
+    };
+
+    window.triggerAction = function(type) {
+        if (type === 'generate') {
+            if (inputField) {
+                inputField.value = "Proceed with code generation and build all project files.";
+                chatForm.dispatchEvent(new Event('submit'));
+            }
+        } else if (type === 'approve_module') {
+            if (inputField) {
+                inputField.value = "Approved. Proceed to the next module.";
+                chatForm.dispatchEvent(new Event('submit'));
+            }
+        } else if (type === 'changes') {
+            if (inputField) {
+                inputField.value = "Please modify the requirements to: ";
+                inputField.focus();
+                inputField.setSelectionRange(inputField.value.length, inputField.value.length);
+                const btn = document.getElementById('btn-send-message');
+                if (btn) btn.removeAttribute('disabled');
+            }
+        }
+    };
     
     // Submit message via AJAX
     if (chatForm) {
         chatForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const messageText = inputField.value.trim();
-            if (!messageText) return;
-            
+
             const card = document.getElementById('input-card');
             const sendBtn = document.getElementById('btn-send-message');
+
+            // If user clicked send button while it's in generating state, abort!
+            if (sendBtn && sendBtn.classList.contains('generating')) {
+                if (currentAbortController) {
+                    currentAbortController.abort();
+                    currentAbortController = null;
+                }
+                typingIndicator.classList.add('hidden');
+                if (card) card.classList.remove('generating');
+                sendBtn.classList.remove('generating');
+                sendBtn.innerHTML = '<i data-lucide="arrow-up" id="send-btn-icon"></i>';
+                lucide.createIcons();
+                appendMessageBubble('assistant', '⚠️ Message processing cancelled.');
+                return;
+            }
+
+            const messageText = inputField.value.trim();
+            if (!messageText) return;
             
             // Check and animate first-load transition
             const consolePanel = document.querySelector('.chat-console-panel');
@@ -626,7 +750,6 @@
             // Clear inputs & previews
             inputField.value = '';
             inputField.style.height = 'auto'; // Reset height
-            sendBtn.setAttribute('disabled', 'true');
             sendBtn.classList.remove('active');
             if (window.removeAttachment) {
                 window.removeAttachment();
@@ -640,28 +763,41 @@
             if (card) card.classList.add('generating');
             if (sendBtn) {
                 sendBtn.classList.add('generating');
+                sendBtn.removeAttribute('disabled');
                 sendBtn.innerHTML = '<i data-lucide="square" style="width:10px; height:10px; fill:currentColor;"></i>';
                 lucide.createIcons();
             }
             
+            currentAbortController = new AbortController();
+
             try {
-                const selectedProvider = document.getElementById('provider-selector') ? document.getElementById('provider-selector').value : 'gemini';
+                const providerSelect = document.getElementById('provider-selector');
+                const selectedProvider = providerSelect ? providerSelect.value : 'auto';
+                const providerVal = (selectedProvider === 'auto' || !selectedProvider) ? null : selectedProvider;
+
                 const response = await fetch("{% url 'send_message_api' session_id=session.id %}", {
                     method: 'POST',
+                    signal: currentAbortController.signal,
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRFToken': '{{ csrf_token }}'
                     },
-                    body: JSON.stringify({ message: messageText, provider: selectedProvider })
+                    body: JSON.stringify({ message: messageText, provider: providerVal })
                 });
                 
-                const data = await response.json();
+                let data;
+                try {
+                    data = await response.json();
+                } catch (parseErr) {
+                    data = { error: 'Invalid response from server' };
+                }
                 
                 // Hide typing indicator & clear generating state
                 typingIndicator.classList.add('hidden');
                 if (card) card.classList.remove('generating');
                 if (sendBtn) {
                     sendBtn.classList.remove('generating');
+                    sendBtn.setAttribute('disabled', 'true');
                     sendBtn.innerHTML = '<i data-lucide="arrow-up" id="send-btn-icon"></i>';
                     lucide.createIcons();
                 }
@@ -673,13 +809,21 @@
                         pollActiveJobEvents(data.job_id);
                     }
                     
-                    // Update session status badge
+                    // Update session status badge & stepper stage
                     if (data.status) {
-                        if (sessionStatusBadge) {
-                            sessionStatusBadge.textContent = data.status.charAt(0).toUpperCase() + data.status.slice(1);
-                            sessionStatusBadge.className = `tag-status status-${data.status}`;
-                        }
+                        updateStatusBadge(data.status);
+                        updateStepperStage(data.status);
                         
+                        // Toggle action bar visibility
+                        const actionBar = document.getElementById('chat-action-bar');
+                        if (actionBar) {
+                            if (['srs_ready', 'plan_draft', 'plan_approved'].includes(data.status)) {
+                                actionBar.classList.remove('hidden');
+                            } else {
+                                actionBar.classList.add('hidden');
+                            }
+                        }
+
                         // Check if Completed & update placeholder
                         if ((data.status === 'completed' || data.status === 'ready') && inputField) {
                             inputField.placeholder = "Codebase generated! Ask to edit files, add features, or how to run the project...";
@@ -729,18 +873,28 @@
                         if (topbarTitleText) topbarTitleText.textContent = data.title;
                     }
                 } else {
-                    appendMessageBubble('assistant', `⚠️ Error: ${data.error || 'Something went wrong.'}`);
+                    appendMessageBubble('assistant', `⚠️ ${data.error || 'Something went wrong.'}`);
                 }
             } catch (err) {
                 typingIndicator.classList.add('hidden');
                 if (card) card.classList.remove('generating');
                 if (sendBtn) {
                     sendBtn.classList.remove('generating');
+                    sendBtn.setAttribute('disabled', 'true');
                     sendBtn.innerHTML = '<i data-lucide="arrow-up" id="send-btn-icon"></i>';
                     lucide.createIcons();
                 }
-                appendMessageBubble('assistant', '⚠️ Network error. Please check your connection and try again.');
+                if (err.name === 'AbortError') {
+                    appendMessageBubble('assistant', '⚠️ Message processing cancelled.');
+                } else {
+                    appendMessageBubble('assistant', '⚠️ Network error. Please check your connection and try again.');
+                }
+            } finally {
+                currentAbortController = null;
             }
+            scrollToBottom();
+        });
+    }
             scrollToBottom();
         });
     }
@@ -1128,16 +1282,43 @@
             document.getElementById('tab-btn-tree').classList.add('active');
             if (fileTabsContainer) fileTabsContainer.style.display = 'flex';
             if (codeActionsBar) codeActionsBar.style.display = 'flex';
+            restoreCodeView();
         } else if (mode === 'plan') {
             document.getElementById('tab-btn-plan').classList.add('active');
             if (fileTabsContainer) fileTabsContainer.style.display = 'none';
+            if (codeActionsBar) codeActionsBar.style.display = 'none';
             renderPlanViewPanel();
         } else if (mode === 'verif') {
             document.getElementById('tab-btn-verif').classList.add('active');
             if (fileTabsContainer) fileTabsContainer.style.display = 'none';
+            if (codeActionsBar) codeActionsBar.style.display = 'none';
             renderVerificationPanel();
         }
     };
+
+    function restoreCodeView() {
+        const activeTab = fileTabsContainer ? fileTabsContainer.querySelector('.file-tab.active') : null;
+        if (activeTab) {
+            const codeId = activeTab.getAttribute('data-code-id');
+            if (codeId) {
+                loadCodeFile(codeId, activeTab);
+                return;
+            }
+        }
+        const firstTab = fileTabsContainer ? fileTabsContainer.querySelector('.file-tab') : null;
+        if (firstTab) {
+            firstTab.click();
+        } else {
+            codeViewContainer.innerHTML = `
+                <div class="empty-code-view" id="empty-code-notice">
+                    <i data-lucide="code-2" class="empty-code-icon"></i>
+                    <h4>Design Dialogue In Progress</h4>
+                    <p>Answer the AI questions on the left. The generated system code will appear here automatically as requirements are gathered.</p>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+    }
 
     // Phase 10: Active Job Polling & Cancellation
     let activeJobPollInterval = null;
@@ -1156,7 +1337,9 @@
                 const resp = await fetch(`/api/jobs/${jobId}/events/?after=${afterSeq}`);
                 if (resp.ok) {
                     const data = await resp.json();
-                    document.getElementById('job-bar-fill').style.width = `${data.progress_current}%`;
+                    const total = data.progress_total || 100;
+                    const pct = Math.min(100, Math.max(0, Math.round((data.progress_current / total) * 100)));
+                    document.getElementById('job-bar-fill').style.width = `${pct}%`;
                     if (data.events && data.events.length > 0) {
                         const logBox = document.getElementById('job-log-events');
                         data.events.forEach(ev => {
@@ -1182,10 +1365,9 @@
                                         if (workspaceWrapper) workspaceWrapper.classList.remove('collapsed-code');
                                     }
                                 });
-                            if (sessionStatusBadge) {
-                                sessionStatusBadge.textContent = 'Ready';
-                                sessionStatusBadge.className = 'tag-status status-ready';
-                            }
+                            const sessStatus = data.session_status || 'ready';
+                            updateStatusBadge(sessStatus);
+                            updateStepperStage(sessStatus);
                             if (inputField) {
                                 inputField.placeholder = "Codebase generated! Ask to edit files, add features, or how to run the project...";
                             }
@@ -1193,10 +1375,8 @@
                                 appendMessageBubble('assistant', `### 🎉 Complete Project Codebase Ready!\n\n${data.result_summary}\n\nYou can inspect each file in the workspace file tree on the right, view the architecture plan and verification checks, and download your turnkey project ZIP.`);
                             }
                         } else if (data.status === 'failed') {
-                            if (sessionStatusBadge) {
-                                sessionStatusBadge.textContent = 'Failed';
-                                sessionStatusBadge.className = 'tag-status status-failed';
-                            }
+                            updateStatusBadge('needs_attention');
+                            updateStepperStage('needs_attention');
                             appendMessageBubble('assistant', `### ⚠️ Generation Failed\n\n${data.error_message || 'An error occurred during build. Please try again or request modifications.'}`);
                         }
                     }
@@ -1247,22 +1427,27 @@
                 }
                 const p = data.plan_data;
                 const files = p.files || [];
-                let filesHTML = files.map(f => `
-                    <div class="plan-file-card">
-                        <div class="plan-file-path">📄 ${f.path}</div>
-                        <div class="plan-file-purpose">${f.purpose || 'Module implementation'}</div>
-                        <div class="plan-deps">Depends on: ${(f.depends_on || []).join(', ') || 'None'}</div>
-                    </div>
-                `).join('');
+                let filesHTML = files.map(f => {
+                    const cleanPath = sanitizeText(f.path);
+                    const cleanPurpose = sanitizeText(f.purpose || 'Module implementation');
+                    const cleanDeps = sanitizeText((f.depends_on || []).join(', ') || 'None');
+                    return `
+                        <div class="plan-file-card">
+                            <div class="plan-file-path">📄 ${cleanPath}</div>
+                            <div class="plan-file-purpose">${cleanPurpose}</div>
+                            <div class="plan-deps">Depends on: ${cleanDeps}</div>
+                        </div>
+                    `;
+                }).join('');
 
                 codeViewContainer.innerHTML = `
                     <div class="plan-view-container">
                         <div class="plan-header-card">
                             <div>
-                                <strong>Architecture Plan v${data.version}</strong>
-                                <span class="badge ${data.status === 'approved' ? 'badge-verified' : 'badge-warning'}">${data.status.toUpperCase()}</span>
+                                <strong>Architecture Plan v${escapeHtml(data.version)}</strong>
+                                <span class="badge ${data.status === 'approved' ? 'badge-verified' : 'badge-warning'}">${escapeHtml(data.status.toUpperCase())}</span>
                             </div>
-                            <button class="btn btn-primary btn-sm" onclick="alert('Plan approved.')">Approve Plan</button>
+                            ${data.status !== 'approved' ? `<button class="btn btn-primary btn-sm" id="btn-approve-plan" onclick="approveArchitecturePlan(this)">Approve Plan</button>` : `<span class="badge badge-verified">Plan Approved ✓</span>`}
                         </div>
                         <div class="plan-files-list">${filesHTML}</div>
                     </div>
@@ -1274,13 +1459,54 @@
         }
     }
 
+    window.approveArchitecturePlan = async function(btn) {
+        if (btn) btn.disabled = true;
+        try {
+            const resp = await fetch(`/api/session/{{ session.id }}/plan/approve/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'Content-Type': 'application/json'
+                }
+            });
+            const resData = await resp.json();
+            if (resp.ok) {
+                renderPlanViewPanel();
+                updateStatusBadge('plan_approved');
+                updateStepperStage('plan_approved');
+                appendMessageBubble('assistant', '### ✅ Architecture Plan Approved\n\nYou have approved the multi-file architecture plan. Click **🚀 Generate Project Codebase** to build all project files!');
+                const actionBar = document.getElementById('chat-action-bar');
+                if (actionBar) actionBar.classList.remove('hidden');
+            } else {
+                alert(resData.error || 'Failed to approve plan.');
+                if (btn) btn.disabled = false;
+            }
+        } catch (e) {
+            console.error("Approve plan error:", e);
+            if (btn) btn.disabled = false;
+        }
+    };
+
     // Phase 10: Render Verification Issues Panel
     async function renderVerificationPanel() {
         try {
             const resp = await fetch(`/api/session/{{ session.id }}/verification/`);
             if (resp.ok) {
                 const data = await resp.json();
-                if (!data.has_verification || !data.issues || data.issues.length === 0) {
+                if (!data.has_verification) {
+                    codeViewContainer.innerHTML = `
+                        <div class="verif-panel-container">
+                            <div class="empty-code-view">
+                                <i data-lucide="shield" class="empty-code-icon" style="color: var(--ink-3);"></i>
+                                <h4>Not Verified Yet</h4>
+                                <p>Static verification will analyze all project files once the codebase generation completes.</p>
+                            </div>
+                        </div>
+                    `;
+                    lucide.createIcons();
+                    return;
+                }
+                if (!data.issues || data.issues.length === 0) {
                     codeViewContainer.innerHTML = `
                         <div class="verif-panel-container">
                             <div class="empty-code-view">
@@ -1293,12 +1519,18 @@
                     lucide.createIcons();
                     return;
                 }
-                let issuesHTML = data.issues.map(iss => `
-                    <div class="verif-issue-card ${iss.severity}" onclick="jumpToIssueLine('${iss.file}', ${iss.line})">
-                        <div class="issue-file-line">📌 ${iss.file} (Line ${iss.line}) [${iss.check}]</div>
-                        <div class="issue-msg">${iss.message}</div>
-                    </div>
-                `).join('');
+                let issuesHTML = data.issues.map(iss => {
+                    const cleanFile = sanitizeText(iss.file);
+                    const cleanCheck = sanitizeText(iss.check);
+                    const cleanMsg = sanitizeText(iss.message);
+                    const lineNum = parseInt(iss.line, 10) || 1;
+                    return `
+                        <div class="verif-issue-card ${sanitizeText(iss.severity)}" onclick="jumpToIssueLine('${cleanFile.replace(/'/g, "\\'")}', ${lineNum})">
+                            <div class="issue-file-line">📌 ${cleanFile} (Line ${lineNum}) [${cleanCheck}]</div>
+                            <div class="issue-msg">${cleanMsg}</div>
+                        </div>
+                    `;
+                }).join('');
 
                 codeViewContainer.innerHTML = `
                     <div class="verif-panel-container">
@@ -1323,7 +1555,9 @@
     };
 
     document.addEventListener('DOMContentLoaded', () => {
-        // Lucide icons initialized globally
+        {% if active_job %}
+        pollActiveJobEvents({{ active_job.id }});
+        {% endif %}
     });
 </script>
 {% endblock %}

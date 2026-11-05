@@ -15,8 +15,25 @@ class JobExecutionEngine:
     def create_job(cls, session, user, job_type: str) -> Job:
         """
         Creates a new Job instance after verifying no active job exists for the session.
-        Raises JobConcurrencyError if a job is already queued or running.
+        Clears stale jobs (>10 mins without update) and raises JobConcurrencyError if a job is actively running.
         """
+        from django.utils import timezone
+        from datetime import timedelta
+
+        # Clear stale jobs older than 10 minutes
+        stale_cutoff = timezone.now() - timedelta(minutes=10)
+        stale_jobs = Job.objects.filter(status__in=['queued', 'running'], updated_at__lt=stale_cutoff)
+        for sj in stale_jobs:
+            sj.status = 'failed'
+            sj.error_message = "Job timed out after 10 minutes of inactivity."
+            sj.save(update_fields=['status', 'error_message'])
+            try:
+                if sj.session.status == 'generating':
+                    sj.session.status = 'needs_attention'
+                    sj.session.save(update_fields=['status'])
+            except Exception:
+                pass
+
         active_jobs = session.jobs.filter(status__in=['queued', 'running'])
         if active_jobs.exists():
             raise JobConcurrencyError("A job is already actively running or queued for this session.")
@@ -66,6 +83,12 @@ class JobExecutionEngine:
             job.error_message = str(e)
             job.save(update_fields=['status', 'error_message'])
             job.log_event('error', f"Job execution failed: {str(e)}")
+            try:
+                if job.session.status == 'generating':
+                    SessionStateMachine.transition_to(job.session, 'needs_attention')
+            except Exception:
+                job.session.status = 'needs_attention'
+                job.session.save(update_fields=['status'])
 
         return job
 

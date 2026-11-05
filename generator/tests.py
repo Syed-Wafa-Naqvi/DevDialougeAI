@@ -107,7 +107,10 @@ class Phase1ProtocolAndWorkspaceTestCase(TestCase):
 
     def test_versioned_project_file_workspace(self):
         pf = ProjectFile.objects.create(session=self.session, path="todo/models.py", content="class Task: pass", current_version=1)
-        fv1 = FileVersion.objects.create(project_file=pf, version_number=1, content="class Task: pass", source='generate')
+        self.assertEqual(pf.versions.count(), 1)
+        fv1 = pf.versions.first()
+        self.assertEqual(fv1.version_number, 1)
+        self.assertEqual(fv1.content, "class Task: pass")
 
         v2 = pf.create_new_version("class Task:\n    title = models.CharField(max_length=100)", source='user_feedback')
         self.assertEqual(pf.current_version, 2)

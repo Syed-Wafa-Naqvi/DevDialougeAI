@@ -171,11 +171,26 @@ LLM_PURPOSE_ROUTING = {
     'chat': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o-mini'), ('free', 'llama-3.3-70b')],
     'completeness': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o-mini'), ('free', 'llama-3.3-70b')],
     'srs': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o'), ('free', 'llama-3.3-70b')],
-    'plan': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o'), ('claude', 'claude-3-5-sonnet-latest'), ('deepseek', 'deepseek-chat'), ('free', 'qwen-2.5-coder')],
-    'codegen': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o'), ('claude', 'claude-3-5-sonnet-latest'), ('deepseek', 'deepseek-chat'), ('free', 'qwen-2.5-coder')],
-    'repair': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o'), ('claude', 'claude-3-5-sonnet-latest'), ('deepseek', 'deepseek-chat'), ('free', 'qwen-2.5-coder')],
+    'plan': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o'), ('claude', 'claude-3-5-sonnet-20241022'), ('deepseek', 'deepseek-chat'), ('free', 'qwen-2.5-coder')],
+    'codegen': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o'), ('claude', 'claude-3-5-sonnet-20241022'), ('deepseek', 'deepseek-chat'), ('free', 'qwen-2.5-coder')],
+    'repair': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o'), ('claude', 'claude-3-5-sonnet-20241022'), ('deepseek', 'deepseek-chat'), ('free', 'qwen-2.5-coder')],
     'summary': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o-mini'), ('free', 'llama-3.3-70b')],
 }
+
+DEFAULT_AI_PROVIDER = os.environ.get('DEFAULT_AI_PROVIDER', 'auto')
+DEFAULT_CHAT_MODEL = os.environ.get('DEFAULT_CHAT_MODEL', 'gemini-2.5-flash-lite')
+COMPLETENESS_THRESHOLD = int(os.environ.get('COMPLETENESS_THRESHOLD', 70))
+FIELD_ENCRYPTION_KEY = os.environ.get('FIELD_ENCRYPTION_KEY', None)
+
+if not DEBUG:
+    SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', 'True') == 'True'
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS', 31536000))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'
 
 # Phase 7 — Lite Runtime Checks Settings
 RUNTIME_CHECKS_ENABLED = os.environ.get('RUNTIME_CHECKS_ENABLED', 'False') == 'True'

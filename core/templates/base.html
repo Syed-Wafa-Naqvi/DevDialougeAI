@@ -73,12 +73,16 @@
                 <a href="{% url 'features' %}" class="btn btn-ghost">Features</a>
                 <a href="{% url 'pricing' %}" class="btn btn-ghost">Pricing</a>
                 <a href="{% url 'about' %}" class="btn btn-ghost">About</a>
-                <a href="{% url 'styleguide' %}" class="btn btn-ghost" title="Styleguide">Styleguide</a>
                 
                 {% if user.is_authenticated %}
                     <a href="{% url 'dashboard' %}" class="btn btn-secondary btn-sm">Projects</a>
                     <a href="{% url 'settings' %}" class="btn btn-ghost btn-sm" aria-label="Settings"><i data-lucide="settings"></i></a>
-                    <a href="{% url 'logout' %}" class="btn btn-ghost btn-sm text-danger" aria-label="Logout"><i data-lucide="log-out"></i></a>
+                    <form action="{% url 'logout' %}" method="POST" style="display:inline; margin:0;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-ghost btn-sm text-danger" aria-label="Logout" title="Logout" style="background:none; border:none; cursor:pointer;">
+                            <i data-lucide="log-out"></i>
+                        </button>
+                    </form>
                 {% else %}
                     <a href="{% url 'login' %}" class="btn btn-ghost">Log In</a>
                     <a href="{% url 'signup' %}" class="btn btn-primary">Start Building</a>

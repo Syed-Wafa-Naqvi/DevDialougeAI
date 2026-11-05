@@ -164,7 +164,8 @@ class PlanGenerator:
                 system_prompt=cls.SYSTEM_PROMPT,
                 provider_name=provider_name,
                 purpose='plan',
-                session=session
+                session=session,
+                user=getattr(session, 'user', None)
             )
 
             try:

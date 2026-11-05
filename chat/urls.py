@@ -21,6 +21,7 @@ urlpatterns = [
     path('api/jobs/<int:job_id>/events/', views.get_job_events_api, name='get_job_events_api'),
     path('api/jobs/<int:job_id>/cancel/', views.cancel_job_api, name='cancel_job_api'),
     path('api/session/<int:session_id>/plan/', views.get_plan_api, name='get_plan_api'),
+    path('api/session/<int:session_id>/plan/approve/', views.approve_plan_api, name='approve_plan_api'),
     path('api/session/<int:session_id>/verification/', views.get_verification_api, name='get_verification_api'),
     path('api/session/<int:session_id>/tree/', views.get_file_tree_api, name='get_file_tree_api'),
 ]

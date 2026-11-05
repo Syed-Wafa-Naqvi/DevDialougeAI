@@ -18,27 +18,16 @@ def get_field_encryption_key():
 def encrypt_api_key(raw_key: str) -> str:
     if not raw_key:
         return ""
-    try:
-        from cryptography.fernet import Fernet
-        f = Fernet(get_field_encryption_key())
-        return f.encrypt(raw_key.encode('utf-8')).decode('utf-8')
-    except Exception:
-        key_bytes = get_field_encryption_key()
-        xor_bytes = bytes([b ^ key_bytes[i % len(key_bytes)] for i, b in enumerate(raw_key.encode('utf-8'))])
-        return base64.b64encode(xor_bytes).decode('utf-8')
+    from cryptography.fernet import Fernet
+    f = Fernet(get_field_encryption_key())
+    return f.encrypt(raw_key.encode('utf-8')).decode('utf-8')
 
 def decrypt_api_key(encrypted_key: str) -> str:
     if not encrypted_key:
         return ""
-    try:
-        from cryptography.fernet import Fernet
-        f = Fernet(get_field_encryption_key())
-        return f.decrypt(encrypted_key.encode('utf-8')).decode('utf-8')
-    except Exception:
-        key_bytes = get_field_encryption_key()
-        raw_bytes = base64.b64decode(encrypted_key.encode('utf-8'))
-        unxored = bytes([b ^ key_bytes[i % len(key_bytes)] for i, b in enumerate(raw_bytes)])
-        return unxored.decode('utf-8')
+    from cryptography.fernet import Fernet
+    f = Fernet(get_field_encryption_key())
+    return f.decrypt(encrypted_key.encode('utf-8')).decode('utf-8')
 
 def mask_api_key(raw_key: str) -> str:
     if not raw_key:
@@ -116,7 +105,7 @@ class Profile(models.Model):
         if not self.otp or not self.otp_created_at:
             return False, "Invalid or expired OTP. Please try again."
 
-        expiry_time = self.otp_created_at + timezone.timedelta(minutes=2)
+        expiry_time = self.otp_created_at + timezone.timedelta(minutes=5)
         if now > expiry_time:
             return False, "OTP code has expired. Please request a new code."
 

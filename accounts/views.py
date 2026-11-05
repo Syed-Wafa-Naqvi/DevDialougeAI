@@ -46,13 +46,14 @@ def signup_view(request):
 
             try:
                 with transaction.atomic():
-                    unverified_users = User.objects.filter(
+                    existing_unverified = User.objects.filter(
                         models.Q(username=username) | models.Q(email=email),
                         is_active=False
-                    )
-                    for unverified_user in unverified_users:
-                        if hasattr(unverified_user, 'profile') and not unverified_user.profile.is_verified:
-                            unverified_user.delete()
+                    ).first()
+                    if existing_unverified:
+                        request.session['pre_verified_user_id'] = existing_unverified.id
+                        messages.warning(request, "An unverified account with this username or email already exists. Please enter your verification code.")
+                        return redirect('verify_otp')
 
                     user = form.save(commit=False)
                     user.is_active = False
@@ -124,7 +125,8 @@ def verify_otp_view(request):
         form = OTPVerificationForm(request.POST)
         if form.is_valid():
             otp_entered = form.cleaned_data['otp']
-            if profile.is_otp_valid(otp_entered):
+            is_valid, reason = profile.verify_otp_with_reason(otp_entered)
+            if is_valid:
                 profile.is_verified = True
                 profile.otp = None
                 profile.otp_created_at = None
@@ -140,7 +142,7 @@ def verify_otp_view(request):
                 messages.success(request, f"Welcome {user.username}! Your account has been verified successfully.")
                 return redirect('dashboard')
             else:
-                form.add_error('otp', "Invalid or expired OTP. Please try again.")
+                form.add_error('otp', reason)
     else:
         form = OTPVerificationForm()
         
@@ -325,7 +327,8 @@ def reset_password_view(request):
             otp = form.cleaned_data['otp']
             new_password = form.cleaned_data['new_password']
 
-            if profile and profile.is_otp_valid(otp):
+            is_valid, reason = profile.verify_otp_with_reason(otp) if profile else (False, "Invalid or expired OTP.")
+            if is_valid:
                 user.set_password(new_password)
                 user.save()
                 
@@ -341,7 +344,7 @@ def reset_password_view(request):
                 messages.success(request, "Your password has been reset successfully. You can now log in.")
                 return redirect('login')
             else:
-                form.add_error('otp', "Invalid or expired OTP.")
+                form.add_error('otp', reason)
     else:
         form = ResetPasswordForm()
 
@@ -384,6 +387,23 @@ def settings_view(request):
                 return redirect('settings')
             else:
                 messages.error(request, "Failed to change password. Please check the errors.")
+
+        elif action == 'update_keys':
+            gemini_key = request.POST.get('gemini_api_key', '').strip()
+            openai_key = request.POST.get('openai_api_key', '').strip()
+            if gemini_key and not gemini_key.startswith('•'):
+                profile.set_gemini_key(gemini_key)
+            elif gemini_key == '':
+                profile.encrypted_gemini_key = ''
+                
+            if openai_key and not openai_key.startswith('•'):
+                profile.set_openai_key(openai_key)
+            elif openai_key == '':
+                profile.encrypted_openai_key = ''
+                
+            profile.save()
+            messages.success(request, "Custom API Keys updated successfully.")
+            return redirect('settings')
     
     user_form = UserUpdateForm(instance=user)
     password_form = PasswordChangeForm(user=user)

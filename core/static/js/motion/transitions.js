@@ -28,10 +28,14 @@ export function initPageTransitions() {
             return el.hasAttribute('data-barba-prevent') || 
                    el.tagName === 'FORM' || 
                    el.href?.includes('/chat/') || 
+                   el.href?.includes('/new-chat/') || 
+                   el.href?.includes('/create-session/') || 
                    el.href?.includes('/dashboard/') || 
                    el.href?.includes('/settings/') || 
                    el.href?.includes('/login/') || 
                    el.href?.includes('/signup/') || 
+                   el.href?.includes('/reset-password/') || 
+                   el.href?.includes('/verify-otp/') || 
                    el.href?.includes('/welcome/');
         },
         transitions: [{

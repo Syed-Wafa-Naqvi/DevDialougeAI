@@ -3,7 +3,7 @@ import re
 
 class FilePlanner:
     @classmethod
-    def get_module_list(cls, tech_stack: str = "django", provider_name: str = None) -> list:
+    def get_module_list(cls, tech_stack: str = "django", provider_name: str = None, session=None, user=None) -> list:
         ts_lower = tech_stack.lower()
 
         # If a full requirements summary was passed, attempt dynamic LLM planning if available
@@ -18,7 +18,7 @@ class FilePlanner:
                     "Do NOT return markdown or explanation, just the JSON array."
                 )
                 system_prompt = "You are an automated file structure planner. Output a valid JSON array of relative file paths."
-                resp = LLMRouter.generate(prompt=prompt, system_prompt=system_prompt, provider_name=provider_name)
+                resp = LLMRouter.generate(prompt=prompt, system_prompt=system_prompt, provider_name=provider_name, purpose='plan', session=session, user=user)
                 match = re.search(r'\[\s*".*?"\s*\]', resp, re.DOTALL)
                 if match:
                     parsed = json.loads(match.group(0))
