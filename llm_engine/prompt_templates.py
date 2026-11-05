@@ -37,17 +37,82 @@ class PromptTemplates:
     @staticmethod
     def get_completeness_system_prompt():
         return (
-            "Analyze the software conversation history. Estimate the requirement completeness as a percentage between 0 and 100. "
-            "Return ONLY an integer number representing the percentage."
+            "You are an expert software architecture requirements evaluator. "
+            "Analyze the conversation transcript and evaluate requirement coverage across these 8 architectural categories:\n"
+            "- core_features: primary functional capabilities\n"
+            "- data_model: database entities, relationships, attributes\n"
+            "- auth_and_roles: authentication, authorization, permissions\n"
+            "- tech_stack: languages, frameworks, databases, libraries\n"
+            "- purpose_and_users: problem statement, target persona, workflows\n"
+            "- integrations: third-party APIs, webhooks, external services\n"
+            "- non_functional: performance, scalability, security, rate limits\n"
+            "- deployment: environment, hosting, containerization, CI/CD\n\n"
+            "Assign each category a status of 'covered', 'partial', or 'missing'.\n"
+            "Return ONLY a valid JSON object matching this schema:\n"
+            "{\n"
+            '  "categories": {\n'
+            '    "core_features": "covered"|"partial"|"missing",\n'
+            '    "data_model": "covered"|"partial"|"missing",\n'
+            '    "auth_and_roles": "covered"|"partial"|"missing",\n'
+            '    "tech_stack": "covered"|"partial"|"missing",\n'
+            '    "purpose_and_users": "covered"|"partial"|"missing",\n'
+            '    "integrations": "covered"|"partial"|"missing",\n'
+            '    "non_functional": "covered"|"partial"|"missing",\n'
+            '    "deployment": "covered"|"partial"|"missing"\n'
+            "  },\n"
+            '  "next_questions": ["<question 1 to ask user>"],\n'
+            '  "contradictions": []\n'
+            "}\n"
+            "Do NOT include markdown conversational text outside the JSON."
+            + PROMPT_INJECTION_DISCLAIMER
         )
 
     @staticmethod
-    def get_code_generation_prompt(requirements_summary: str, module_name: str, tech_stack: str = "Python/Django"):
+    def get_code_generation_prompt(requirements_summary: str, module_name: str, tech_stack: str = None, all_files: list = None, existing_signatures: dict = None):
+        if not tech_stack or tech_stack == "Python/Django":
+            ts_candidate = None
+            req_lower = (requirements_summary or "").lower()
+            if module_name.endswith(('.dart', '.yaml')) or 'flutter' in req_lower:
+                ts_candidate = "Dart / Flutter"
+            elif module_name.endswith('.go') or 'golang' in req_lower:
+                ts_candidate = "Go (Golang)"
+            elif module_name.endswith('.rs') or 'rust' in req_lower:
+                ts_candidate = "Rust"
+            elif module_name.endswith(('.js', '.jsx', '.ts', '.tsx')):
+                ts_candidate = "JavaScript / TypeScript"
+            elif module_name.endswith('.py'):
+                if 'fastapi' in req_lower:
+                    ts_candidate = "Python / FastAPI"
+                elif 'flask' in req_lower:
+                    ts_candidate = "Python / Flask"
+                else:
+                    ts_candidate = "Python / Django"
+            else:
+                ts_candidate = tech_stack or "Full Stack Application"
+            tech_stack = ts_candidate
+
+        context_info = []
+        if all_files:
+            file_list_str = "\n".join([f"- {f}" for f in all_files])
+            context_info.append(f"ALL PLANNED PROJECT FILES:\n{file_list_str}")
+
+        if existing_signatures:
+            sig_lines = []
+            for fn, sig in existing_signatures.items():
+                if fn != module_name and sig:
+                    sig_lines.append(f"File `{fn}`:\n{sig}")
+            if sig_lines:
+                context_info.append("ALREADY GENERATED SIGNATURES & STRUCTURE:\n" + "\n\n".join(sig_lines))
+
+        extra_context = ("\n\n" + "\n\n".join(context_info)) if context_info else ""
+
         return (
             f"Generate high-quality, production-ready source code for the file `{module_name}`.\n"
             f"Tech Stack: {tech_stack}\n"
-            f"Project Requirements:\n{requirements_summary}\n\n"
-            f"Provide ONLY the actual executable source code for `{module_name}` without markdown conversational fluff."
+            f"Project Requirements:\n{requirements_summary}"
+            f"{extra_context}\n\n"
+            f"Provide ONLY the actual executable source code for `{module_name}` without markdown conversational fluff. "
+            f"Ensure all imports, class names, function signatures, and route references match the existing files."
             + PROMPT_INJECTION_DISCLAIMER
         )
 

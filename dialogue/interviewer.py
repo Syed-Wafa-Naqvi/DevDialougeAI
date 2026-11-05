@@ -3,7 +3,7 @@ from llm_engine.prompt_templates import PromptTemplates
 
 class InterviewerService:
     @classmethod
-    def generate_next_question(cls, conversation_history: list, provider_name: str = None) -> str:
+    def generate_next_question(cls, conversation_history: list, provider_name: str = None, session = None, user = None) -> str:
         messages_text = "\n".join([f"{m.get('role').capitalize()}: {m.get('content')}" for m in conversation_history])
         
         user_msgs = [m.get('content', '') for m in conversation_history if m.get('role') == 'user']
@@ -18,4 +18,4 @@ class InterviewerService:
         )
         
         system_prompt = PromptTemplates.get_interview_system_prompt()
-        return LLMRouter.generate(prompt=prompt, system_prompt=system_prompt, provider_name=provider_name)
+        return LLMRouter.generate(prompt=prompt, system_prompt=system_prompt, provider_name=provider_name, purpose='chat', session=session, user=user)

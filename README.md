@@ -53,17 +53,24 @@ DevDialougeAI/
    pip install -r requirements.txt
    ```
 
-4. **Run migrations**:
+4. **Configure environment variables**:
+   ```bash
+   cp .env.example .env
+   # Update SECRET_KEY, DEBUG, and optional API keys in .env
+   python -c "from django.core.management.utils import get_random_secret_key; print('SECRET_KEY=' + get_random_secret_key())"
+   ```
+
+5. **Run database migrations**:
    ```bash
    python manage.py migrate
    ```
 
-5. **Run the test suite**:
+6. **Run the test suite**:
    ```bash
    python manage.py test
    ```
 
-6. **Start the development server**:
+7. **Start the development server**:
    ```bash
    python manage.py runserver
    ```

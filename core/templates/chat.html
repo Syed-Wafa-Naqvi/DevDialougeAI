@@ -12,6 +12,10 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
 {% endblock %}
 
+{% block vendor_scripts %}
+<!-- Three.js, GSAP, ScrollTrigger, Lenis, and Barba are bypassed on the chat workspace for optimal speed and lightweight page load -->
+{% endblock %}
+
 {% block content %}
 <div class="chat-app-layout">
     <!-- Left Sidebar: Conversations History & Settings -->
@@ -318,22 +322,22 @@
 
                 <!-- Fixed Message Input Area -->
                 <div class="console-input-area">
-                    {% if session.status == 'completed' and session.mode == 'mode1' %}
+                    {% if session.status == 'completed' or session.status == 'ready' %}
                         <div class="completed-msg-banner">
-                            <i data-lucide="check-circle" class="text-success"></i> Requirements gathered. This session is complete. You can view all files on the right.
+                            <i data-lucide="check-circle" class="text-success"></i> Codebase generated & verified! You can inspect files on the right, or continue chatting to request edits and run instructions.
                         </div>
-                    {% else %}
-                        {% if is_first_load %}
-                            <div class="first-load-header-group">
-                                <h2 class="first-load-greeting">What can we build today?</h2>
-                                <p class="first-load-subheading">Start a new workspace or continue where you left off.</p>
-                                <div class="suggested-prompts-container">
-                                    <button type="button" class="suggested-prompt-chip" onclick="fillPromptText(this)">Build a REST API</button>
-                                    <button type="button" class="suggested-prompt-chip" onclick="fillPromptText(this)">Debug my code</button>
-                                    <button type="button" class="suggested-prompt-chip" onclick="fillPromptText(this)">Explain this error</button>
-                                </div>
+                    {% endif %}
+                    {% if is_first_load %}
+                        <div class="first-load-header-group">
+                            <h2 class="first-load-greeting">What can we build today?</h2>
+                            <p class="first-load-subheading">Start a new workspace or continue where you left off.</p>
+                            <div class="suggested-prompts-container">
+                                <button type="button" class="suggested-prompt-chip" onclick="fillPromptText(this)">Build a REST API</button>
+                                <button type="button" class="suggested-prompt-chip" onclick="fillPromptText(this)">Debug my code</button>
+                                <button type="button" class="suggested-prompt-chip" onclick="fillPromptText(this)">Explain this error</button>
                             </div>
-                        {% endif %}
+                        </div>
+                    {% endif %}
                         <form id="chat-input-form" class="input-form" enctype="multipart/form-data">
                             {% csrf_token %}
                             <div class="input-container-card" id="input-card">
@@ -376,7 +380,6 @@
                         <div class="helper-text">
                             DevDialogue can make mistakes. Check important info.
                         </div>
-                    {% endif %}
                 </div>
             </div>
 
@@ -673,14 +676,9 @@
                             sessionStatusBadge.className = `tag-status status-${data.status}`;
                         }
                         
-                        // Check if Completed & Mode 1
-                        if (data.status === 'completed' && "{{ session.mode }}" === "mode1") {
-                            inputArea.innerHTML = `
-                                <div class="completed-msg-banner">
-                                    <i data-lucide="check-circle" class="text-success"></i> Requirements gathered. This session is complete. You can view all files on the right.
-                                </div>
-                            `;
-                            lucide.createIcons();
+                        // Check if Completed & update placeholder
+                        if ((data.status === 'completed' || data.status === 'ready') && inputField) {
+                            inputField.placeholder = "Codebase generated! Ask to edit files, add features, or how to run the project...";
                         }
                     }
                     
@@ -801,7 +799,8 @@
             btn.className = `file-tab ${((activeId && activeId == code.id) || (!activeId && index === 0)) ? 'active' : ''}`;
             btn.setAttribute('data-code-id', code.id);
             btn.setAttribute('onclick', `loadCodeFile(${code.id}, this)`);
-            btn.innerHTML = `<i data-lucide="file-code" class="icon-inline"></i> ${code.module_name}`;
+            btn.innerHTML = '<i data-lucide="file-code" class="icon-inline"></i> ';
+            btn.appendChild(document.createTextNode(code.module_name));
             fileTabsContainer.appendChild(btn);
         });
         

@@ -100,14 +100,31 @@ class JobExecutionEngine:
 
     @classmethod
     def _execute_generation_job(cls, job: Job, provider_name: str = None):
+        import re
         session = job.session
         SessionStateMachine.transition_to(session, 'generating')
 
         # Collect current workspace files
         existing_files = {pf.path: pf.content for pf in session.project_files.all()}
 
-        # Fetch latest plan
+        # Fetch latest SRS summary from messages or session
+        srs_msgs = session.messages.filter(role='assistant')
+        srs_summary = ""
+        for m in reversed(list(srs_msgs)):
+            if re.search(r'#+\s*(?:Project\s+)?Requirements\s+Summary', m.content, re.IGNORECASE):
+                srs_summary = m.content
+                break
+        if not srs_summary:
+            srs_summary = session.summary_text or "Standard web application"
+
+        # Fetch latest plan or generate on-the-fly
         plan_obj = session.plans.filter(status__in=['approved', 'draft']).first()
+        if not plan_obj and srs_summary:
+            try:
+                plan_obj = PlanGenerator.generate_plan(srs_summary, session, provider_name=provider_name)
+            except Exception:
+                plan_obj = None
+
         plan_data = plan_obj.plan_data if plan_obj else None
         gen_order = plan_obj.generation_order if plan_obj else []
 
@@ -115,7 +132,8 @@ class JobExecutionEngine:
             gen_order = list(existing_files.keys())
 
         if not gen_order:
-            gen_order = ["todo/models.py", "todo/views.py"]
+            from generator.file_planner import FilePlanner
+            gen_order = FilePlanner.get_module_list(srs_summary, provider_name=provider_name)
 
         total_files = len(gen_order)
         job.progress_total = total_files * 10
@@ -134,8 +152,16 @@ class JobExecutionEngine:
 
             job.log_event('file_started', f"Writing file ({idx+1}/{total_files}): '{file_path}'...")
             
-            # Generate code module
-            code_content = CodeBuilder.generate_code_for_module(file_path, "Generate module", provider_name=provider_name)
+            # Generate code module with cross-file awareness
+            code_content = CodeBuilder.generate_code_for_module(
+                module_name=file_path,
+                requirements_summary=srs_summary,
+                all_files=gen_order,
+                existing_files=generated_files,
+                provider_name=provider_name,
+                session=session,
+                user=job.user
+            )
             generated_files[file_path] = code_content
 
             # Save / version ProjectFile
@@ -146,6 +172,14 @@ class JobExecutionEngine:
             )
             if not created:
                 pf.create_new_version(code_content, source='generate')
+
+            # Dual-table sync: GeneratedCode
+            from chat.models import GeneratedCode
+            GeneratedCode.objects.update_or_create(
+                session=session,
+                module_name=file_path,
+                defaults={'code_content': code_content}
+            )
 
             job.progress_current = (idx + 1) * 10
             job.save(update_fields=['progress_current'])
@@ -166,8 +200,12 @@ class JobExecutionEngine:
         final_status = repair_res['status']
         if final_status in ('verified', 'verified_with_warnings'):
             SessionStateMachine.transition_to(session, 'ready')
+            session.status = 'completed'
+            session.save(update_fields=['status'])
         else:
             SessionStateMachine.transition_to(session, 'needs_attention')
+            session.status = 'completed'
+            session.save(update_fields=['status'])
 
         job.status = 'succeeded'
         job.progress_current = job.progress_total

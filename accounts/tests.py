@@ -32,3 +32,37 @@ class AccountsTestCase(TestCase):
             'password': 'Password123!'
         })
         self.assertEqual(response.status_code, 302)
+
+    def test_forgot_password_duplicate_email_no_crash(self):
+        # Two users sharing same email should not crash with MultipleObjectsReturned 500
+        User.objects.create_user(username='user1', email='duplicate@example.com', password='Password123!')
+        User.objects.create_user(username='user2', email='duplicate@example.com', password='Password123!')
+        response = self.client.post('/forgot-password/', {'email': 'duplicate@example.com'})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, '/reset-password/')
+
+    def test_unverified_user_login_sends_otp(self):
+        user = User.objects.create_user(username='unverified', email='unverified@example.com', password='Password123!')
+        user.is_active = False
+        user.save()
+        user.profile.is_verified = False
+        user.profile.save()
+
+        response = self.client.post('/login/', {
+            'username': 'unverified',
+            'password': 'Password123!'
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/verify-otp/', response.url)
+        user.profile.refresh_from_db()
+        self.assertIsNotNone(user.profile.otp)
+
+    def test_otp_generation_resets_failed_attempts(self):
+        user = User.objects.create_user(username='otptest', email='otp@example.com', password='Password123!')
+        profile = user.profile
+        profile.otp_failed_attempts = 4
+        profile.save()
+        otp = profile.generate_otp()
+        self.assertEqual(len(otp), 6)
+        self.assertTrue(otp.isdigit())
+        self.assertEqual(profile.otp_failed_attempts, 0)

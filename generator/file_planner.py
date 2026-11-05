@@ -29,8 +29,8 @@ class FilePlanner:
             except Exception:
                 pass
 
-        # Domain-aware contextual fallbacks
-        if "flutter" in ts_lower or "dart" in ts_lower:
+        # Domain-aware contextual fallbacks using strict word boundary matching
+        if re.search(r'\b(flutter|dart)\b', ts_lower):
             if "snake" in ts_lower or "game" in ts_lower:
                 return [
                     "pubspec.yaml",
@@ -48,20 +48,20 @@ class FilePlanner:
                 "lib/widgets/task_tile.dart",
                 "test/widget_test.dart"
             ]
-        elif "go" in ts_lower or "golang" in ts_lower:
+        elif re.search(r'\bgo(lang)?\b', ts_lower):
             return ["go.mod", "main.go", "handlers/api.go", "models/data.go"]
-        elif "rust" in ts_lower:
+        elif re.search(r'\brust\b', ts_lower):
             return ["Cargo.toml", "src/main.rs", "src/models.rs"]
-        elif "fastapi" in ts_lower:
+        elif re.search(r'\bfastapi\b', ts_lower):
             return ["main.py", "models.py", "schemas.py", "database.py"]
-        elif "express" in ts_lower or "node" in ts_lower or "react" in ts_lower:
+        elif re.search(r'\b(express|node|react)\b', ts_lower):
             return ["server.js", "models/User.js", "routes/api.js", "public/index.html"]
-        elif "flask" in ts_lower:
+        elif re.search(r'\bflask\b', ts_lower):
             return ["app.py", "models.py", "templates/index.html"]
-        elif "java" in ts_lower or "spring" in ts_lower:
+        elif re.search(r'\b(java|spring)\b', ts_lower):
             return ["pom.xml", "src/main/java/com/app/Application.java", "src/main/java/com/app/controller/ApiController.java"]
         else:
-            # Default Django stack
+            # Default Django / Python stack
             return ["models.py", "views.py", "templates/index.html"]
 
 

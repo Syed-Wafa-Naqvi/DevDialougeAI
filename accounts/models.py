@@ -2,6 +2,7 @@ import base64
 import hashlib
 import hmac
 import random
+import secrets
 from django.db import models
 from django.contrib.auth.models import User
 from django.db.models.signals import post_save
@@ -86,9 +87,11 @@ class Profile(models.Model):
         return mask_api_key(self.get_gemini_key())
 
     def generate_otp(self):
-        self.otp = f"{random.randint(100000, 999999)}"
+        self.otp = f"{secrets.randbelow(900000) + 100000}"
         self.otp_created_at = timezone.now()
         self.otp_last_resent_at = timezone.now()
+        self.otp_failed_attempts = 0
+        self.otp_lockout_until = None
         self.save()
         return self.otp
 

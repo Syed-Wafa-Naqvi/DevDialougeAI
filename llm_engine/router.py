@@ -45,7 +45,23 @@ class LLMRouter:
         elif requested == 'deepseek' and deepseek_key:
             return DeepSeekProvider(api_key=deepseek_key)
 
-        # 2. Automatic key resolution if not explicitly specified or key was missing
+        # 2. Check Purpose Routing Table in settings if configured
+        purpose_routing = getattr(settings, 'LLM_PURPOSE_ROUTING', {})
+        if purpose in purpose_routing:
+            for p_type, model_choice in purpose_routing[purpose]:
+                p_type = p_type.lower()
+                if p_type == 'gemini' and gemini_key:
+                    return GeminiProvider(api_key=gemini_key, model=model_choice)
+                elif p_type == 'openai' and openai_key:
+                    return OpenAIProvider(api_key=openai_key, model=model_choice)
+                elif p_type == 'claude' and claude_key:
+                    return ClaudeProvider(api_key=claude_key, model=model_choice)
+                elif p_type == 'deepseek' and deepseek_key:
+                    return DeepSeekProvider(api_key=deepseek_key, model=model_choice)
+                elif p_type == 'free':
+                    return FreeAIProvider(model=model_choice)
+
+        # 3. Automatic key resolution if not explicitly specified or key was missing
         if gemini_key:
             return GeminiProvider(api_key=gemini_key)
         if openai_key:
@@ -55,7 +71,7 @@ class LLMRouter:
         if claude_key:
             return ClaudeProvider(api_key=claude_key)
 
-        # 3. Default to Free Keyless AI Provider (LLaMA 3.3 / Qwen Coder)
+        # 4. Default to Free Keyless AI Provider (LLaMA 3.3 / Qwen Coder)
         return FreeAIProvider()
 
     @classmethod
@@ -115,15 +131,19 @@ class LLMRouter:
                 except Exception as e_free:
                     err_msg += f" | FreeAI fallback error: {str(e_free)[:200]}"
 
-            # Fallback 3: MockProvider as last resort for offline continuity
+            # Fallback 3: MockProvider ONLY if offline test/mock mode is explicitly enabled
             if not result:
-                fallback = MockProvider()
-                p_name = "mock_fallback"
-                result = fallback.generate_completion(prompt=prompt, system_prompt=system_prompt)
-
+                if getattr(settings, 'USE_MOCK_LLM', False):
+                    fallback = MockProvider()
+                    p_name = "mock_fallback"
+                    result = fallback.generate_completion(prompt=prompt, system_prompt=system_prompt)
+                else:
+                    success = False
+                    # Do not return fake silent canned code when all providers fail
+                    err_msg = err_msg or "All AI providers failed or were unavailable."
 
         latency_ms = int((time.time() - start_time) * 1000)
-        out_tokens = len(result) // 4
+        out_tokens = len(result) // 4 if result else 0
 
         # Log LLM Call
         try:
@@ -140,13 +160,16 @@ class LLMRouter:
                 latency_ms=latency_ms,
                 estimated_cost=0.0,
                 success=success,
-                error_message=err_msg,
+                error_message=err_msg if not success else "",
                 fallback_used=fallback_used,
                 prompt_body=prompt[:2000] if log_bodies else None,
                 response_body=result[:2000] if log_bodies else None
             )
         except Exception:
             pass
+
+        if not success:
+            raise RuntimeError(f"AI generation failed: {err_msg}")
 
         return result
 

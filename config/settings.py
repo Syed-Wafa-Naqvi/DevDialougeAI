@@ -14,6 +14,8 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
+from django.core.exceptions import ImproperlyConfigured
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -24,13 +26,19 @@ load_dotenv(BASE_DIR / '.env')
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-y727zrv529e!(4*b3#l95u7wovz!y5q2_kua%b54jg+6h29myq')
-
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+DEBUG = os.environ.get('DEBUG', 'False').lower() in ('true', '1', 't')
 
-ALLOWED_HOSTS = ['*']
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY or (not DEBUG and 'django-insecure' in SECRET_KEY):
+    if DEBUG:
+        SECRET_KEY = SECRET_KEY or 'django-insecure-devdialogue-local-dev-fallback-secret-key'
+    else:
+        raise ImproperlyConfigured("A secure SECRET_KEY environment variable is required in production.")
+
+raw_allowed_hosts = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver')
+ALLOWED_HOSTS = [h.strip() for h in raw_allowed_hosts.split(',') if h.strip()]
 
 
 # Application definition
@@ -158,7 +166,6 @@ IS_TESTING = 'test' in sys.argv
 
 USE_MOCK_LLM = IS_TESTING or (os.environ.get('USE_MOCK_LLM', 'False') == 'True')
 LLM_LOG_BODIES = os.environ.get('LLM_LOG_BODIES', 'False') == 'True'
-CELERY_TASK_ALWAYS_EAGER = True
 
 LLM_PURPOSE_ROUTING = {
     'chat': [('gemini', 'gemini-2.5-flash-lite'), ('openai', 'gpt-4o-mini'), ('free', 'llama-3.3-70b')],

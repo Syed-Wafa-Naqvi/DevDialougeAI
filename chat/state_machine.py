@@ -31,7 +31,7 @@ class SessionStateMachine:
         'applying_feedback': {'verifying', 'generating'},
         'ready': {'applying_feedback', 'interviewing', 'completed'},
         'needs_attention': {'applying_feedback', 'repairing', 'interviewing', 'completed'},
-        'completed': {'applying_feedback', 'interviewing'},
+        'completed': {'applying_feedback', 'interviewing', 'ready', 'active'},
     }
 
     @classmethod

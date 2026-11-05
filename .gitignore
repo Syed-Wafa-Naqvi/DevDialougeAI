@@ -88,14 +88,19 @@ DevDialogue_*Prompt*.md
 DevDialogue_UI_*.md
 DevDialogue_Visual_*.md
 
+# Archives and Academic Documents / Presentations
+*.zip
+*.tar.gz
+*.docx
+*.pptx
+*.pdf
+
 # Django static & media media files
 staticfiles/
 media/
 static-collected/
 
-# Django migrations (ignores generated files, preserves directory structure)
-**/migrations/*.py
-!**/migrations/__init__.py
+# Django migrations are committed to ensure fresh clones work cleanly
 
 # IDEs and Editors
 .vscode/

@@ -12,8 +12,11 @@ class GeminiProvider(BaseLLMProvider):
         return bool(self.api_key and self.api_key.strip())
 
     def _call_gemini_api(self, model: str, prompt: str, system_prompt: str = None, temperature: float = 0.7) -> str:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={self.api_key}"
-        headers = {"Content-Type": "application/json"}
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        headers = {
+            "Content-Type": "application/json",
+            "x-goog-api-key": self.api_key
+        }
         
         contents = []
         if system_prompt:

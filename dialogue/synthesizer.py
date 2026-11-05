@@ -2,12 +2,13 @@ from llm_engine.router import LLMRouter
 
 class SRSSynthesizer:
     @classmethod
-    def synthesize_summary(cls, conversation_history: list, is_mode2: bool = False, provider_name: str = None) -> str:
+    def synthesize_summary(cls, conversation_history: list, is_mode2: bool = False, provider_name: str = None, session = None, user = None) -> str:
         messages_text = "\n".join([f"{m.get('role').capitalize()}: {m.get('content')}" for m in conversation_history])
         
         prompt = (
             f"Analyze this software design conversation:\n\n{messages_text}\n\n"
             "Synthesize a clear, professional Project Requirements Summary in Markdown format.\n"
+            "CRITICAL: You MUST begin your output with the exact markdown heading: `### Project Requirements Summary`\n\n"
             "Extract:\n"
             "- **Project Concept**: (brief summary of what the software application is)\n"
             "- **Tech Stack**: (frameworks, programming languages, databases specified)\n"
@@ -21,4 +22,4 @@ class SRSSynthesizer:
             prompt += " (Mention that generation will happen incrementally, module-by-module)."
             
         system_prompt = "You are a senior software architect compiling a formal SRS requirements summary."
-        return LLMRouter.generate(prompt=prompt, system_prompt=system_prompt, provider_name=provider_name)
+        return LLMRouter.generate(prompt=prompt, system_prompt=system_prompt, provider_name=provider_name, purpose='srs', session=session, user=user)

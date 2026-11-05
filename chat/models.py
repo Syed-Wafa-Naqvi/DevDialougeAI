@@ -74,7 +74,7 @@ class Message(models.Model):
 
 class GeneratedCode(models.Model):
     session = models.ForeignKey(Session, on_delete=models.CASCADE, related_name='generated_codes')
-    module_name = models.CharField(max_length=100)
+    module_name = models.CharField(max_length=255)
     code_content = models.TextField()
     generated_at = models.DateTimeField(auto_now_add=True)
 

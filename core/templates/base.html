@@ -29,17 +29,20 @@
     <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400..700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
     <!-- Vendored Libraries -->
+    <script src="{% static 'vendor/purify.min.js' %}"></script>
+    <script src="{% static 'vendor/marked.min.js' %}"></script>
+
+    {% block vendor_scripts %}
     <script src="{% static 'vendor/gsap.min.js' %}"></script>
     <script src="{% static 'vendor/ScrollTrigger.min.js' %}"></script>
     <script src="{% static 'vendor/Flip.min.js' %}"></script>
     <script src="{% static 'vendor/lenis.min.js' %}"></script>
     <script src="{% static 'vendor/barba.min.js' %}"></script>
     <script src="{% static 'vendor/three.min.js' %}"></script>
-    <script src="{% static 'vendor/purify.min.js' %}"></script>
-    <script src="{% static 'vendor/marked.min.js' %}"></script>
+    {% endblock %}
 
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Lucide Icons (Pinned version) -->
+    <script src="https://unpkg.com/lucide@0.441.0"></script>
 
     <!-- Stylesheets -->
     <link rel="stylesheet" href="{% static 'css/tokens.css' %}">

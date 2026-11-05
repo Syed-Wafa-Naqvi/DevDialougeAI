@@ -126,6 +126,10 @@ class CompletenessEngine:
                 return True
 
         threshold = getattr(settings, 'COMPLETENESS_THRESHOLD', 70)
+        # Fast keyword check first to avoid redundant LLM calls on early interview turns
+        kw_score = cls._calculate_keyword_fallback_score(conversation_history)
+        if kw_score < 50:
+            return False
         score = cls.calculate_score(conversation_history, provider_name=provider_name)
         return score >= threshold
 

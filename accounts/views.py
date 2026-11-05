@@ -7,6 +7,7 @@ from django.http import JsonResponse
 from django.core.mail import send_mail
 from django.conf import settings
 from django.db import transaction, models
+from django.utils import timezone
 
 from accounts.models import Profile
 from accounts.forms import SignUpForm, OTPVerificationForm, ForgotPasswordForm, ResetPasswordForm, UserUpdateForm
@@ -47,9 +48,10 @@ def signup_view(request):
                     
                     otp = profile.generate_otp()
 
-                print(f"\n==========================================")
-                print(f"[DevDialogue AI] Verification OTP for {user.username} ({user.email}): {otp}")
-                print(f"==========================================\n")
+                if settings.DEBUG:
+                    print(f"\n==========================================")
+                    print(f"[DevDialogue AI] Verification OTP for {user.username} ({user.email}): {otp}")
+                    print(f"==========================================\n")
                 
                 request.session['pre_verified_user_id'] = user.id
                 
@@ -71,8 +73,8 @@ def signup_view(request):
                         messages.warning(request, "Account created! Verification email delivery failed. Click Resend OTP.")
                 
                 return redirect('verify_otp')
-            except Exception as e:
-                messages.error(request, f"Error processing signup: {str(e)}. Please try again.")
+            except Exception:
+                messages.error(request, "Error processing signup. Please check your information and try again.")
         else:
             messages.error(request, "Please correct the errors below.")
     else:
@@ -153,9 +155,10 @@ def resend_otp_view(request):
         return JsonResponse({'error': reason}, status=429)
     
     otp = profile.generate_otp()
-    print(f"\n==========================================")
-    print(f"[DevDialogue AI] Resent OTP for {user.username} ({user.email}): {otp}")
-    print(f"==========================================\n")
+    if settings.DEBUG:
+        print(f"\n==========================================")
+        print(f"[DevDialogue AI] Resent OTP for {user.username} ({user.email}): {otp}")
+        print(f"==========================================\n")
     
     subject = "DevDialogue AI - Reset Your Password" if is_reset else "DevDialogue AI - Verify Your Account"
     message = f"Hello {user.username},\n\nYour new verification code (OTP) is: {otp}\n\nBest regards,\nThe DevDialogue AI Team"
@@ -166,7 +169,7 @@ def resend_otp_view(request):
     except Exception as e:
         if settings.DEBUG:
             return JsonResponse({'success': True, 'message': f'For local testing, your new OTP is: {otp}'})
-        return JsonResponse({'error': f'Error sending email: {str(e)}'}, status=500)
+        return JsonResponse({'error': 'Error sending email. Please try again later.'}, status=500)
 
 
 
@@ -177,25 +180,56 @@ def login_view(request):
         return redirect('verify_otp')
         
     if request.method == 'POST':
+        attempts = request.session.get('login_attempts', 0)
+        last_attempt = request.session.get('last_login_attempt', 0)
+        now_ts = timezone.now().timestamp()
+        if attempts >= 10 and (now_ts - last_attempt) < 300:
+            messages.error(request, "Too many login attempts. Please wait 5 minutes before trying again.")
+            return render(request, 'login.html', {'form': AuthenticationForm()})
+
         form = AuthenticationForm(request, data=request.POST)
-        if form.is_valid():
-            username = form.cleaned_data.get('username')
-            password = form.cleaned_data.get('password')
-            user = authenticate(username=username, password=password)
-            if user is not None:
-                if hasattr(user, 'profile') and not user.profile.is_verified:
-                    user.is_active = False
-                    user.save()
-                    profile = user.profile
-                    otp = profile.generate_otp()
-                    request.session['pre_verified_user_id'] = user.id
-                    messages.warning(request, "Your email is not verified. A new OTP has been sent.")
-                    return redirect('verify_otp')
-                
-                login(request, user)
-                messages.success(request, f"Welcome back, {username}!")
-                return redirect('dashboard')
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+
+        # Check if user exists and is unverified (Django's default authenticate returns None for inactive users)
+        existing_user = User.objects.filter(username=username).first()
+        if existing_user and existing_user.check_password(password):
+            profile = getattr(existing_user, 'profile', None)
+            if profile and not profile.is_verified:
+                request.session['login_attempts'] = 0
+                otp = profile.generate_otp()
+                if settings.DEBUG:
+                    print(f"\n==========================================")
+                    print(f"[DevDialogue AI] Verification OTP for unverified login {existing_user.username} ({existing_user.email}): {otp}")
+                    print(f"==========================================\n")
+                request.session['pre_verified_user_id'] = existing_user.id
+
+                subject = "DevDialogue AI - Verify Your Account"
+                message = (
+                    f"Hello {existing_user.username},\n\n"
+                    f"Your email is not verified yet. Your 6-digit verification code (OTP) is: {otp}\n\n"
+                    f"This code is valid for 2 minutes.\n\n"
+                    f"Best regards,\nThe DevDialogue AI Team"
+                )
+                try:
+                    send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [existing_user.email], fail_silently=False)
+                    messages.warning(request, "Your email is not verified. A new verification OTP has been sent to your email.")
+                except Exception:
+                    if settings.DEBUG:
+                        messages.warning(request, f"Your email is not verified. Dev OTP is: {otp}")
+                    else:
+                        messages.warning(request, "Your email is not verified. Please verify your OTP.")
+                return redirect('verify_otp')
+
+        user = authenticate(username=username, password=password)
+        if user is not None:
+            request.session['login_attempts'] = 0
+            login(request, user)
+            messages.success(request, f"Welcome back, {username}!")
+            return redirect('dashboard')
         else:
+            request.session['login_attempts'] = attempts + 1
+            request.session['last_login_attempt'] = now_ts
             messages.error(request, "Invalid username or password.")
     else:
         form = AuthenticationForm()
@@ -213,33 +247,45 @@ def forgot_password_view(request):
         return redirect('dashboard')
 
     if request.method == 'POST':
+        attempts = request.session.get('forgot_pw_attempts', 0)
+        last_attempt = request.session.get('last_forgot_pw_attempt', 0)
+        now_ts = timezone.now().timestamp()
+        if attempts >= 5 and (now_ts - last_attempt) < 300:
+            messages.error(request, "Too many password reset requests. Please wait a few minutes.")
+            return render(request, 'forgot_password.html', {'form': ForgotPasswordForm()})
+
         form = ForgotPasswordForm(request.POST)
         if form.is_valid():
             email = form.cleaned_data['email']
-            user = User.objects.get(email=email)
-            profile = user.profile
-            
-            otp = profile.generate_otp()
-            print(f"\n==========================================")
-            print(f"[DevDialogue AI] Reset Password OTP for {user.username} ({user.email}): {otp}")
-            print(f"==========================================\n")
-            
-            request.session['reset_password_user_id'] = user.id
-            subject = "DevDialogue AI - Reset Your Password"
-            message = f"Hello {user.username},\n\nYour OTP to reset password is: {otp}\n\nBest regards,\nThe DevDialogue AI Team"
-            
-            try:
-                send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
-                messages.success(request, "A password reset code has been sent to your email.")
-            except Exception as e:
+            request.session['forgot_pw_attempts'] = attempts + 1
+            request.session['last_forgot_pw_attempt'] = now_ts
+
+            # Use filter().first() to avoid MultipleObjectsReturned crash with duplicate emails
+            user = User.objects.filter(email=email).order_by('-date_joined').first()
+            if user:
+                profile = getattr(user, 'profile', None)
+                if not profile:
+                    profile = Profile.objects.create(user=user)
+                otp = profile.generate_otp()
                 if settings.DEBUG:
-                    messages.warning(request, f"Reset code generated! For development, your OTP code is: {otp}")
-                else:
-                    messages.warning(request, "Reset code generated, but email delivery failed.")
-            
+                    print(f"\n==========================================")
+                    print(f"[DevDialogue AI] Reset Password OTP for {user.username} ({user.email}): {otp}")
+                    print(f"==========================================\n")
+                
+                request.session['reset_password_user_id'] = user.id
+                subject = "DevDialogue AI - Reset Your Password"
+                message = f"Hello {user.username},\n\nYour OTP to reset password is: {otp}\n\nBest regards,\nThe DevDialogue AI Team"
+                
+                try:
+                    send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
+                except Exception:
+                    pass
+
+            # Generic success message to eliminate account enumeration
+            messages.success(request, "If an account exists with this email address, a password reset code has been sent.")
             return redirect('reset_password')
         else:
-            messages.error(request, "Please correct the error below.")
+            messages.error(request, "Please enter a valid email address.")
     else:
         form = ForgotPasswordForm()
 
