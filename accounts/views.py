@@ -8,6 +8,23 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.db import transaction, models
 from django.utils import timezone
+from django.core.cache import cache
+
+def get_client_ip(request):
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        return x_forwarded_for.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR', '127.0.0.1')
+
+def is_rate_limited(key: str, max_attempts: int, timeout_seconds: int) -> bool:
+    attempts = cache.get(key, 0)
+    if attempts >= max_attempts:
+        return True
+    cache.set(key, attempts + 1, timeout=timeout_seconds)
+    return False
+
+def reset_rate_limit(key: str):
+    cache.delete(key)
 
 from accounts.models import Profile
 from accounts.forms import SignUpForm, OTPVerificationForm, ForgotPasswordForm, ResetPasswordForm, UserUpdateForm
@@ -180,23 +197,23 @@ def login_view(request):
         return redirect('verify_otp')
         
     if request.method == 'POST':
-        attempts = request.session.get('login_attempts', 0)
-        last_attempt = request.session.get('last_login_attempt', 0)
-        now_ts = timezone.now().timestamp()
-        if attempts >= 10 and (now_ts - last_attempt) < 300:
+        username = request.POST.get('username', '').strip()
+        password = request.POST.get('password', '')
+        ip = get_client_ip(request)
+        rl_key = f"login_{ip}_{username}"
+
+        if is_rate_limited(rl_key, max_attempts=10, timeout_seconds=300):
             messages.error(request, "Too many login attempts. Please wait 5 minutes before trying again.")
             return render(request, 'login.html', {'form': AuthenticationForm()})
 
         form = AuthenticationForm(request, data=request.POST)
-        username = request.POST.get('username')
-        password = request.POST.get('password')
 
         # Check if user exists and is unverified (Django's default authenticate returns None for inactive users)
         existing_user = User.objects.filter(username=username).first()
         if existing_user and existing_user.check_password(password):
             profile = getattr(existing_user, 'profile', None)
             if profile and not profile.is_verified:
-                request.session['login_attempts'] = 0
+                reset_rate_limit(rl_key)
                 otp = profile.generate_otp()
                 if settings.DEBUG:
                     print(f"\n==========================================")
@@ -223,13 +240,11 @@ def login_view(request):
 
         user = authenticate(username=username, password=password)
         if user is not None:
-            request.session['login_attempts'] = 0
+            reset_rate_limit(rl_key)
             login(request, user)
             messages.success(request, f"Welcome back, {username}!")
             return redirect('dashboard')
         else:
-            request.session['login_attempts'] = attempts + 1
-            request.session['last_login_attempt'] = now_ts
             messages.error(request, "Invalid username or password.")
     else:
         form = AuthenticationForm()
@@ -247,18 +262,15 @@ def forgot_password_view(request):
         return redirect('dashboard')
 
     if request.method == 'POST':
-        attempts = request.session.get('forgot_pw_attempts', 0)
-        last_attempt = request.session.get('last_forgot_pw_attempt', 0)
-        now_ts = timezone.now().timestamp()
-        if attempts >= 5 and (now_ts - last_attempt) < 300:
+        ip = get_client_ip(request)
+        if is_rate_limited(f"forgot_pw_{ip}", max_attempts=5, timeout_seconds=300):
             messages.error(request, "Too many password reset requests. Please wait a few minutes.")
             return render(request, 'forgot_password.html', {'form': ForgotPasswordForm()})
 
         form = ForgotPasswordForm(request.POST)
         if form.is_valid():
             email = form.cleaned_data['email']
-            request.session['forgot_pw_attempts'] = attempts + 1
-            request.session['last_forgot_pw_attempt'] = now_ts
+            request.session['reset_password_email'] = email
 
             # Use filter().first() to avoid MultipleObjectsReturned crash with duplicate emails
             user = User.objects.filter(email=email).order_by('-date_joined').first()
@@ -280,6 +292,8 @@ def forgot_password_view(request):
                     send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
                 except Exception:
                     pass
+            else:
+                request.session['reset_password_user_id'] = None
 
             # Generic success message to eliminate account enumeration
             messages.success(request, "If an account exists with this email address, a password reset code has been sent.")
@@ -296,13 +310,14 @@ def reset_password_view(request):
     if request.user.is_authenticated:
         return redirect('dashboard')
 
-    user_id = request.session.get('reset_password_user_id')
-    if not user_id:
+    email = request.session.get('reset_password_email')
+    if not email:
         messages.error(request, "Session invalid or expired. Please request password reset again.")
         return redirect('forgot_password')
 
-    user = get_object_or_404(User, id=user_id)
-    profile = user.profile
+    user_id = request.session.get('reset_password_user_id')
+    user = User.objects.filter(id=user_id).first() if user_id else None
+    profile = getattr(user, 'profile', None) if user else None
 
     if request.method == 'POST':
         form = ResetPasswordForm(request.POST)
@@ -310,7 +325,7 @@ def reset_password_view(request):
             otp = form.cleaned_data['otp']
             new_password = form.cleaned_data['new_password']
 
-            if profile.is_otp_valid(otp):
+            if profile and profile.is_otp_valid(otp):
                 user.set_password(new_password)
                 user.save()
                 
@@ -318,7 +333,10 @@ def reset_password_view(request):
                 profile.otp_created_at = None
                 profile.save()
 
-                del request.session['reset_password_user_id']
+                if 'reset_password_user_id' in request.session:
+                    del request.session['reset_password_user_id']
+                if 'reset_password_email' in request.session:
+                    del request.session['reset_password_email']
 
                 messages.success(request, "Your password has been reset successfully. You can now log in.")
                 return redirect('login')
@@ -327,7 +345,7 @@ def reset_password_view(request):
     else:
         form = ResetPasswordForm()
 
-    return render(request, 'reset_password.html', {'form': form, 'email': user.email})
+    return render(request, 'reset_password.html', {'form': form, 'email': email})
 
 
 @verification_required

@@ -66,3 +66,41 @@ class AccountsTestCase(TestCase):
         self.assertEqual(len(otp), 6)
         self.assertTrue(otp.isdigit())
         self.assertEqual(profile.otp_failed_attempts, 0)
+
+    def test_cache_based_rate_limiting_persists_across_cleared_cookies(self):
+        from django.core.cache import cache
+        cache.clear()
+
+        # Trigger failed logins up to limit (10 attempts)
+        for _ in range(10):
+            self.client.post('/login/', {'username': 'ratelimituser', 'password': 'wrongpassword'})
+
+        # 11th attempt should be blocked by rate limit
+        response = self.client.post('/login/', {'username': 'ratelimituser', 'password': 'wrongpassword'})
+        self.assertContains(response, "Too many login attempts")
+
+        # Clear client session cookies to simulate cookie deletion
+        self.client.cookies.clear()
+
+        # Attempt with cleared cookie should STILL be rate limited
+        response_cleared = self.client.post('/login/', {'username': 'ratelimituser', 'password': 'wrongpassword'})
+        self.assertContains(response_cleared, "Too many login attempts")
+
+    def test_forgot_password_nonexistent_email_does_not_bounce(self):
+        # Request reset for an unknown email
+        response = self.client.post('/forgot-password/', {'email': 'unknown@example.com'})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, '/reset-password/')
+
+        # Follow redirect - should render the reset page with form, not bounce back to forgot_password
+        follow_response = self.client.get('/reset-password/')
+        self.assertEqual(follow_response.status_code, 200)
+
+        # Submitting an OTP for nonexistent email returns standard invalid OTP error without account enumeration
+        post_response = self.client.post('/reset-password/', {
+            'otp': '123456',
+            'new_password': 'NewPassword123!',
+            'confirm_new_password': 'NewPassword123!'
+        })
+        self.assertEqual(post_response.status_code, 200)
+        self.assertContains(post_response, "Invalid or expired OTP")

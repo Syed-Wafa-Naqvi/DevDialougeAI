@@ -69,24 +69,34 @@ class PromptTemplates:
 
     @staticmethod
     def get_code_generation_prompt(requirements_summary: str, module_name: str, tech_stack: str = None, all_files: list = None, existing_signatures: dict = None):
+        import re
         if not tech_stack or tech_stack == "Python/Django":
             ts_candidate = None
             req_lower = (requirements_summary or "").lower()
-            if module_name.endswith(('.dart', '.yaml')) or 'flutter' in req_lower:
+            
+            # 1. Primary check by explicit file extension (prevents text like 'trusted' from triggering Rust)
+            if module_name.endswith(('.dart', '.yaml')):
                 ts_candidate = "Dart / Flutter"
-            elif module_name.endswith('.go') or 'golang' in req_lower:
+            elif module_name.endswith('.go'):
                 ts_candidate = "Go (Golang)"
-            elif module_name.endswith('.rs') or 'rust' in req_lower:
+            elif module_name.endswith('.rs'):
                 ts_candidate = "Rust"
             elif module_name.endswith(('.js', '.jsx', '.ts', '.tsx')):
                 ts_candidate = "JavaScript / TypeScript"
             elif module_name.endswith('.py'):
-                if 'fastapi' in req_lower:
+                if re.search(r'\bfastapi\b', req_lower):
                     ts_candidate = "Python / FastAPI"
-                elif 'flask' in req_lower:
+                elif re.search(r'\bflask\b', req_lower):
                     ts_candidate = "Python / Flask"
                 else:
                     ts_candidate = "Python / Django"
+            # 2. Context fallback strictly with word boundary regex
+            elif re.search(r'\b(flutter|dart)\b', req_lower):
+                ts_candidate = "Dart / Flutter"
+            elif re.search(r'\bgo(lang)?\b', req_lower):
+                ts_candidate = "Go (Golang)"
+            elif re.search(r'\brust\b', req_lower):
+                ts_candidate = "Rust"
             else:
                 ts_candidate = tech_stack or "Full Stack Application"
             tech_stack = ts_candidate

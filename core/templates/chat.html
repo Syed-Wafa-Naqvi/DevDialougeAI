@@ -669,6 +669,10 @@
                 if (response.ok) {
                     appendMessageBubble('assistant', data.response);
                     
+                    if (data.job_id) {
+                        pollActiveJobEvents(data.job_id);
+                    }
+                    
                     // Update session status badge
                     if (data.status) {
                         if (sessionStatusBadge) {
@@ -1169,6 +1173,32 @@
                         setTimeout(() => {
                             if (banner) banner.classList.add('hidden');
                         }, 3000);
+                        if (data.status === 'succeeded') {
+                            fetch(`/api/session/{{ session.id }}/tree/`)
+                                .then(r => r.json())
+                                .then(treeData => {
+                                    if (treeData.generated_codes && treeData.generated_codes.length > 0) {
+                                        updateCodeFilesPanel(treeData.generated_codes);
+                                        if (workspaceWrapper) workspaceWrapper.classList.remove('collapsed-code');
+                                    }
+                                });
+                            if (sessionStatusBadge) {
+                                sessionStatusBadge.textContent = 'Ready';
+                                sessionStatusBadge.className = 'tag-status status-ready';
+                            }
+                            if (inputField) {
+                                inputField.placeholder = "Codebase generated! Ask to edit files, add features, or how to run the project...";
+                            }
+                            if (data.result_summary) {
+                                appendMessageBubble('assistant', `### 🎉 Complete Project Codebase Ready!\n\n${data.result_summary}\n\nYou can inspect each file in the workspace file tree on the right, view the architecture plan and verification checks, and download your turnkey project ZIP.`);
+                            }
+                        } else if (data.status === 'failed') {
+                            if (sessionStatusBadge) {
+                                sessionStatusBadge.textContent = 'Failed';
+                                sessionStatusBadge.className = 'tag-status status-failed';
+                            }
+                            appendMessageBubble('assistant', `### ⚠️ Generation Failed\n\n${data.error_message || 'An error occurred during build. Please try again or request modifications.'}`);
+                        }
                     }
                 }
             } catch (e) {

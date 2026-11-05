@@ -19,19 +19,19 @@ class SessionStateMachine:
 
     # Allowed state transition map: current_state -> set of allowed next_states
     TRANSITIONS = {
-        'interviewing': {'interviewing', 'srs_ready', 'active'},
-        'active': {'interviewing', 'srs_ready', 'active'},  # Backward compatibility
-        'srs_ready': {'plan_draft', 'generating'},
-        'plan_draft': {'plan_draft', 'plan_approved', 'interviewing'},
+        'interviewing': {'interviewing', 'srs_ready', 'plan_draft', 'generating', 'active'},
+        'active': {'interviewing', 'srs_ready', 'plan_draft', 'generating', 'active'},  # Backward compatibility
+        'srs_ready': {'plan_draft', 'generating', 'interviewing'},
+        'plan_draft': {'plan_draft', 'plan_approved', 'interviewing', 'generating'},
         'plan_approved': {'generating'},
         'generating': {'verifying', 'awaiting_review', 'generating'},
         'verifying': {'repairing', 'ready', 'needs_attention'},
         'repairing': {'verifying', 'ready', 'needs_attention'},
         'awaiting_review': {'generating', 'applying_feedback', 'ready', 'completed'},
         'applying_feedback': {'verifying', 'generating'},
-        'ready': {'applying_feedback', 'interviewing', 'completed'},
-        'needs_attention': {'applying_feedback', 'repairing', 'interviewing', 'completed'},
-        'completed': {'applying_feedback', 'interviewing', 'ready', 'active'},
+        'ready': {'applying_feedback', 'interviewing', 'completed', 'generating', 'srs_ready'},
+        'needs_attention': {'applying_feedback', 'repairing', 'interviewing', 'completed', 'generating', 'srs_ready'},
+        'completed': {'applying_feedback', 'interviewing', 'ready', 'active', 'srs_ready', 'plan_draft', 'generating'},
     }
 
     @classmethod

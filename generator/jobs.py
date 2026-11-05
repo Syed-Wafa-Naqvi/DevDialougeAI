@@ -200,12 +200,8 @@ class JobExecutionEngine:
         final_status = repair_res['status']
         if final_status in ('verified', 'verified_with_warnings'):
             SessionStateMachine.transition_to(session, 'ready')
-            session.status = 'completed'
-            session.save(update_fields=['status'])
         else:
             SessionStateMachine.transition_to(session, 'needs_attention')
-            session.status = 'completed'
-            session.save(update_fields=['status'])
 
         job.status = 'succeeded'
         job.progress_current = job.progress_total
