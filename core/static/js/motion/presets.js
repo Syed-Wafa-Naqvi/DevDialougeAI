@@ -6,38 +6,53 @@ import { EASES } from './ease.js';
 import { qualityManager } from './quality.js';
 
 export function initScrollReveals() {
-    if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
-    gsap.registerPlugin(ScrollTrigger);
+    try {
+        if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') {
+            document.documentElement.classList.remove('js');
+            return;
+        }
+        gsap.registerPlugin(ScrollTrigger);
 
-    const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const isReduced = prefersReducedMotion || qualityManager.getTier() === 'Reduced';
+        const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const isReduced = prefersReducedMotion || qualityManager.getTier() === 'Reduced';
 
-    if (isReduced) {
+        if (isReduced) {
+            gsap.set('[data-reveal]', { opacity: 0 });
+            ScrollTrigger.batch('[data-reveal]', {
+                start: 'top 85%',
+                once: true,
+                onEnter: (batch) => {
+                    gsap.to(batch, {
+                        opacity: 1,
+                        duration: 0.4,
+                        ease: 'power2.out',
+                        overwrite: 'auto'
+                    });
+                }
+            });
+            return;
+        }
+
+        // normal mode
+        gsap.set('[data-reveal]', { opacity: 0, y: 24 });
         ScrollTrigger.batch('[data-reveal]', {
             start: 'top 85%',
             once: true,
             onEnter: (batch) => {
-                gsap.fromTo(batch,
-                    { opacity: 0 },
-                    { opacity: 1, duration: 0.4, ease: 'power2.out', overwrite: 'auto' }
-                );
+                gsap.to(batch, {
+                    opacity: 1,
+                    y: 0,
+                    duration: 1.1,
+                    ease: 'power3.out',
+                    stagger: 0.12,
+                    overwrite: 'auto'
+                });
             }
         });
-        return;
+    } catch (err) {
+        console.error('[initScrollReveals] Error initializing scroll reveals:', err);
+        document.documentElement.classList.remove('js');
     }
-
-    // Scroll reveal using ScrollTrigger.batch on [data-reveal]
-    // from { y: 24, opacity: 0 } to { y: 0, opacity: 1 }, duration 1.1, ease 'power3.out', stagger 0.12, once: true, start 'top 85%'
-    ScrollTrigger.batch('[data-reveal]', {
-        start: 'top 85%',
-        once: true,
-        onEnter: (batch) => {
-            gsap.fromTo(batch,
-                { y: 24, opacity: 0 },
-                { y: 0, opacity: 1, duration: 1.1, ease: 'power3.out', stagger: 0.12, overwrite: 'auto' }
-            );
-        }
-    });
 }
 
 /**

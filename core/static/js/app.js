@@ -20,23 +20,28 @@ class App {
 
     init() {
         const runSetup = () => {
-            registerEases();
-            qualityManager.startFrameTimingMonitor();
+            try {
+                registerEases();
+                qualityManager.startFrameTimingMonitor();
 
-            // Motion & Page Setup
-            initSmoothScroll();
-            initScrollReveals();
-            initTiltCards();
-            initMagneticButtons();
-            CommandPalette.init();
-            toast.init();
-            this.initCustomCursor();
-            this.initThreeScenes();
+                // Motion & Page Setup
+                initSmoothScroll();
+                initScrollReveals();
+                initTiltCards();
+                initMagneticButtons();
+                CommandPalette.init();
+                toast.init();
+                this.initCustomCursor();
+                this.initThreeScenes();
 
-            // Theme toggle listener
-            this.bindThemeToggle();
+                // Theme toggle listener
+                this.bindThemeToggle();
 
-            console.log('[DevDialogue AI v3] Frontend Initialized successfully | Tier:', qualityManager.getTier());
+                console.log('[DevDialogue AI v3] Frontend Initialized successfully | Tier:', qualityManager.getTier());
+            } catch (err) {
+                console.error('[App.init] Failed to initialize frontend motion/UI:', err);
+                document.documentElement.classList.remove('js');
+            }
         };
 
         if (document.readyState !== 'loading') {
