@@ -12,28 +12,6 @@ import { LandingNebulaScene } from './three/engine.js';
 import { CommandPalette } from './components/commandPalette.js';
 import { toast } from './components/toast.js';
 
-// Global toggleTheme helper function
-window.toggleTheme = function() {
-    const current = document.documentElement.getAttribute('data-theme') || 'dark';
-    const next = current === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', next);
-    localStorage.setItem('devdialogue_theme', next);
-    
-    document.querySelectorAll('#theme-toggle-btn, .theme-toggle-btn').forEach(btn => {
-        const icon = btn.querySelector('[data-lucide], i');
-        if (icon) {
-            icon.setAttribute('data-lucide', next === 'dark' ? 'moon' : 'sun');
-        }
-    });
-
-    if (typeof lucide !== 'undefined') {
-        lucide.createIcons();
-    }
-    
-    console.log('[DevDialogue AI] Theme toggled to:', next);
-    return next;
-};
-
 class App {
     constructor() {
         this.heroScene = null;

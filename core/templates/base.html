@@ -150,8 +150,14 @@
                 const iconElem = document.getElementById('theme-icon');
                 if (iconElem) {
                     iconElem.setAttribute('data-lucide', current === 'dim' ? 'sun' : 'moon');
-                    if (typeof lucide !== 'undefined') lucide.createIcons();
                 }
+                document.querySelectorAll('#theme-toggle-btn, .theme-toggle-btn').forEach(btn => {
+                    const icon = btn.querySelector('[data-lucide], i');
+                    if (icon) {
+                        icon.setAttribute('data-lucide', current === 'dim' ? 'sun' : 'moon');
+                    }
+                });
+                if (typeof lucide !== 'undefined') lucide.createIcons();
             };
 
             updateThemeIcon();

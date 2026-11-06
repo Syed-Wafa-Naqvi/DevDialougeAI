@@ -690,7 +690,7 @@
     function updateStepperStage(status) {
         let stage = 'discover';
         if (['srs_ready', 'plan_draft', 'plan_approved'].includes(status)) stage = 'blueprint';
-        else if (status === 'generating') stage = 'build';
+        else if (['generating', 'awaiting_review'].includes(status)) stage = 'build';
         else if (['ready', 'needs_attention'].includes(status)) stage = 'review';
         else if (status === 'completed') stage = 'export';
         

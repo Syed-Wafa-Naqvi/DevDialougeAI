@@ -315,6 +315,231 @@ def _trigger_generation_job(session, user, provider_name, run_async=True):
     return job, response_text
 
 
+def _handle_module_edit(session, user_content, summary, existing_files, provider_name, user):
+    target_pf = existing_files[-1]
+    for pf in existing_files:
+        if pf.path.lower() in user_content.lower():
+            target_pf = pf
+            break
+    updated_code = CodeBuilder.generate_code_for_module(
+        target_pf.path,
+        summary,
+        modifications=user_content,
+        provider_name=provider_name,
+        session=session,
+        user=user
+    )
+    target_pf.create_new_version(updated_code, source='user_feedback')
+
+    from generator.verifier import StaticVerifier
+    from chat.models import VerificationRun
+    files_dict = {f.path: f.content for f in session.project_files.all()}
+    verif_res = StaticVerifier.verify_project(files_dict)
+    VerificationRun.objects.create(
+        session=session,
+        level='static',
+        passed=verif_res.get('passed', True),
+        error_count=verif_res.get('error_count', 0),
+        warning_count=verif_res.get('warning_count', 0),
+        issues=verif_res.get('issues', [])
+    )
+    file_issues = {iss['file'] for iss in verif_res.get('issues', [])}
+    target_pf.status = 'has_issues' if target_pf.path in file_issues else 'verified'
+    target_pf.save(update_fields=['status'])
+
+    verif_msg = ""
+    if not verif_res.get('passed', True):
+        verif_msg = f"\n\n*Note: Static verification reported {verif_res.get('error_count', 0)} issue(s). Check the Verification panel for details.*"
+
+    return (
+        f"### ✏️ Updated Module `{target_pf.path}`\n\n"
+        f"I have modified `{target_pf.path}` based on your request: *\"{user_content}\"*\n\n"
+        f"You can review the updated code in the right panel and download the project ZIP anytime.{verif_msg}"
+    )
+
+
+def _handle_post_generation_qa(session, user_content, summary, provider_name, user):
+    post_prompt = (
+        f"Project Specification:\n{summary}\n\n"
+        f"User Question: \"{user_content}\"\n\n"
+        "The user's project codebase has already been generated and packaged into a ZIP. "
+        "Answer their question directly with clear, practical steps (e.g., exact commands to run the project, how to open in an IDE like VS Code or PyCharm, how to start the development server, how to access admin, etc.)."
+    )
+    post_system = (
+        "You are DevDialogue AI — Lead Systems Architect. "
+        "Guide the user on running, testing, or understanding their generated project clearly, step-by-step, with practical terminal commands and IDE instructions."
+    )
+    return LLMRouter.generate(prompt=post_prompt, system_prompt=post_system, provider_name=provider_name, purpose='chat', session=session, user=user)
+
+
+def _complete_incremental_project(session, plan_obj, provider_name):
+    from generator.repair import CodeRepairEngine
+    from chat.state_machine import SessionStateMachine
+
+    all_files_dict = {pf.path: pf.content for pf in session.project_files.all()}
+    repair_res = CodeRepairEngine.run_repair_loop(
+        session=session,
+        files_dict=all_files_dict,
+        plan_data=plan_obj.plan_data if plan_obj else None,
+        max_attempts=3,
+        provider_name=provider_name
+    )
+    if repair_res.get('status') in ('verified', 'verified_with_warnings'):
+        SessionStateMachine.transition_to(session, 'ready')
+    else:
+        SessionStateMachine.transition_to(session, 'needs_attention')
+
+    return (
+        f"### 🚀 Incremental Generation Complete!\n\n"
+        f"{repair_res.get('honest_message', 'All project files have been planned, generated, and verified.')}\n\n"
+        "All project modules have been approved and generated. You can download the complete project ZIP from the sidebar."
+    )
+
+
+def _generate_next_module(session, user, provider_name, summary=None, modules=None, existing_files=None):
+    from chat.state_machine import SessionStateMachine
+    from generator.planner import PlanGenerator
+
+    if not summary:
+        history = list(session.messages.values('role', 'content'))
+        summary = session.summary_text or SRSSynthesizer.synthesize_summary(history, is_mode2=True, provider_name=provider_name, session=session, user=user)
+        session.summary_text = summary
+        session.save(update_fields=['summary_text'])
+        SessionStateMachine.transition_to(session, 'srs_ready')
+
+    plan_obj = session.plans.first()
+    if not plan_obj and summary:
+        try:
+            plan_obj = PlanGenerator.generate_plan(summary, session, provider_name=provider_name)
+        except Exception:
+            plan_obj = None
+
+    if modules is None:
+        modules = plan_obj.generation_order if plan_obj else FilePlanner.get_module_list(summary)
+
+    if not modules:
+        return None, 0, 0, "I couldn't determine the module list for your project. Please provide more details about your requirements."
+
+    if existing_files is None:
+        existing_files = list(session.project_files.filter(path__in=modules))
+
+    generated_paths = set(pf.path for pf in existing_files)
+    remaining = [m for m in modules if m not in generated_paths]
+
+    if not remaining:
+        return None, len(modules), len(modules), ""
+
+    current_mod = remaining[0]
+    module_num = len(modules) - len(remaining) + 1
+    existing_files_dict = {pf.path: pf.content for pf in existing_files}
+
+    code = CodeBuilder.generate_code_for_module(
+        current_mod,
+        summary,
+        all_files=modules,
+        existing_files=existing_files_dict,
+        provider_name=provider_name,
+        session=session,
+        user=user
+    )
+    ProjectFile.objects.create(session=session, path=current_mod, content=code, status='generated')
+
+    if session.status != 'generating':
+        SessionStateMachine.transition_to(session, 'generating')
+
+    msg = (
+        f"### Module {module_num}/{len(modules)}: `{current_mod}`\n\n"
+        f"I have generated the code for `{current_mod}`. Inspect it in the right panel.\n\n"
+        f"Do you approve this module? (Say **yes** to move to the next module, or describe what changes you want)."
+    )
+    return current_mod, module_num, len(modules), msg
+
+
+def _handle_mode1_message(session, user_content, action, is_approval, provider_name, run_async, history, user):
+    existing_files = list(session.project_files.all())
+    if session.status in ('completed', 'ready', 'needs_attention') or bool(existing_files):
+        edit_patterns = [
+            r'\b(modify|update|refactor|rewrite|edit|fix code|add field|add model|fix bug)\b',
+            r'\bchange\s+(the\s+)?(code|module|file|function|class|model|view|schema|implementation)\b'
+        ]
+        wants_edit = (action == 'edit') or any(re.search(pat, user_content, re.IGNORECASE) for pat in edit_patterns)
+        summary = session.summary_text or SRSSynthesizer.synthesize_summary(history, provider_name=provider_name, session=session, user=user)
+        if wants_edit and existing_files:
+            return None, _handle_module_edit(session, user_content, summary, existing_files, provider_name, user)
+        else:
+            return None, _handle_post_generation_qa(session, user_content, summary, provider_name, user)
+    elif is_approval:
+        active_job, resp_text = _trigger_generation_job(session, user, provider_name, run_async=run_async)
+        return active_job, resp_text
+    else:
+        return None, InterviewerService.generate_next_question(history, provider_name=provider_name, session=session, user=user)
+
+
+def _handle_mode2_message(session, user_content, action, is_approval, provider_name, history, user):
+    summary = session.summary_text or SRSSynthesizer.synthesize_summary(history, is_mode2=True, provider_name=provider_name, session=session, user=user)
+    from generator.planner import PlanGenerator
+    plan_obj = session.plans.first()
+    if not plan_obj and summary:
+        try:
+            plan_obj = PlanGenerator.generate_plan(summary, session, provider_name=provider_name)
+        except Exception:
+            plan_obj = None
+
+    modules = plan_obj.generation_order if plan_obj else FilePlanner.get_module_list(summary)
+    existing_files = list(session.project_files.filter(path__in=modules))
+    all_modules_generated = len(existing_files) >= len(modules) and len(modules) > 0
+
+    edit_patterns = [
+        r'\b(modify|update|refactor|rewrite|edit|fix code|add field|add model|fix bug)\b',
+        r'\bchange\s+(the\s+)?(code|module|file|function|class|model|view|schema|implementation)\b'
+    ]
+    wants_edit = (action == 'edit') or any(re.search(pat, user_content, re.IGNORECASE) for pat in edit_patterns)
+
+    # 1. Project already completed and verified
+    if session.status in ('completed', 'ready', 'needs_attention'):
+        if wants_edit and existing_files:
+            return _handle_module_edit(session, user_content, summary, existing_files, provider_name, user)
+        else:
+            return _handle_post_generation_qa(session, user_content, summary, provider_name, user)
+
+    # 2. All planned modules exist: awaiting final approval/completion
+    if all_modules_generated:
+        if wants_edit and existing_files:
+            return _handle_module_edit(session, user_content, summary, existing_files, provider_name, user)
+        else:
+            # User approved or confirmed the final module -> run completion & verification!
+            return _complete_incremental_project(session, plan_obj, provider_name)
+
+    # 3. Intermediate module review: user requests changes to current module
+    if len(existing_files) > 0 and not is_approval:
+        last_pf = existing_files[-1]
+        updated_code = CodeBuilder.generate_code_for_module(
+            last_pf.path,
+            summary,
+            modifications=user_content,
+            provider_name=provider_name,
+            session=session,
+            user=user
+        )
+        last_pf.create_new_version(updated_code, source='user_feedback')
+        return (
+            f"### ✏️ Updated Module `{last_pf.path}`\n\n"
+            f"I have modified `{last_pf.path}` based on your feedback: *\"{user_content}\"*\n\n"
+            f"You can inspect the updated code in the right panel. Do you approve this module? (Say **yes** to approve and proceed, or specify further changes)."
+        )
+
+    # 4. User approved or starting next module
+    _, _, _, response_text = _generate_next_module(
+        session=session,
+        user=user,
+        provider_name=provider_name,
+        summary=summary,
+        modules=modules,
+        existing_files=existing_files
+    )
+    return response_text
+
+
 @verification_required
 def send_message_api(request, session_id):
     if request.method != 'POST':
@@ -351,6 +576,11 @@ def send_message_api(request, session_id):
     Message.objects.create(session=session, role='user', content=user_content)
     history = list(session.messages.values('role', 'content'))
     
+    # Legacy migration: ensure ProjectFile rows exist if only GeneratedCode exists
+    if not session.project_files.exists() and session.generated_codes.exists():
+        for gc in session.generated_codes.all():
+            ProjectFile.objects.get_or_create(session=session, path=gc.module_name, defaults={'content': gc.code_content, 'status': 'verified'})
+    
     from chat.state_machine import SessionStateMachine
     from generator.jobs import JobConcurrencyError
     from llm_engine.router import UsageLimitExceededError
@@ -376,7 +606,7 @@ def send_message_api(request, session_id):
                 if not has_negation:
                     # Strict affirmative match: user's input is a dedicated approval command or affirmative phrase
                     strict_approval_patterns = [
-                        r'^(yes|y|proceed|approve|confirm|ok|okay|sure|go ahead)[.!]?$',
+                        r'^(yes|y|proceed|approve|confirm|ok|okay|sure|go ahead|looks good|looks great|lgtm|perfect|fine|accepted|approved)[.!]?$',
                         r'^(proceed|start|begin|go ahead)\s+(with\s+)?(generation|code|building|all files|project)[.!]?$',
                         r'^(generate|build)\s+(the\s+)?(code|files|codebase|project|all files)[.!]?$',
                         r'^(yes|sure|okay|yep|yup)[,\s]+(please\s+)?(proceed|generate|build|start|go ahead)(\s+(and|&)\s+(generate|build|proceed))?(\s+(with\s+)?(it|code|generation|the files|files|all files|the codebase|project))?[.!]?$',
@@ -384,226 +614,11 @@ def send_message_api(request, session_id):
                     ]
                     if any(re.match(pat, confirmation_msg) for pat in strict_approval_patterns):
                         is_approval = True
-            
+
             if session.mode == 'mode1':
-                if session.status in ('completed', 'ready', 'needs_attention') or session.generated_codes.exists() or session.project_files.exists():
-                    edit_patterns = [
-                        r'\b(modify|update|refactor|rewrite|edit|fix code|add field|add model|fix bug)\b',
-                        r'\bchange\s+(the\s+)?(code|module|file|function|class|model|view|schema|implementation)\b'
-                    ]
-                    wants_edit = (action == 'edit') or any(re.search(pat, user_content, re.IGNORECASE) for pat in edit_patterns)
-                    existing_files = list(session.project_files.all())
-                    if wants_edit and existing_files:
-                        target_pf = existing_files[-1]
-                        for pf in existing_files:
-                            if pf.path.lower() in user_content.lower():
-                                target_pf = pf
-                                break
-                        summary = session.summary_text or SRSSynthesizer.synthesize_summary(history, provider_name=provider_name, session=session, user=request.user)
-                        updated_code = CodeBuilder.generate_code_for_module(
-                            target_pf.path,
-                            summary,
-                            modifications=user_content,
-                            provider_name=provider_name,
-                            session=session,
-                            user=request.user
-                        )
-                        target_pf.create_new_version(updated_code, source='user_feedback')
-
-                        # Keep GeneratedCode in sync as mirror
-                        gc = session.generated_codes.filter(module_name=target_pf.path).first()
-                        if gc:
-                            gc.code_content = updated_code
-                            gc.save()
-                        else:
-                            GeneratedCode.objects.create(session=session, module_name=target_pf.path, code_content=updated_code)
-
-                        from generator.verifier import StaticVerifier
-                        from chat.models import VerificationRun
-                        files_dict = {f.path: f.content for f in session.project_files.all()}
-                        verif_res = StaticVerifier.verify_project(files_dict)
-                        VerificationRun.objects.create(
-                            session=session,
-                            level='static',
-                            passed=verif_res.get('passed', True),
-                            error_count=verif_res.get('error_count', 0),
-                            warning_count=verif_res.get('warning_count', 0),
-                            issues=verif_res.get('issues', [])
-                        )
-                        file_issues = {iss['file'] for iss in verif_res.get('issues', [])}
-                        target_pf.status = 'has_issues' if target_pf.path in file_issues else 'verified'
-                        target_pf.save(update_fields=['status'])
-
-                        verif_msg = ""
-                        if not verif_res.get('passed', True):
-                            verif_msg = f"\n\n*Note: Static verification reported {verif_res.get('error_count', 0)} issue(s). Check the Verification panel for details.*"
-
-                        response_text = f"### ✏️ Updated Module `{target_pf.path}`\n\nI have updated `{target_pf.path}` based on your request. You can inspect the updated code in the right panel and download the project ZIP.{verif_msg}"
-                    else:
-                        summary = session.summary_text or SRSSynthesizer.synthesize_summary(history, provider_name=provider_name, session=session, user=request.user)
-                        post_prompt = (
-                            f"Project Specification:\n{summary}\n\n"
-                            f"User Question: \"{user_content}\"\n\n"
-                            "The user's project codebase has already been generated and packaged into a ZIP. "
-                            "Answer their question directly with clear, practical steps (e.g., exact commands to run the project, how to open in an IDE like VS Code or PyCharm, how to start the development server, how to access admin, etc.)."
-                        )
-                        post_system = (
-                            "You are DevDialogue AI — Lead Systems Architect. "
-                            "Guide the user on running, testing, or understanding their generated project clearly, step-by-step, with practical terminal commands and IDE instructions."
-                        )
-                        response_text = LLMRouter.generate(prompt=post_prompt, system_prompt=post_system, provider_name=provider_name, purpose='chat', session=session, user=request.user)
-                elif is_approval:
-                    active_job, response_text = _trigger_generation_job(session, request.user, provider_name, run_async=run_async)
-                else:
-                    response_text = InterviewerService.generate_next_question(history, provider_name=provider_name, session=session, user=request.user)
+                active_job, response_text = _handle_mode1_message(session, user_content, action, is_approval, provider_name, run_async, history, request.user)
             else:
-                # Mode 2: Incremental Module-by-Module Generation
-                summary = session.summary_text or SRSSynthesizer.synthesize_summary(history, provider_name=provider_name, session=session, user=request.user)
-                from generator.planner import PlanGenerator
-                plan_obj = session.plans.first()
-                if not plan_obj and summary:
-                    try:
-                        plan_obj = PlanGenerator.generate_plan(summary, session, provider_name=provider_name)
-                    except Exception:
-                        plan_obj = None
-                modules = plan_obj.generation_order if plan_obj else FilePlanner.get_module_list(summary)
-                # Only count files that are part of the plan, not harness files from ZIP download
-                existing_files = list(session.project_files.filter(path__in=modules))
-                
-                # Check if all modules have already been generated and approved
-                if session.status in ('completed', 'ready', 'needs_attention') or (len(existing_files) >= len(modules) and len(modules) > 0):
-                    edit_patterns = [
-                        r'\b(modify|update|refactor|rewrite|edit|fix code|add field|add model|fix bug)\b',
-                        r'\bchange\s+(the\s+)?(code|module|file|function|class|model|view|schema|implementation)\b'
-                    ]
-                    wants_edit = (action == 'edit') or any(re.search(pat, user_content, re.IGNORECASE) for pat in edit_patterns)
-                    
-                    if wants_edit and existing_files:
-                        target_pf = existing_files[-1]
-                        for pf in existing_files:
-                            if pf.path.lower() in user_content.lower():
-                                target_pf = pf
-                                break
-                        updated_code = CodeBuilder.generate_code_for_module(
-                            target_pf.path,
-                            summary,
-                            modifications=user_content,
-                            provider_name=provider_name,
-                            session=session,
-                            user=request.user
-                        )
-                        target_pf.create_new_version(updated_code, source='user_feedback')
-
-                        # Keep GeneratedCode in sync
-                        gc = session.generated_codes.filter(module_name=target_pf.path).first()
-                        if gc:
-                            gc.code_content = updated_code
-                            gc.save()
-                        else:
-                            GeneratedCode.objects.create(session=session, module_name=target_pf.path, code_content=updated_code)
-
-                        from generator.verifier import StaticVerifier
-                        from chat.models import VerificationRun
-                        files_dict = {f.path: f.content for f in session.project_files.all()}
-                        verif_res = StaticVerifier.verify_project(files_dict)
-                        VerificationRun.objects.create(
-                            session=session,
-                            level='static',
-                            passed=verif_res.get('passed', True),
-                            error_count=verif_res.get('error_count', 0),
-                            warning_count=verif_res.get('warning_count', 0),
-                            issues=verif_res.get('issues', [])
-                        )
-                        file_issues = {iss['file'] for iss in verif_res.get('issues', [])}
-                        target_pf.status = 'has_issues' if target_pf.path in file_issues else 'verified'
-                        target_pf.save(update_fields=['status'])
-                        verif_msg = f"\n\n*Note: Static verification reported {verif_res.get('error_count', 0)} issue(s). Check the Verification panel.*"
-
-                        response_text = (
-                            f"### ✏️ Updated Module `{target_pf.path}`\n\n"
-                            f"I have modified `{target_pf.path}` based on your request: *\"{user_content}\"*\n\n"
-                            f"You can review the updated code in the right panel and download the project ZIP anytime.{verif_msg}"
-                        )
-                    else:
-                        post_prompt = (
-                            f"Project Specification:\n{summary}\n\n"
-                            f"User Question: \"{user_content}\"\n\n"
-                            "The user's project codebase has already been generated and packaged into a ZIP. "
-                            "Answer their question directly with clear, practical steps (e.g., exact commands to run the project, how to open in an IDE like VS Code or PyCharm, how to start the development server, how to access admin, etc.)."
-                        )
-                        post_system = (
-                            "You are DevDialogue AI — Lead Systems Architect. "
-                            "Guide the user on running, testing, or understanding their generated project clearly, step-by-step, with practical terminal commands and IDE instructions."
-                        )
-                        response_text = LLMRouter.generate(prompt=post_prompt, system_prompt=post_system, provider_name=provider_name, purpose='chat', session=session, user=request.user)
-                elif len(existing_files) > 0 and not is_approval:
-                    # User wants to modify the current module based on feedback during review
-                    last_pf = existing_files[-1]
-                    updated_code = CodeBuilder.generate_code_for_module(
-                        last_pf.path, 
-                        summary, 
-                        modifications=user_content, 
-                        provider_name=provider_name,
-                        session=session,
-                        user=request.user
-                    )
-                    last_pf.create_new_version(updated_code, source='user_feedback')
-                    
-                    gc = session.generated_codes.filter(module_name=last_pf.path).first()
-                    if gc:
-                        gc.code_content = updated_code
-                        gc.save()
-                    
-                    response_text = (
-                        f"### ✏️ Updated Module `{last_pf.path}`\n\n"
-                        f"I have modified `{last_pf.path}` based on your feedback: *\"{user_content}\"*\n\n"
-                        f"You can inspect the updated code in the right panel. Do you approve this module? (Say **yes** to approve and proceed, or specify further changes)."
-                    )
-                else:
-                    # User approved or starting next module
-                    generated_paths = set(pf.path for pf in existing_files)
-                    remaining = [m for m in modules if m not in generated_paths]
-                    if remaining:
-                        current_mod = remaining[0]
-                        module_num = len(modules) - len(remaining) + 1
-                        existing_files_dict = {pf.path: pf.content for pf in existing_files}
-                        code = CodeBuilder.generate_code_for_module(
-                            current_mod, 
-                            summary, 
-                            all_files=modules,
-                            existing_files=existing_files_dict,
-                            provider_name=provider_name,
-                            session=session,
-                            user=request.user
-                        )
-                        GeneratedCode.objects.create(session=session, module_name=current_mod, code_content=code)
-                        ProjectFile.objects.create(session=session, path=current_mod, content=code, status='generated')
-                        
-                        response_text = (
-                            f"### Module {module_num}/{len(modules)}: `{current_mod}`\n\n"
-                            f"I have generated the code for `{current_mod}`. Inspect it in the right panel.\n\n"
-                            f"Do you approve this module? (Say **yes** to move to the next module, or describe what changes you want)."
-                        )
-                    else:
-                        from generator.repair import CodeRepairEngine
-                        all_files_dict = {pf.path: pf.content for pf in session.project_files.all()}
-                        repair_res = CodeRepairEngine.run_repair_loop(
-                            session=session,
-                            files_dict=all_files_dict,
-                            plan_data=plan_obj.plan_data if plan_obj else None,
-                            max_attempts=3,
-                            provider_name=provider_name
-                        )
-                        if repair_res['status'] in ('verified', 'verified_with_warnings'):
-                            SessionStateMachine.transition_to(session, 'ready')
-                        else:
-                            SessionStateMachine.transition_to(session, 'needs_attention')
-
-                        response_text = (
-                            f"### 🚀 Incremental Generation Complete!\n\n"
-                            f"{repair_res['honest_message']}\n\n"
-                            "All project modules have been approved and generated. You can download the complete project ZIP from the sidebar."
-                        )
+                response_text = _handle_mode2_message(session, user_content, action, is_approval, provider_name, history, request.user)
         else:
             # Check if user explicitly demanded code/files or agreed to generation prompt
             code_demand_triggers = [
@@ -625,37 +640,7 @@ def send_message_api(request, session_id):
 
             if is_direct_code_demand:
                 if session.mode == 'mode2':
-                    # Mode 2: synthesize summary, create plan, generate Module 1 only
-                    summary = SRSSynthesizer.synthesize_summary(history, is_mode2=True, provider_name=provider_name, session=session, user=request.user)
-                    session.summary_text = summary
-                    session.save(update_fields=['summary_text'])
-                    SessionStateMachine.transition_to(session, 'srs_ready')
-
-                    from generator.planner import PlanGenerator
-                    try:
-                        plan_obj = PlanGenerator.generate_plan(summary, session, provider_name=provider_name)
-                    except Exception:
-                        plan_obj = None
-                    modules = plan_obj.generation_order if plan_obj else FilePlanner.get_module_list(summary)
-
-                    if modules:
-                        current_mod = modules[0]
-                        code = CodeBuilder.generate_code_for_module(
-                            current_mod, summary, all_files=modules,
-                            existing_files={},
-                            provider_name=provider_name,
-                            session=session, user=request.user
-                        )
-                        GeneratedCode.objects.create(session=session, module_name=current_mod, code_content=code)
-                        ProjectFile.objects.create(session=session, path=current_mod, content=code, status='generated')
-
-                        response_text = (
-                            f"### Module 1/{len(modules)}: `{current_mod}`\n\n"
-                            f"I have generated the code for `{current_mod}`. Inspect it in the right panel.\n\n"
-                            f"Do you approve this module? (Say **yes** to move to the next module, or describe what changes you want)."
-                        )
-                    else:
-                        response_text = "I couldn't determine the module list for your project. Please provide more details about your requirements."
+                    _, _, _, response_text = _generate_next_module(session=session, user=request.user, provider_name=provider_name)
                 else:
                     active_job, response_text = _trigger_generation_job(session, request.user, provider_name, run_async=run_async)
             elif CompletenessEngine.should_synthesize_summary(history, user_content, provider_name=provider_name):

@@ -152,7 +152,9 @@ class ChatTestCase(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertTrue(session.project_files.exists())
-        self.assertTrue(session.generated_codes.exists())
+        pf = session.project_files.first()
+        self.assertEqual(pf.status, 'generated')
+        self.assertEqual(pf.current_version, 1)
 
     def test_srs_summary_sets_status_srs_ready(self):
         session = Session.objects.create(user=self.user, mode='mode1', status='active')
@@ -479,3 +481,34 @@ class ChatTestCase(TestCase):
         )
         # The cache entry should exist
         self.assertTrue(cache.get('cancel_req_test_ttl_req'))
+
+    def test_mode2_completion_runs_repair_and_marks_ready(self):
+        """Mode 2: Approving the last module should trigger repair loop, mark session ready, and return completion message."""
+        from chat.models import ProjectPlan
+        session = Session.objects.create(user=self.user, mode='mode2', status='generating')
+        session.summary_text = 'Test project with two modules'
+        session.save(update_fields=['summary_text'])
+        
+        modules = ['app/models.py', 'app/views.py']
+        ProjectPlan.objects.create(session=session, version=1, plan_data={'files': [{'path': m} for m in modules]}, generation_order=modules)
+        
+        # All planned modules already generated
+        ProjectFile.objects.create(session=session, path='app/models.py', content='class Todo: pass', status='generated')
+        ProjectFile.objects.create(session=session, path='app/views.py', content='def list_todos(): pass', status='generated')
+        
+        Message.objects.create(session=session, role='assistant',
+            content='### Module 2/2: `app/views.py`\n\nI have generated the code. Do you approve this module? (Say **yes** to move to the next module).')
+
+        # User says "yes" to approve the final module
+        response = self.client.post(
+            f'/api/chat/{session.id}/send/',
+            data={'message': 'yes', 'provider': 'mock'},
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn('Incremental Generation Complete', data.get('response', ''))
+        
+        session.refresh_from_db()
+        self.assertIn(session.status, ['ready', 'needs_attention'])
+        self.assertEqual(data.get('status'), session.status)
