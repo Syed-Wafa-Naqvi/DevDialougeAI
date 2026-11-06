@@ -8,7 +8,7 @@
 <!-- Studio Light Hero Section (§7.2, §8) -->
 <section class="hero-section" style="padding: 80px 24px 100px; text-align: center; overflow: hidden; background: var(--canvas); position: relative;">
     <!-- 3D Architecture Nebula WebGL Canvas -->
-    <canvas id="hero-canvas" class="hero-canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; opacity: 0.85; -webkit-mask-image: radial-gradient(ellipse 55% 45% at 50% 36%, transparent 58%, black 98%), -webkit-linear-gradient(top, black 80%, transparent 100%); -webkit-mask-composite: source-in; mask-image: radial-gradient(ellipse 55% 45% at 50% 36%, transparent 58%, black 98%), linear-gradient(to bottom, black 80%, transparent 100%); mask-composite: intersect;"></canvas>
+    <canvas id="hero-canvas" class="hero-canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; opacity: 0.85; -webkit-mask-image: radial-gradient(ellipse 42% 28% at 50% 24%, transparent 50%, black 95%), -webkit-linear-gradient(top, black 85%, transparent 100%); -webkit-mask-composite: source-in; mask-image: radial-gradient(ellipse 42% 28% at 50% 24%, transparent 50%, black 95%), linear-gradient(to bottom, black 85%, transparent 100%); mask-composite: intersect;"></canvas>
 
     <div style="max-width: 900px; margin: 0 auto; position: relative; z-index: 2;" data-reveal="up">
         <span class="badge badge-brand" style="margin-bottom: 20px; font-size: 13px; padding: 6px 14px;">
@@ -172,38 +172,51 @@
         if (!productGroup) return;
 
         const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        const hasMouse = matchMedia('(any-hover: hover) and (any-pointer: fine)').matches;
-        if (prefersReducedMotion || !hasMouse) return;
+        if (prefersReducedMotion) return;
 
-        // Smooth GSAP QuickTo Parallax Tilt for 60fps responsiveness
         if (typeof gsap !== 'undefined') {
-            const setRotX = gsap.quickTo(productGroup, 'rotationX', { duration: 0.6, ease: 'power2.out' });
-            const setRotY = gsap.quickTo(productGroup, 'rotationY', { duration: 0.6, ease: 'power2.out' });
-
-            window.addEventListener('mousemove', (e) => {
-                const nx = (e.clientX / window.innerWidth - 0.5) * 2;
-                const ny = (e.clientY / window.innerHeight - 0.5) * 2;
-                setRotX(-ny * 8 + 15);
-                setRotY(nx * 8 - 6);
+            // 1. Ambient idle floating/breathing on the main product mockup group
+            gsap.to(productGroup, {
+                y: -8,
+                duration: 3.8,
+                repeat: -1,
+                yoyo: true,
+                ease: 'sine.inOut'
             });
 
-            // Gentle ambient floating effect on the 3D cards
+            // 2. Ambient floating effect on the 3D cards with preserved translateZ depth
             gsap.to('.floating-card-1', {
-                y: -8,
-                duration: 2.8,
+                y: -10,
+                z: 70,
+                duration: 3.2,
                 repeat: -1,
                 yoyo: true,
                 ease: 'sine.inOut'
             });
 
             gsap.to('.floating-card-2', {
-                y: 8,
-                duration: 3.2,
+                y: 10,
+                z: 90,
+                duration: 3.6,
                 repeat: -1,
                 yoyo: true,
                 ease: 'sine.inOut',
-                delay: 0.4
+                delay: 0.5
             });
+
+            // 3. Smooth mouse parallax tilt (active when a fine-pointer / mouse is detected)
+            const hasMouse = matchMedia('(any-hover: hover) and (any-pointer: fine)').matches;
+            if (hasMouse) {
+                const setRotX = gsap.quickTo(productGroup, 'rotationX', { duration: 0.6, ease: 'power2.out' });
+                const setRotY = gsap.quickTo(productGroup, 'rotationY', { duration: 0.6, ease: 'power2.out' });
+
+                window.addEventListener('mousemove', (e) => {
+                    const nx = (e.clientX / window.innerWidth - 0.5) * 2;
+                    const ny = (e.clientY / window.innerHeight - 0.5) * 2;
+                    setRotX(-ny * 8 + 15);
+                    setRotY(nx * 8 - 6);
+                });
+            }
         }
     });
 </script>

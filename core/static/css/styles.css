@@ -4410,9 +4410,9 @@ body.chat-page-body .main-content-wrapper {
     pointer-events: none;
     z-index: 1;
     opacity: 0.85;
-    -webkit-mask-image: radial-gradient(ellipse 55% 45% at 50% 36%, transparent 58%, black 98%), -webkit-linear-gradient(top, black 80%, transparent 100%);
+    -webkit-mask-image: radial-gradient(ellipse 42% 28% at 50% 24%, transparent 50%, black 95%), -webkit-linear-gradient(top, black 85%, transparent 100%);
     -webkit-mask-composite: source-in;
-    mask-image: radial-gradient(ellipse 55% 45% at 50% 36%, transparent 58%, black 98%), linear-gradient(to bottom, black 80%, transparent 100%);
+    mask-image: radial-gradient(ellipse 42% 28% at 50% 24%, transparent 50%, black 95%), linear-gradient(to bottom, black 85%, transparent 100%);
     mask-composite: intersect;
 }
 

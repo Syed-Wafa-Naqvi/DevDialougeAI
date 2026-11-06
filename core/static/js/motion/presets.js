@@ -34,7 +34,7 @@ export function initScrollReveals() {
         }
 
         // normal mode
-        gsap.set('[data-reveal]', { opacity: 0, y: 24 });
+        gsap.set('[data-reveal]', { opacity: 0, y: 36 });
         ScrollTrigger.batch('[data-reveal]', {
             start: 'top 85%',
             once: true,
@@ -42,9 +42,9 @@ export function initScrollReveals() {
                 gsap.to(batch, {
                     opacity: 1,
                     y: 0,
-                    duration: 1.1,
-                    ease: 'power3.out',
-                    stagger: 0.12,
+                    duration: 1.35,
+                    ease: 'power2.out',
+                    stagger: 0.22,
                     overwrite: 'auto'
                 });
             }
