@@ -192,7 +192,7 @@
                 <button type="button" class="sidebar-toggle-btn" onclick="toggleSidebarMobile()" style="background: none; border: none; color: var(--ink-2); cursor: pointer;">
                     <i data-lucide="menu"></i>
                 </button>
-                <h3 class="topbar-title" onclick="startRenameSession(event, {{ session.id }}, '{% url 'rename_session' session_id=session.id %}')" title="Click to rename workspace" style="font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer; display: flex; align-items: center;">
+                <h3 class="topbar-title" onclick="startRenameSession(event, {{ session.id }}, '{% url 'rename_session' session_id=session.id %}')" title="Click to rename workspace" style="view-transition-name: project-{{ session.id }}; font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer; display: flex; align-items: center;">
                     <span id="active-topbar-title-text">{{ session.title }}</span>
                     <i data-lucide="edit-2" style="width: 12px; color: var(--ink-3); margin-left: 6px;"></i>
                 </h3>

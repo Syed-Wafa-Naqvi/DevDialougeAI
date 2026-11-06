@@ -30,6 +30,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+node_modules/
 
 # Environment configurations and secrets
 .env

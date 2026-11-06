@@ -4179,6 +4179,31 @@ body.chat-page-body .main-content-wrapper {
     color: #4ade80;
 }
 
+/* Pipeline 5-Stage Responsive Grid (§8) */
+.pipeline-grid {
+    display: grid;
+    gap: 20px;
+    grid-template-columns: 1fr;
+}
+
+@media (min-width: 600px) {
+    .pipeline-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (min-width: 900px) {
+    .pipeline-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (min-width: 1200px) {
+    .pipeline-grid {
+        grid-template-columns: repeat(5, 1fr);
+    }
+}
+
 .diff-remove {
     background: rgba(239, 68, 68, 0.15);
     color: #f87171;

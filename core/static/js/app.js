@@ -54,7 +54,8 @@ class App {
     }
 
     initCustomCursor() {
-        if (qualityManager.getTier() === 'Reduced' || 'ontouchstart' in window) return;
+        const hasMouse = window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+        if (qualityManager.getTier() === 'Reduced' || !hasMouse) return;
 
         let dot = document.querySelector('.custom-cursor-dot');
         let ring = document.querySelector('.custom-cursor-ring');

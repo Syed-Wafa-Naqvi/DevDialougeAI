@@ -1,7 +1,7 @@
 /**
  * DevDialogue AI — Three.js Architecture & Nebula Engine (v4 Studio Light §7.2)
  * Clean, bright diagram-like 3D architecture graph and subtle ambient nebula
- * with crisp nodes, thin lines, restrained depth, and low resource overhead.
+ * with soft glowing points, thin lines, restrained depth, and low resource overhead.
  */
 
 import { qualityManager } from '../motion/quality.js';
@@ -26,7 +26,7 @@ export class ThreeEngine {
         // Cap pixel ratio at 1.5 to protect battery and GPU fillrate
         const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
         this.renderer.setPixelRatio(pixelRatio);
-        this.renderer.setSize(canvasElement.clientWidth, canvasElement.clientHeight || 400);
+        this.renderer.setSize(canvasElement.clientWidth, canvasElement.clientHeight || 400, false);
 
         this.disposed = false;
         this.paused = false;
@@ -50,7 +50,7 @@ export class ThreeEngine {
                     if (width > 0 && height > 0 && this.camera && this.renderer) {
                         this.camera.aspect = width / height;
                         this.camera.updateProjectionMatrix();
-                        this.renderer.setSize(width, height);
+                        this.renderer.setSize(width, height, false);
                     }
                 }
             }
@@ -170,129 +170,180 @@ export class ArchitectureGraphScene extends ThreeEngine {
     }
 }
 
+function createGlowingPointTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 30);
+    grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+    grad.addColorStop(0.25, 'rgba(96, 165, 250, 0.85)');
+    grad.addColorStop(0.6, 'rgba(37, 72, 232, 0.35)');
+    grad.addColorStop(1, 'rgba(37, 72, 232, 0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(32, 32, 30, 0, Math.PI * 2);
+    ctx.fill();
+    const texture = new THREE.CanvasTexture(canvas);
+    return texture;
+}
+
 /**
- * LandingNebulaScene — Ambient 3D Hero Constellation & Architecture Graph
- * Blends interactive node graph with soft dialogue particle nebula.
- * Smooth mouse parallax, ultra-low GPU draw call overhead, battery friendly.
+ * LandingNebulaScene — Ambient 3D Hero Soft Constellation Engine
+ * Soft glowing points in brand blue, faint connecting lines, dynamic section sizing,
+ * subtle camera parallax (max ±0.6 units) only when fine mouse is present.
+ * Zero solid boxes or obtrusive elements to maintain pristine text readability.
  */
 export class LandingNebulaScene extends ThreeEngine {
     constructor(canvas) {
         super(canvas);
         if (!this.renderer) return;
 
-        this.camera.position.z = 40;
-        this.mouseX = 0;
-        this.mouseY = 0;
-        this.targetMouseX = 0;
-        this.targetMouseY = 0;
+        this.camera.position.set(0, 0, 38);
+        this.camBaseZ = 38;
+        this.targetCamX = 0;
+        this.targetCamY = 0;
 
         const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         this.reducedMotion = prefersReducedMotion || this.tier === 'Reduced';
+        this.hasMouse = window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
+        // Size dynamically from the enclosing hero section
+        this.heroSection = this.canvas.closest('.hero-section') || this.canvas.parentElement || this.canvas;
+        this.initSectionResizeObserver();
 
         this.buildScene();
         this.bindEvents();
 
         if (this.reducedMotion) {
-            // Render single static frame without continuous requestAnimationFrame loop
             this.renderer.render(this.scene, this.camera);
         } else {
             this.animate();
         }
     }
 
+    initSectionResizeObserver() {
+        const updateSize = () => {
+            if (!this.heroSection || !this.renderer || !this.camera) return;
+            const w = this.heroSection.clientWidth;
+            const h = this.heroSection.clientHeight || 500;
+            if (w > 0 && h > 0) {
+                this.camera.aspect = w / h;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(w, h, false);
+            }
+        };
+
+        updateSize();
+
+        this.sectionResizeObserver = new ResizeObserver(() => updateSize());
+        this.sectionResizeObserver.observe(this.heroSection);
+    }
+
     buildScene() {
         this.masterGroup = new THREE.Group();
+        this.pointTexture = createGlowingPointTexture();
 
-        // 1. Particle Constellation (Dialogue / Token Stream)
-        const particleCount = this.tier === 'High' ? 140 : 80;
+        // 1. Soft glowing background particle cloud (circular texture, size ~2.8px, additive blending)
+        const particleCount = this.tier === 'High' ? 120 : 65;
         const particleGeo = new THREE.BufferGeometry();
         const positions = new Float32Array(particleCount * 3);
-        const scales = new Float32Array(particleCount);
 
         for (let i = 0; i < particleCount; i++) {
-            positions[i * 3] = (Math.random() - 0.5) * 60;
-            positions[i * 3 + 1] = (Math.random() - 0.5) * 40;
-            positions[i * 3 + 2] = (Math.random() - 0.5) * 30;
-            scales[i] = Math.random() * 2 + 1;
+            // Keep points outside the center headline & CTA button zone
+            let x, y;
+            do {
+                x = (Math.random() - 0.5) * 66;
+                y = (Math.random() - 0.5) * 36;
+            } while (Math.abs(x) < 22 && Math.abs(y) < 14);
+
+            positions[i * 3] = x;
+            positions[i * 3 + 1] = y;
+            positions[i * 3 + 2] = (Math.random() - 0.5) * 20;
         }
 
         particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
         const particleMat = new THREE.PointsMaterial({
-            color: 0x2548E8,
-            size: 1.2,
+            color: 0x3B82F6,
+            map: this.pointTexture,
+            size: 2.8,
+            sizeAttenuation: true,
             transparent: true,
-            opacity: 0.45,
-            blending: THREE.NormalBlending
+            opacity: 0.48,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
         });
 
         this.particles = new THREE.Points(particleGeo, particleMat);
         this.masterGroup.add(this.particles);
 
-        // 2. Core Architecture Blueprint Nodes
-        const nodesData = [
-            { x: -14, y: 7, z: -2, color: 0x2548E8, size: 2.2, label: "Discover" },
-            { x: -7, y: -4, z: 2, color: 0x4F46E5, size: 2.6, label: "Blueprint" },
-            { x: 0, y: 5, z: 4, color: 0x2548E8, size: 3.2, label: "Synthesizer" },
-            { x: 8, y: -5, z: 1, color: 0x06B6D4, size: 2.6, label: "Verify" },
-            { x: 15, y: 6, z: -1, color: 0x10B981, size: 2.4, label: "Export" }
+        // 2. Soft glowing constellation node points (size ~3.8px in brand blue)
+        const keyNodes = [
+            new THREE.Vector3(-24, 10, -1),
+            new THREE.Vector3(-22, -8, 2),
+            new THREE.Vector3(-14, 14, 0),
+            new THREE.Vector3(14, 14, 0),
+            new THREE.Vector3(22, -8, 1),
+            new THREE.Vector3(25, 9, -1)
         ];
 
-        this.nodeMeshes = [];
-        const boxGeo = new THREE.BoxGeometry(4.0, 2.0, 0.4);
-        const ringGeo = new THREE.RingGeometry(2.4, 2.6, 24);
-
-        nodesData.forEach((node) => {
-            const nodeGroup = new THREE.Group();
-            nodeGroup.position.set(node.x, node.y, node.z);
-
-            const mat = new THREE.MeshBasicMaterial({
-                color: node.color,
-                transparent: true,
-                opacity: 0.85
-            });
-            const box = new THREE.Mesh(boxGeo, mat);
-            nodeGroup.add(box);
-
-            const ringMat = new THREE.MeshBasicMaterial({
-                color: node.color,
-                side: THREE.DoubleSide,
-                transparent: true,
-                opacity: 0.35
-            });
-            const ring = new THREE.Mesh(ringGeo, ringMat);
-            ring.position.z = 0.3;
-            nodeGroup.add(ring);
-
-            this.masterGroup.add(nodeGroup);
-            this.nodeMeshes.push(nodeGroup);
+        const nodeGeo = new THREE.BufferGeometry().setFromPoints(keyNodes);
+        const nodeMat = new THREE.PointsMaterial({
+            color: 0x2548E8,
+            map: this.pointTexture,
+            size: 3.8,
+            sizeAttenuation: true,
+            transparent: true,
+            opacity: 0.55,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
         });
 
-        // 3. Connective Pipeline Lines
-        const linePoints = this.nodeMeshes.map(m => m.position);
-        const lineGeo = new THREE.BufferGeometry().setFromPoints(linePoints);
+        this.nodePoints = new THREE.Points(nodeGeo, nodeMat);
+        this.masterGroup.add(this.nodePoints);
+
+        // 3. Faint delicate connecting constellation lines
+        const lineConnections = [
+            keyNodes[0], keyNodes[2],
+            keyNodes[0], keyNodes[1],
+            keyNodes[2], keyNodes[3],
+            keyNodes[3], keyNodes[5],
+            keyNodes[4], keyNodes[5],
+            keyNodes[1], keyNodes[4]
+        ];
+
+        const lineGeo = new THREE.BufferGeometry().setFromPoints(lineConnections);
         const lineMat = new THREE.LineBasicMaterial({
             color: 0x2548E8,
             transparent: true,
-            opacity: 0.35,
+            opacity: 0.14,
+            blending: THREE.AdditiveBlending,
             linewidth: 1
         });
-        const lineMesh = new THREE.Line(lineGeo, lineMat);
-        this.masterGroup.add(lineMesh);
+
+        this.connectionLines = new THREE.LineSegments(lineGeo, lineMat);
+        this.masterGroup.add(this.connectionLines);
 
         this.scene.add(this.masterGroup);
     }
 
     bindEvents() {
         this.onMouseMove = (e) => {
-            this.targetMouseX = (e.clientX / window.innerWidth - 0.5) * 2;
-            this.targetMouseY = (e.clientY / window.innerHeight - 0.5) * 2;
+            if (!this.hasMouse || this.reducedMotion) return;
+            const nx = (e.clientX / window.innerWidth - 0.5) * 2;
+            const ny = (e.clientY / window.innerHeight - 0.5) * 2;
+            // Slight camera parallax (max ±0.6 units)
+            this.targetCamX = Math.max(-0.6, Math.min(0.6, nx * 0.6));
+            this.targetCamY = Math.max(-0.6, Math.min(0.6, -ny * 0.6));
         };
         window.addEventListener('mousemove', this.onMouseMove);
     }
 
     dispose() {
         if (this.onMouseMove) window.removeEventListener('mousemove', this.onMouseMove);
+        if (this.sectionResizeObserver) this.sectionResizeObserver.disconnect();
+        if (this.pointTexture) this.pointTexture.dispose();
         super.dispose();
     }
 
@@ -301,18 +352,17 @@ export class LandingNebulaScene extends ThreeEngine {
         this.animId = requestAnimationFrame(() => this.animate());
         if (this.paused) return;
 
-        // Smooth camera and group parallax with easing
-        this.mouseX += (this.targetMouseX - this.mouseX) * 0.04;
-        this.mouseY += (this.targetMouseY - this.mouseY) * 0.04;
-
-        if (this.masterGroup) {
-            this.masterGroup.rotation.y = this.mouseX * 0.12;
-            this.masterGroup.rotation.x = -this.mouseY * 0.08;
+        // Smooth camera lerp toward target (max ±0.6 units)
+        if (this.hasMouse && !this.reducedMotion) {
+            this.camera.position.x += (this.targetCamX - this.camera.position.x) * 0.05;
+            this.camera.position.y += (this.targetCamY - this.camera.position.y) * 0.05;
+            this.camera.lookAt(0, 0, 0);
         }
 
+        // Gentle organic rotation of background particles
         if (this.particles) {
-            this.particles.rotation.y += 0.0006;
-            this.particles.rotation.x += 0.0003;
+            this.particles.rotation.y += 0.0004;
+            this.particles.rotation.x += 0.0002;
         }
 
         this.renderer.render(this.scene, this.camera);
