@@ -159,12 +159,17 @@ STATICFILES_DIRS = [
 ]
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
+import sys
+IS_TESTING = 'test' in sys.argv
+
 STORAGES = {
-    "default": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
-    },
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        "BACKEND": (
+            "django.contrib.staticfiles.storage.StaticFilesStorage"
+            if DEBUG or IS_TESTING
+            else "whitenoise.storage.CompressedManifestStaticFilesStorage"
+        )
     },
 }
 
@@ -189,9 +194,6 @@ EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'no-reply@devdialogue.ai')
 
 # LLM Purpose Routing & Configuration
-import sys
-IS_TESTING = 'test' in sys.argv
-
 USE_MOCK_LLM = IS_TESTING or (os.environ.get('USE_MOCK_LLM', 'False') == 'True')
 LLM_LOG_BODIES = os.environ.get('LLM_LOG_BODIES', 'False') == 'True'
 

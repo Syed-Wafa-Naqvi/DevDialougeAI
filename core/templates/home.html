@@ -172,7 +172,7 @@
         if (!productGroup) return;
 
         const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        const hasMouse = matchMedia('(hover: hover) and (pointer: fine)').matches;
+        const hasMouse = matchMedia('(any-hover: hover) and (any-pointer: fine)').matches;
         if (prefersReducedMotion || !hasMouse) return;
 
         // Smooth GSAP QuickTo Parallax Tilt for 60fps responsiveness

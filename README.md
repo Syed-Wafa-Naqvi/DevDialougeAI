@@ -77,6 +77,28 @@ DevDialougeAI/
 
 ---
 
+## 🚀 Deployment
+
+For production deployments:
+
+1. **Run database migrations**:
+   ```bash
+   python manage.py migrate
+   ```
+
+2. **Collect static files**:
+   ```bash
+   python manage.py collectstatic --noinput
+   ```
+
+3. **Start the application with a WSGI/ASGI server**:
+   ```bash
+   gunicorn config.wsgi:application --bind 0.0.0.0:8000
+   ```
+
+
+---
+
 ## ⚡ Lite Runtime Checks (Optional & Feature-Flagged)
 
 DevDialogue AI includes an optional **Lite Runtime Verification Engine** (`generator/runtime_verifier.py`) that runs execution checks (`compileall`, `manage.py check`, `pytest`/`unittest`) on generated code.

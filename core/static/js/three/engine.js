@@ -206,7 +206,7 @@ export class LandingNebulaScene extends ThreeEngine {
 
         const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         this.reducedMotion = prefersReducedMotion || this.tier === 'Reduced';
-        this.hasMouse = window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+        this.hasMouse = window.matchMedia && window.matchMedia('(any-hover: hover) and (any-pointer: fine)').matches;
 
         // Size dynamically from the enclosing hero section
         this.heroSection = this.canvas.closest('.hero-section') || this.canvas.parentElement || this.canvas;
@@ -244,33 +244,49 @@ export class LandingNebulaScene extends ThreeEngine {
         this.masterGroup = new THREE.Group();
         this.pointTexture = createGlowingPointTexture();
 
-        // 1. Soft glowing background particle cloud (circular texture, size ~2.8px, additive blending)
-        const particleCount = this.tier === 'High' ? 120 : 65;
+        // 1. Soft glowing background particle cloud across full width and height
+        this.particleCount = (this.tier === 'High') ? 220 : 100;
         const particleGeo = new THREE.BufferGeometry();
-        const positions = new Float32Array(particleCount * 3);
+        const positions = new Float32Array(this.particleCount * 3);
+        const colors = new Float32Array(this.particleCount * 3);
+        this.basePositions = new Float32Array(this.particleCount * 3);
+        this.phases = new Float32Array(this.particleCount);
 
-        for (let i = 0; i < particleCount; i++) {
-            // Keep points outside the center headline & CTA button zone
-            let x, y;
-            do {
-                x = (Math.random() - 0.5) * 66;
-                y = (Math.random() - 0.5) * 36;
-            } while (Math.abs(x) < 22 && Math.abs(y) < 14);
+        const colorBrand = new THREE.Color(0x2548E8);
+        const colorSoft = new THREE.Color(0x60A5FA);
+
+        for (let i = 0; i < this.particleCount; i++) {
+            const x = (Math.random() - 0.5) * 110;
+            const y = (Math.random() - 0.5) * 44;
+            const z = (Math.random() - 0.5) * 22;
 
             positions[i * 3] = x;
             positions[i * 3 + 1] = y;
-            positions[i * 3 + 2] = (Math.random() - 0.5) * 20;
+            positions[i * 3 + 2] = z;
+
+            this.basePositions[i * 3] = x;
+            this.basePositions[i * 3 + 1] = y;
+            this.basePositions[i * 3 + 2] = z;
+
+            this.phases[i] = Math.random() * Math.PI * 2;
+
+            // Two tones: brand cobalt (#2548E8) and sky blue (#60A5FA)
+            const c = (Math.random() > 0.45) ? colorBrand : colorSoft;
+            colors[i * 3] = c.r;
+            colors[i * 3 + 1] = c.g;
+            colors[i * 3 + 2] = c.b;
         }
 
         particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        particleGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
         const particleMat = new THREE.PointsMaterial({
-            color: 0x3B82F6,
             map: this.pointTexture,
-            size: 2.8,
+            size: 3.8,
             sizeAttenuation: true,
             transparent: true,
-            opacity: 0.48,
+            opacity: 0.7,
+            vertexColors: true,
             blending: THREE.AdditiveBlending,
             depthWrite: false
         });
@@ -278,24 +294,34 @@ export class LandingNebulaScene extends ThreeEngine {
         this.particles = new THREE.Points(particleGeo, particleMat);
         this.masterGroup.add(this.particles);
 
-        // 2. Soft glowing constellation node points (size ~3.8px in brand blue)
-        const keyNodes = [
-            new THREE.Vector3(-24, 10, -1),
-            new THREE.Vector3(-22, -8, 2),
-            new THREE.Vector3(-14, 14, 0),
-            new THREE.Vector3(14, 14, 0),
-            new THREE.Vector3(22, -8, 1),
-            new THREE.Vector3(25, 9, -1)
+        // 2. 12 larger "node" points placed strictly at the left and right sides
+        const leftNodes = [
+            new THREE.Vector3(-44, 12, -2),
+            new THREE.Vector3(-35, 4, 3),
+            new THREE.Vector3(-42, -7, 1),
+            new THREE.Vector3(-25, 14, 0),
+            new THREE.Vector3(-21, -3, -1),
+            new THREE.Vector3(-29, -12, 2)
         ];
 
-        const nodeGeo = new THREE.BufferGeometry().setFromPoints(keyNodes);
+        const rightNodes = [
+            new THREE.Vector3(44, 12, -2),
+            new THREE.Vector3(35, 4, 3),
+            new THREE.Vector3(42, -7, 1),
+            new THREE.Vector3(25, 14, 0),
+            new THREE.Vector3(21, -3, -1),
+            new THREE.Vector3(29, -12, 2)
+        ];
+
+        const allNodes = [...leftNodes, ...rightNodes];
+        const nodeGeo = new THREE.BufferGeometry().setFromPoints(allNodes);
         const nodeMat = new THREE.PointsMaterial({
-            color: 0x2548E8,
+            color: 0x60A5FA,
             map: this.pointTexture,
-            size: 3.8,
+            size: 4.8,
             sizeAttenuation: true,
             transparent: true,
-            opacity: 0.55,
+            opacity: 0.8,
             blending: THREE.AdditiveBlending,
             depthWrite: false
         });
@@ -303,21 +329,32 @@ export class LandingNebulaScene extends ThreeEngine {
         this.nodePoints = new THREE.Points(nodeGeo, nodeMat);
         this.masterGroup.add(this.nodePoints);
 
-        // 3. Faint delicate connecting constellation lines
+        // 3. Faint connecting lines strictly within left side and right side (no center crossing)
         const lineConnections = [
-            keyNodes[0], keyNodes[2],
-            keyNodes[0], keyNodes[1],
-            keyNodes[2], keyNodes[3],
-            keyNodes[3], keyNodes[5],
-            keyNodes[4], keyNodes[5],
-            keyNodes[1], keyNodes[4]
+            // Left loose graph
+            leftNodes[0], leftNodes[1],
+            leftNodes[1], leftNodes[2],
+            leftNodes[0], leftNodes[3],
+            leftNodes[3], leftNodes[4],
+            leftNodes[1], leftNodes[4],
+            leftNodes[2], leftNodes[5],
+            leftNodes[4], leftNodes[5],
+
+            // Right loose graph
+            rightNodes[0], rightNodes[1],
+            rightNodes[1], rightNodes[2],
+            rightNodes[0], rightNodes[3],
+            rightNodes[3], rightNodes[4],
+            rightNodes[1], rightNodes[4],
+            rightNodes[2], rightNodes[5],
+            rightNodes[4], rightNodes[5]
         ];
 
         const lineGeo = new THREE.BufferGeometry().setFromPoints(lineConnections);
         const lineMat = new THREE.LineBasicMaterial({
-            color: 0x2548E8,
+            color: 0x60A5FA,
             transparent: true,
-            opacity: 0.14,
+            opacity: 0.25,
             blending: THREE.AdditiveBlending,
             linewidth: 1
         });
@@ -333,9 +370,9 @@ export class LandingNebulaScene extends ThreeEngine {
             if (!this.hasMouse || this.reducedMotion) return;
             const nx = (e.clientX / window.innerWidth - 0.5) * 2;
             const ny = (e.clientY / window.innerHeight - 0.5) * 2;
-            // Slight camera parallax (max ±0.6 units)
-            this.targetCamX = Math.max(-0.6, Math.min(0.6, nx * 0.6));
-            this.targetCamY = Math.max(-0.6, Math.min(0.6, -ny * 0.6));
+            // Camera parallax lerps up to ±1.5 units toward cursor
+            this.targetCamX = Math.max(-1.5, Math.min(1.5, nx * 1.5));
+            this.targetCamY = Math.max(-1.5, Math.min(1.5, -ny * 1.5));
         };
         window.addEventListener('mousemove', this.onMouseMove);
     }
@@ -352,17 +389,27 @@ export class LandingNebulaScene extends ThreeEngine {
         this.animId = requestAnimationFrame(() => this.animate());
         if (this.paused) return;
 
-        // Smooth camera lerp toward target (max ±0.6 units)
+        // Smooth camera parallax lerp toward target (max ±1.5 units)
         if (this.hasMouse && !this.reducedMotion) {
             this.camera.position.x += (this.targetCamX - this.camera.position.x) * 0.05;
             this.camera.position.y += (this.targetCamY - this.camera.position.y) * 0.05;
             this.camera.lookAt(0, 0, 0);
         }
 
-        // Gentle organic rotation of background particles
-        if (this.particles) {
-            this.particles.rotation.y += 0.0004;
-            this.particles.rotation.x += 0.0002;
+        // Slow organic drift: sine-based y offset per particle and slow whole-group rotation
+        if (this.particles && this.particles.geometry.attributes.position) {
+            const time = performance.now() * 0.001;
+            const posAttr = this.particles.geometry.attributes.position;
+            const arr = posAttr.array;
+            for (let i = 0; i < this.particleCount; i++) {
+                const idx = i * 3 + 1;
+                arr[idx] = this.basePositions[idx] + Math.sin(time * 0.7 + this.phases[i]) * 0.8;
+            }
+            posAttr.needsUpdate = true;
+        }
+
+        if (this.masterGroup) {
+            this.masterGroup.rotation.y += 0.0003;
         }
 
         this.renderer.render(this.scene, this.camera);

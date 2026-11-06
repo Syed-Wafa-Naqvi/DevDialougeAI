@@ -54,7 +54,7 @@ class App {
     }
 
     initCustomCursor() {
-        const hasMouse = window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+        const hasMouse = window.matchMedia && window.matchMedia('(any-hover: hover) and (any-pointer: fine)').matches;
         if (qualityManager.getTier() === 'Reduced' || !hasMouse) return;
 
         let dot = document.querySelector('.custom-cursor-dot');
