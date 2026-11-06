@@ -4369,3 +4369,43 @@ body.chat-page-body .main-content-wrapper {
         box-sizing: border-box !important;
     }
 }
+
+/* ==========================================================================
+   Card Tilt & Hero Canvas Mask (§6.5, Problem 1 & 2)
+   ========================================================================== */
+
+.tilt-card {
+    will-change: transform;
+    transform-style: preserve-3d;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.tilt-card-glare {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    border-radius: inherit;
+    mix-blend-mode: overlay;
+    z-index: 2;
+}
+
+.hero-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.85;
+    -webkit-mask-image: radial-gradient(ellipse 55% 45% at 50% 36%, transparent 58%, black 98%), -webkit-linear-gradient(top, black 80%, transparent 100%);
+    -webkit-mask-composite: source-in;
+    mask-image: radial-gradient(ellipse 55% 45% at 50% 36%, transparent 58%, black 98%), linear-gradient(to bottom, black 80%, transparent 100%);
+    mask-composite: intersect;
+}
+

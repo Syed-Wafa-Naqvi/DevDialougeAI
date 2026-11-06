@@ -229,6 +229,7 @@ export class LandingNebulaScene extends ThreeEngine {
     }
 
     initSectionResizeObserver() {
+        let resizeTimer = null;
         const updateSize = () => {
             if (!this.heroSection || !this.renderer || !this.camera) return;
             const w = this.heroSection.clientWidth;
@@ -237,6 +238,13 @@ export class LandingNebulaScene extends ThreeEngine {
                 this.camera.aspect = w / h;
                 this.camera.updateProjectionMatrix();
                 this.renderer.setSize(w, h, false);
+
+                // Debounce particle & node regeneration (200ms) on resize (§Problem 1)
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(() => {
+                    this.generateParticlePositions();
+                    this.updateNodePositions();
+                }, 200);
             }
         };
 
@@ -250,8 +258,7 @@ export class LandingNebulaScene extends ThreeEngine {
         this.masterGroup = new THREE.Group();
         this.pointTexture = createGlowingPointTexture();
 
-        // 1. Soft glowing background particle cloud across full width and height
-        // Mobile battery saving: ~60 particles on coarse-only mobile displays
+        // 1. Soft glowing background particle cloud
         this.particleCount = this.isMobileCoarse ? 60 : ((this.tier === 'High') ? 220 : 100);
         const particleGeo = new THREE.BufferGeometry();
         const positions = new Float32Array(this.particleCount * 3);
@@ -263,28 +270,8 @@ export class LandingNebulaScene extends ThreeEngine {
         const colorSoft = new THREE.Color(0x60A5FA);
 
         for (let i = 0; i < this.particleCount; i++) {
-            let x, y, z;
-            let attempts = 0;
-            // Widen keep-out zone around headline, paragraph, and buttons (|x| < 30 and y in [-14, 20])
-            do {
-                x = (Math.random() - 0.5) * 110;
-                y = (Math.random() - 0.5) * 44;
-                z = (Math.random() - 0.5) * 22;
-                attempts++;
-            } while (attempts < 100 && (Math.abs(x) < 30 && y > -14 && y < 20));
-
-            positions[i * 3] = x;
-            positions[i * 3 + 1] = y;
-            positions[i * 3 + 2] = z;
-
-            this.basePositions[i * 3] = x;
-            this.basePositions[i * 3 + 1] = y;
-            this.basePositions[i * 3 + 2] = z;
-
             this.phases[i] = Math.random() * Math.PI * 2;
-
-            // Two tones: brand cobalt (#2548E8) and sky blue (#60A5FA)
-            const c = (Math.random() > 0.45) ? colorBrand : colorSoft;
+            const c = (i % 2 === 0) ? colorBrand : colorSoft;
             colors[i * 3] = c.r;
             colors[i * 3 + 1] = c.g;
             colors[i * 3 + 2] = c.b;
@@ -298,7 +285,7 @@ export class LandingNebulaScene extends ThreeEngine {
             size: 3.8,
             sizeAttenuation: true,
             transparent: true,
-            opacity: 0.7,
+            opacity: 0.72,
             vertexColors: true,
             blending: THREE.AdditiveBlending,
             depthWrite: false
@@ -307,27 +294,13 @@ export class LandingNebulaScene extends ThreeEngine {
         this.particles = new THREE.Points(particleGeo, particleMat);
         this.masterGroup.add(this.particles);
 
-        // 2. 12 larger "node" points placed strictly at the left and right perimeters
-        const leftNodes = [
-            new THREE.Vector3(-46, 12, -2),
-            new THREE.Vector3(-36, 4, 3),
-            new THREE.Vector3(-44, -7, 1),
-            new THREE.Vector3(-32, 14, 0),
-            new THREE.Vector3(-33, -3, -1),
-            new THREE.Vector3(-35, -12, 2)
-        ];
+        // Populate initial stratified particle positions inside 95% visible area
+        this.generateParticlePositions();
 
-        const rightNodes = [
-            new THREE.Vector3(46, 12, -2),
-            new THREE.Vector3(36, 4, 3),
-            new THREE.Vector3(44, -7, 1),
-            new THREE.Vector3(32, 14, 0),
-            new THREE.Vector3(33, -3, -1),
-            new THREE.Vector3(35, -12, 2)
-        ];
-
-        const allNodes = [...leftNodes, ...rightNodes];
-        const nodeGeo = new THREE.BufferGeometry().setFromPoints(allNodes);
+        // 2. 12 larger "node" points placed strictly at side perimeters
+        const dummyNodes = [];
+        for (let i = 0; i < 12; i++) dummyNodes.push(new THREE.Vector3());
+        const nodeGeo = new THREE.BufferGeometry().setFromPoints(dummyNodes);
         const nodeMat = new THREE.PointsMaterial({
             color: 0x60A5FA,
             map: this.pointTexture,
@@ -344,27 +317,9 @@ export class LandingNebulaScene extends ThreeEngine {
 
         // 3. Faint connecting lines strictly within side clusters (skipped on mobile to save battery)
         if (!this.isMobileCoarse) {
-            const lineConnections = [
-                // Left loose graph
-                leftNodes[0], leftNodes[1],
-                leftNodes[1], leftNodes[2],
-                leftNodes[0], leftNodes[3],
-                leftNodes[3], leftNodes[4],
-                leftNodes[1], leftNodes[4],
-                leftNodes[2], leftNodes[5],
-                leftNodes[4], leftNodes[5],
-
-                // Right loose graph
-                rightNodes[0], rightNodes[1],
-                rightNodes[1], rightNodes[2],
-                rightNodes[0], rightNodes[3],
-                rightNodes[3], rightNodes[4],
-                rightNodes[1], rightNodes[4],
-                rightNodes[2], rightNodes[5],
-                rightNodes[4], rightNodes[5]
-            ];
-
-            const lineGeo = new THREE.BufferGeometry().setFromPoints(lineConnections);
+            const dummyLinePoints = [];
+            for (let i = 0; i < 28; i++) dummyLinePoints.push(new THREE.Vector3());
+            const lineGeo = new THREE.BufferGeometry().setFromPoints(dummyLinePoints);
             const lineMat = new THREE.LineBasicMaterial({
                 color: 0x60A5FA,
                 transparent: true,
@@ -377,7 +332,179 @@ export class LandingNebulaScene extends ThreeEngine {
             this.masterGroup.add(this.connectionLines);
         }
 
+        this.updateNodePositions();
         this.scene.add(this.masterGroup);
+    }
+
+    /**
+     * Compute visible frustum area and distribute particles evenly via stratified jittered grid cells.
+     * Lower half (left & right of product mockup) gets >= 40% (46%) of particles.
+     */
+    generateParticlePositions() {
+        if (!this.particles || !this.camera) return;
+
+        const visibleH = 2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * this.camera.position.z;
+        const visibleW = visibleH * this.camera.aspect;
+
+        const maxW = visibleW * 0.95;
+        const maxH = visibleH * 0.95;
+        const halfW = maxW / 2;
+        const halfH = maxH / 2;
+
+        const count = this.particleCount;
+        // Distribute: lower half gets 46% (23% left, 23% right), upper gets 44%, top center gets 10%
+        const lowerCountEach = Math.floor(count * 0.23);
+        const upperCountEach = Math.floor(count * 0.22);
+        const topCount = count - (lowerCountEach * 2 + upperCountEach * 2);
+
+        let idx = 0;
+        const isKeepOut = (x, y) => Math.abs(x) < 20 && y > -3 && y < 16;
+
+        const setPoint = (x, y, z) => {
+            if (idx >= count) return;
+            // Strict keep-out safety enforcement: push any borderline points outward
+            if (isKeepOut(x, y)) {
+                const side = (x >= 0) ? 1 : -1;
+                x = side * (20 + Math.random() * 6);
+            }
+
+            this.basePositions[idx * 3] = x;
+            this.basePositions[idx * 3 + 1] = y;
+            this.basePositions[idx * 3 + 2] = z;
+
+            const posAttr = this.particles.geometry.attributes.position;
+            posAttr.array[idx * 3] = x;
+            posAttr.array[idx * 3 + 1] = y;
+            posAttr.array[idx * 3 + 2] = z;
+            idx++;
+        };
+
+        const fillStratifiedZone = (numPoints, minX, maxX, minY, maxY, minZ, maxZ) => {
+            if (numPoints <= 0) return;
+            const w = Math.max(maxX - minX, 1);
+            const h = Math.max(maxY - minY, 1);
+            const cols = Math.max(1, Math.round(Math.sqrt(numPoints * (w / h))));
+            const rows = Math.max(1, Math.ceil(numPoints / cols));
+
+            const cellW = w / cols;
+            const cellH = h / rows;
+
+            let placed = 0;
+            for (let r = 0; r < rows && placed < numPoints && idx < count; r++) {
+                for (let c = 0; c < cols && placed < numPoints && idx < count; c++) {
+                    const jx = 0.15 + Math.random() * 0.7;
+                    const jy = 0.15 + Math.random() * 0.7;
+                    const x = minX + (c + jx) * cellW;
+                    const y = minY + (r + jy) * cellH;
+                    const z = minZ + Math.random() * (maxZ - minZ);
+
+                    // Skip point if in keep-out zone
+                    if (isKeepOut(x, y)) {
+                        continue;
+                    }
+
+                    setPoint(x, y, z);
+                    placed++;
+                }
+            }
+
+            // Fill any remainder
+            while (placed < numPoints && idx < count) {
+                const x = minX + Math.random() * w;
+                const y = minY + Math.random() * h;
+                if (isKeepOut(x, y)) continue;
+                const z = minZ + Math.random() * (maxZ - minZ);
+                setPoint(x, y, z);
+                placed++;
+            }
+        };
+
+        // 1. Lower left: clearly visible dots left of product mockup (23% of total)
+        fillStratifiedZone(lowerCountEach, -halfW, -14, -halfH, 0, -8, 8);
+
+        // 2. Lower right: clearly visible dots right of product mockup (23% of total)
+        fillStratifiedZone(lowerCountEach, 14, halfW, -halfH, 0, -8, 8);
+
+        // 3. Upper left: left of headline & subhead (22% of total)
+        fillStratifiedZone(upperCountEach, -halfW, -20, 0, halfH, -8, 8);
+
+        // 4. Upper right: right of headline & subhead (22% of total)
+        fillStratifiedZone(upperCountEach, 20, halfW, 0, halfH, -8, 8);
+
+        // 5. Top strip: above headline (remaining ~10%)
+        fillStratifiedZone(topCount, -halfW * 0.7, halfW * 0.7, 16, halfH, -8, 8);
+
+        // Any trailing points strictly in safe margins
+        while (idx < count) {
+            const side = Math.random() > 0.5 ? 1 : -1;
+            const x = side * (20 + Math.random() * Math.max(halfW - 20, 5));
+            const y = -halfH + Math.random() * maxH;
+            const z = (Math.random() - 0.5) * 16;
+            setPoint(x, y, z);
+        }
+
+        this.particles.geometry.attributes.position.needsUpdate = true;
+    }
+
+    updateNodePositions() {
+        if (!this.nodePoints || !this.camera) return;
+
+        const visibleH = 2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * this.camera.position.z;
+        const visibleW = visibleH * this.camera.aspect;
+        const halfW = (visibleW * 0.95) / 2;
+        const halfH = (visibleH * 0.95) / 2;
+
+        const leftX1 = -Math.min(halfW * 0.88, 38);
+        const leftX2 = -Math.min(halfW * 0.68, 28);
+        const leftX3 = -Math.min(halfW * 0.52, 20);
+
+        const rightX1 = Math.min(halfW * 0.88, 38);
+        const rightX2 = Math.min(halfW * 0.68, 28);
+        const rightX3 = Math.min(halfW * 0.52, 20);
+
+        const leftNodes = [
+            new THREE.Vector3(leftX1, halfH * 0.6, -2),
+            new THREE.Vector3(leftX2, halfH * 0.2, 3),
+            new THREE.Vector3(leftX1, -halfH * 0.35, 1),
+            new THREE.Vector3(leftX3, halfH * 0.7, 0),
+            new THREE.Vector3(leftX3, -halfH * 0.15, -1),
+            new THREE.Vector3(leftX2, -halfH * 0.6, 2)
+        ];
+
+        const rightNodes = [
+            new THREE.Vector3(rightX1, halfH * 0.6, -2),
+            new THREE.Vector3(rightX2, halfH * 0.2, 3),
+            new THREE.Vector3(rightX1, -halfH * 0.35, 1),
+            new THREE.Vector3(rightX3, halfH * 0.7, 0),
+            new THREE.Vector3(rightX3, -halfH * 0.15, -1),
+            new THREE.Vector3(rightX2, -halfH * 0.6, 2)
+        ];
+
+        const allNodes = [...leftNodes, ...rightNodes];
+        this.nodePoints.geometry.setFromPoints(allNodes);
+        this.nodePoints.geometry.attributes.position.needsUpdate = true;
+
+        if (this.connectionLines) {
+            const lineConnections = [
+                leftNodes[0], leftNodes[1],
+                leftNodes[1], leftNodes[2],
+                leftNodes[0], leftNodes[3],
+                leftNodes[3], leftNodes[4],
+                leftNodes[1], leftNodes[4],
+                leftNodes[2], leftNodes[5],
+                leftNodes[4], leftNodes[5],
+
+                rightNodes[0], rightNodes[1],
+                rightNodes[1], rightNodes[2],
+                rightNodes[0], rightNodes[3],
+                rightNodes[3], rightNodes[4],
+                rightNodes[1], rightNodes[4],
+                rightNodes[2], rightNodes[5],
+                rightNodes[4], rightNodes[5]
+            ];
+            this.connectionLines.geometry.setFromPoints(lineConnections);
+            this.connectionLines.geometry.attributes.position.needsUpdate = true;
+        }
     }
 
     bindEvents() {

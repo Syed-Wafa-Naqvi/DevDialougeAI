@@ -14,6 +14,7 @@ import { toast } from './components/toast.js';
 class App {
     constructor() {
         this.heroScene = null;
+        window.app = this;
         this.init();
     }
 
