@@ -185,6 +185,7 @@ class Job(models.Model):
         ('verify', 'Static Verification'),
         ('repair', 'Code Repair'),
         ('feedback_edit', 'Feedback Edit'),
+        ('module', 'File-by-file Module Step'),
     ]
 
     STATUS_CHOICES = [

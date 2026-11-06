@@ -216,13 +216,6 @@ class JobExecutionEngine:
             if not created:
                 pf.create_new_version(code_content, source='generate')
 
-            # Dual-table sync: GeneratedCode
-            from chat.models import GeneratedCode
-            GeneratedCode.objects.update_or_create(
-                session=session,
-                module_name=file_path,
-                defaults={'code_content': code_content}
-            )
 
             job.progress_current = (idx + 1) * 10
             job.updated_at = timezone.now()

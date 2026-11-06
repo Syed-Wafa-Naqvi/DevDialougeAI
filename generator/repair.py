@@ -183,14 +183,7 @@ class CodeRepairEngine:
                 )
                 if not created:
                     pf.create_new_version(current_files[path], source='repair')
-                
-                # Keep GeneratedCode in sync with repaired content
-                from chat.models import GeneratedCode
-                GeneratedCode.objects.update_or_create(
-                    session=session,
-                    module_name=path,
-                    defaults={'code_content': current_files[path]}
-                )
+
 
     @classmethod
     def _format_honest_message(cls, file_count: int, attempts: int, verif_result: dict, status: str, runtime_res: dict = None) -> str:

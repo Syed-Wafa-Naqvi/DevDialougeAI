@@ -358,11 +358,37 @@ def _handle_module_edit(session, user_content, summary, existing_files, provider
     )
 
 
-def _handle_post_generation_qa(session, user_content, summary, provider_name, user):
+_CHANGE_VERBS = r'\b(add|remove|delete|change|modify|update|rename|replace|fix|make|use|switch|include|refactor|rewrite|edit|implement)\b'
+_QUESTION_START = r'^(what|why|how|where|when|which|who|explain|describe|is|are|does|do|should|could)\b'
+
+
+def _looks_like_question(text):
+    """True for questions about the code ("what does this file do?"),
+    False for change requests phrased as questions ("can you add a due date?")."""
+    t = (text or '').strip().lower()
+    if not t:
+        return False
+    if re.search(_CHANGE_VERBS, t) and not re.match(r'^(what|why|how|where|when|which|who|explain|describe)\b', t):
+        return False
+    return t.endswith('?') or bool(re.match(_QUESTION_START, t))
+
+
+def _handle_post_generation_qa(session, user_content, summary, provider_name, user, focus_file=None, in_progress=False):
+    if in_progress:
+        state_line = (
+            "The project is being generated module by module and is not finished yet. "
+            "Answer the question without changing any code."
+        )
+    else:
+        state_line = "The user's project codebase has already been generated and packaged into a ZIP."
+    file_context = ""
+    if focus_file is not None:
+        file_context = f"Current file `{focus_file.path}`:\n```\n{focus_file.content[:6000]}\n```\n\n"
     post_prompt = (
         f"Project Specification:\n{summary}\n\n"
+        f"{file_context}"
         f"User Question: \"{user_content}\"\n\n"
-        "The user's project codebase has already been generated and packaged into a ZIP. "
+        f"{state_line} "
         "Answer their question directly with clear, practical steps (e.g., exact commands to run the project, how to open in an IDE like VS Code or PyCharm, how to start the development server, how to access admin, etc.)."
     )
     post_system = (
@@ -475,69 +501,111 @@ def _handle_mode1_message(session, user_content, action, is_approval, provider_n
         return None, InterviewerService.generate_next_question(history, provider_name=provider_name, session=session, user=user)
 
 
-def _handle_mode2_message(session, user_content, action, is_approval, provider_name, history, user):
+def _run_mode2_worker(job_id, provider_name, task, save_message=True):
+    """Background worker for File-by-file mode. task is 'next_module' or 'complete'."""
+    from django.db import connection
+    from django.utils import timezone
+    from chat.models import Job
+    job = None
+    try:
+        job = Job.objects.select_related('session', 'user').get(id=job_id)
+        job.status = 'running'
+        job.updated_at = timezone.now()
+        job.save(update_fields=['status', 'updated_at'])
+        session = job.session
+        if task == 'complete':
+            job.log_event('info', 'Verifying and repairing the completed project...')
+            plan_obj = session.plans.first()
+            msg_text = _complete_incremental_project(session, plan_obj, provider_name)
+        else:
+            job.log_event('info', 'Generating the next module...')
+            _, _, _, msg_text = _generate_next_module(session=session, user=job.user, provider_name=provider_name, summary=session.summary_text or None)
+        if save_message:
+            Message.objects.create(session=session, role='assistant', content=msg_text)
+        job.result_summary = msg_text
+        job.status = 'succeeded'
+        job.progress_current = job.progress_total
+        job.updated_at = timezone.now()
+        job.save(update_fields=['result_summary', 'status', 'progress_current', 'updated_at'])
+    except Exception as worker_err:
+        if job is not None:
+            job.status = 'failed'
+            job.error_message = str(worker_err)
+            job.updated_at = timezone.now()
+            job.save(update_fields=['status', 'error_message', 'updated_at'])
+            Message.objects.create(
+                session=job.session, role='assistant',
+                content=f"### ⚠️ Module Generation Failed\n\n{worker_err}\n\nSay **yes** to try again."
+            )
+    finally:
+        connection.close()
+
+
+def _start_mode2_task(session, user, provider_name, task, run_async=True):
+    """Runs a File-by-file step as a background Job (async) or inline (tests).
+    Returns (job_or_None, response_text)."""
+    from generator.jobs import JobExecutionEngine
+    job = JobExecutionEngine.create_job(session=session, user=user, job_type='module')
+    if run_async:
+        import threading
+        threading.Thread(target=_run_mode2_worker, args=(job.id, provider_name, task), daemon=True).start()
+        if task == 'complete':
+            return job, "### 🔍 Verifying your project...\n\nAll modules are approved. Running final verification and repair in the background."
+        return job, "### ⚙️ Generating the next module...\n\nThis runs in the background; the file will appear on the right when it's ready."
+    # Inline (tests / X-Run-Sync: true): the caller saves the reply as the assistant message
+    _run_mode2_worker(job.id, provider_name, task, save_message=False)
+    job.refresh_from_db()
+    session.refresh_from_db()
+    if job.status == 'failed':
+        raise RuntimeError(job.error_message or 'Module generation failed')
+    return None, job.result_summary
+
+
+def _handle_mode2_message(session, user_content, action, is_approval, provider_name, history, user, run_async=True):
+    """File-by-file routing. Returns (active_job, response_text).
+
+    Decision order for every step:
+      1. Question about the code     -> answer, never touch files
+      2. Approval (button or 'yes')  -> next module, or final verification after the last one
+      3. Anything else               -> change request for the current module
+    """
     summary = session.summary_text or SRSSynthesizer.synthesize_summary(history, is_mode2=True, provider_name=provider_name, session=session, user=user)
-    from generator.planner import PlanGenerator
     plan_obj = session.plans.first()
-    if not plan_obj and summary:
-        try:
-            plan_obj = PlanGenerator.generate_plan(summary, session, provider_name=provider_name)
-        except Exception:
-            plan_obj = None
-
     modules = plan_obj.generation_order if plan_obj else FilePlanner.get_module_list(summary)
-    existing_files = list(session.project_files.filter(path__in=modules))
-    all_modules_generated = len(existing_files) >= len(modules) and len(modules) > 0
+    existing_files = list(session.project_files.filter(path__in=modules)) if modules else []
+    current_file = max(existing_files, key=lambda f: f.updated_at) if existing_files else None
+    is_question = action is None and not is_approval and _looks_like_question(user_content)
 
-    edit_patterns = [
-        r'\b(modify|update|refactor|rewrite|edit|fix code|add field|add model|fix bug)\b',
-        r'\bchange\s+(the\s+)?(code|module|file|function|class|model|view|schema|implementation)\b'
-    ]
-    wants_edit = (action == 'edit') or any(re.search(pat, user_content, re.IGNORECASE) for pat in edit_patterns)
-
-    # 1. Project already completed and verified
+    # A. Project already finished: questions -> Q&A, everything else -> edit
     if session.status in ('completed', 'ready', 'needs_attention'):
-        if wants_edit and existing_files:
-            return _handle_module_edit(session, user_content, summary, existing_files, provider_name, user)
-        else:
-            return _handle_post_generation_qa(session, user_content, summary, provider_name, user)
+        if is_question or not existing_files:
+            return None, _handle_post_generation_qa(session, user_content, summary, provider_name, user)
+        return None, _handle_module_edit(session, user_content, summary, existing_files, provider_name, user)
 
-    # 2. All planned modules exist: awaiting final approval/completion
-    if all_modules_generated:
-        if wants_edit and existing_files:
-            return _handle_module_edit(session, user_content, summary, existing_files, provider_name, user)
-        else:
-            # User approved or confirmed the final module -> run completion & verification!
-            return _complete_incremental_project(session, plan_obj, provider_name)
+    # B. No module generated yet (reviewing the requirements summary)
+    if not existing_files:
+        if is_approval:
+            return _start_mode2_task(session, user, provider_name, 'next_module', run_async)
+        if is_question:
+            return None, _handle_post_generation_qa(session, user_content, summary, provider_name, user, in_progress=True)
+        # Requirement change: rebuild the summary from the full history (which includes this message)
+        new_summary = SRSSynthesizer.synthesize_summary(history, is_mode2=True, provider_name=provider_name, session=session, user=user)
+        session.summary_text = new_summary
+        session.save(update_fields=['summary_text'])
+        session.plans.all().delete()  # plan was built from the old summary
+        return None, new_summary
 
-    # 3. Intermediate module review: user requests changes to current module
-    if len(existing_files) > 0 and not is_approval:
-        last_pf = existing_files[-1]
-        updated_code = CodeBuilder.generate_code_for_module(
-            last_pf.path,
-            summary,
-            modifications=user_content,
-            provider_name=provider_name,
-            session=session,
-            user=user
-        )
-        last_pf.create_new_version(updated_code, source='user_feedback')
-        return (
-            f"### ✏️ Updated Module `{last_pf.path}`\n\n"
-            f"I have modified `{last_pf.path}` based on your feedback: *\"{user_content}\"*\n\n"
-            f"You can inspect the updated code in the right panel. Do you approve this module? (Say **yes** to approve and proceed, or specify further changes)."
-        )
+    # C. Reviewing a module
+    if is_question:
+        return None, _handle_post_generation_qa(session, user_content, summary, provider_name, user, focus_file=current_file, in_progress=True)
+    if is_approval:
+        task = 'complete' if len(existing_files) >= len(modules) else 'next_module'
+        return _start_mode2_task(session, user, provider_name, task, run_async)
+    # Change request: edit the file the user names, else the module under review
+    if current_file is not None:
+        existing_files = [f for f in existing_files if f.pk != current_file.pk] + [current_file]
+    return None, _handle_module_edit(session, user_content, summary, existing_files, provider_name, user)
 
-    # 4. User approved or starting next module
-    _, _, _, response_text = _generate_next_module(
-        session=session,
-        user=user,
-        provider_name=provider_name,
-        summary=summary,
-        modules=modules,
-        existing_files=existing_files
-    )
-    return response_text
 
 
 @verification_required
@@ -598,12 +666,14 @@ def send_message_api(request, session_id):
         
         if has_summary:
             is_approval = False
-            if action == 'generate':
+            if action in ('generate', 'approve_module'):
                 is_approval = True
+            elif action == 'changes':
+                is_approval = False
             else:
                 confirmation_msg = user_content.lower().strip()
                 has_negation = bool(re.search(r'\b(no|not|don\'?t|never|wait|stop|hold|cancel|refuse)\b', confirmation_msg))
-                if not has_negation:
+                if action is None and not has_negation:
                     # Strict affirmative match: user's input is a dedicated approval command or affirmative phrase
                     strict_approval_patterns = [
                         r'^(yes|y|proceed|approve|confirm|ok|okay|sure|go ahead|looks good|looks great|lgtm|perfect|fine|accepted|approved)[.!]?$',
@@ -614,11 +684,16 @@ def send_message_api(request, session_id):
                     ]
                     if any(re.match(pat, confirmation_msg) for pat in strict_approval_patterns):
                         is_approval = True
+                    # "yes, proceed with the first module" / "ok continue": affirmative opener and no
+                    # change request inside ("yes, but add an admin panel" stays a change request)
+                    elif re.match(r'^(yes|yep|yup|yeah|sure|ok|okay|approved?|proceed|go ahead|continue|next|looks good|lgtm)\b', confirmation_msg) \
+                            and not re.search(_CHANGE_VERBS, confirmation_msg):
+                        is_approval = True
 
             if session.mode == 'mode1':
                 active_job, response_text = _handle_mode1_message(session, user_content, action, is_approval, provider_name, run_async, history, request.user)
             else:
-                response_text = _handle_mode2_message(session, user_content, action, is_approval, provider_name, history, request.user)
+                active_job, response_text = _handle_mode2_message(session, user_content, action, is_approval, provider_name, history, request.user, run_async=run_async)
         else:
             # Check if user explicitly demanded code/files or agreed to generation prompt
             code_demand_triggers = [
@@ -640,7 +715,12 @@ def send_message_api(request, session_id):
 
             if is_direct_code_demand:
                 if session.mode == 'mode2':
-                    _, _, _, response_text = _generate_next_module(session=session, user=request.user, provider_name=provider_name)
+                    # Build summary + plan now (fast enough), generate Module 1 in the background
+                    if not session.summary_text:
+                        session.summary_text = SRSSynthesizer.synthesize_summary(history, is_mode2=True, provider_name=provider_name, session=session, user=request.user)
+                        session.save(update_fields=['summary_text'])
+                        SessionStateMachine.transition_to(session, 'srs_ready')
+                    active_job, response_text = _start_mode2_task(session, request.user, provider_name, 'next_module', run_async=run_async)
                 else:
                     active_job, response_text = _trigger_generation_job(session, request.user, provider_name, run_async=run_async)
             elif CompletenessEngine.should_synthesize_summary(history, user_content, provider_name=provider_name):
@@ -790,6 +870,7 @@ def get_job_events_api(request, job_id):
     
     return JsonResponse({
         'job_id': job.id,
+        'job_type': job.job_type,
         'status': job.status,
         'progress_current': job.progress_current,
         'progress_total': job.progress_total,

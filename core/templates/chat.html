@@ -378,6 +378,16 @@
                         </button>
                     </div>
 
+                    <!-- File-by-file: per-module review buttons (explicit intent, no guessing from text) -->
+                    <div class="chat-action-bar {% if session.mode != 'mode2' or session.status != 'generating' or active_job %}hidden{% endif %}" id="module-review-bar" style="margin-bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button type="button" class="btn btn-primary btn-sm" id="btn-approve-module" onclick="triggerAction('approve_module')">
+                            <i data-lucide="check" class="icon-inline"></i> Approve module
+                        </button>
+                        <button type="button" class="btn btn-ghost btn-sm" id="btn-module-changes" onclick="triggerAction('module_changes')">
+                            <i data-lucide="edit-3" class="icon-inline"></i> Request changes
+                        </button>
+                    </div>
+
                     <form id="chat-input-form" class="input-form">
                         {% csrf_token %}
                         <div class="input-container-card" id="input-card">
@@ -727,6 +737,14 @@
     };
 
     let pendingAction = null;
+    const SESSION_MODE = '{{ session.mode }}';
+    function updateModuleReviewBar(status, jobRunning) {
+        const bar = document.getElementById('module-review-bar');
+        if (!bar) return;
+        const show = SESSION_MODE === 'mode2' && status === 'generating' && !jobRunning;
+        bar.classList.toggle('hidden', !show);
+    }
+    window.updateModuleReviewBar = updateModuleReviewBar;
     window.triggerAction = function(type) {
         if (type === 'generate') {
             pendingAction = 'generate';
@@ -735,13 +753,15 @@
                 chatForm.dispatchEvent(new Event('submit'));
             }
         } else if (type === 'approve_module') {
+            pendingAction = 'approve_module';
             if (inputField) {
                 inputField.value = "Approved. Proceed to the next module.";
                 chatForm.dispatchEvent(new Event('submit'));
             }
-        } else if (type === 'changes') {
+        } else if (type === 'changes' || type === 'module_changes') {
+            pendingAction = 'changes';
             if (inputField) {
-                inputField.value = "Please modify the requirements to: ";
+                inputField.value = type === 'changes' ? "Please modify the requirements to: " : "Change this module: ";
                 inputField.focus();
                 inputField.setSelectionRange(inputField.value.length, inputField.value.length);
                 const btn = document.getElementById('btn-send-message');
@@ -872,6 +892,7 @@
                         updateStatusBadge(data.status);
                         updateStepperStage(data.status);
                         
+                        updateModuleReviewBar(data.status, !!data.job_id);
                         // Toggle action bar visibility
                         const actionBar = document.getElementById('chat-action-bar');
                         if (actionBar) {
@@ -1500,14 +1521,20 @@
                             const sessStatus = data.session_status || 'ready';
                             updateStatusBadge(sessStatus);
                             updateStepperStage(sessStatus);
+                            updateModuleReviewBar(sessStatus, false);
+                            if (data.job_type === 'module') {
+                                if (data.result_summary) appendMessageBubble('assistant', data.result_summary);
+                            } else {
                             if (inputField) {
                                 inputField.placeholder = "Codebase generated! Ask to edit files, add features, or how to run the project...";
                             }
                             if (data.result_summary) {
                                 appendMessageBubble('assistant', `### 🎉 Complete Project Codebase Ready!\n\n${data.result_summary}\n\nYou can inspect each file in the workspace file tree on the right, view the architecture plan and verification checks, and download your turnkey project ZIP.`);
                             }
+                            }
                         } else if (data.status === 'failed') {
-                            updateStatusBadge('needs_attention');
+                            updateModuleReviewBar(data.session_status, false);
+                            updateStatusBadge(data.session_status || 'needs_attention');
                             updateStepperStage('needs_attention');
                             appendMessageBubble('assistant', `### ⚠️ Generation Failed\n\n${data.error_message || 'An error occurred during build. Please try again or request modifications.'}`);
                         }

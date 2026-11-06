@@ -80,7 +80,7 @@ class ChatTestCase(TestCase):
         session.refresh_from_db()
         self.assertIn(session.status, ['ready', 'needs_attention'])
         self.assertTrue(session.project_files.exists())
-        self.assertTrue(session.generated_codes.exists())
+        self.assertTrue(session.project_files.exists())
         self.assertTrue(session.jobs.filter(status='succeeded').exists())
 
     def test_job_refresh_from_db_populates_result_summary(self):
@@ -512,3 +512,82 @@ class ChatTestCase(TestCase):
         session.refresh_from_db()
         self.assertIn(session.status, ['ready', 'needs_attention'])
         self.assertEqual(data.get('status'), session.status)
+
+    # --- File-by-file routing regressions -------------------------------------------------
+    def _mode2_session(self, generated=('app/models.py',), status='generating'):
+        from chat.models import ProjectPlan
+        session = Session.objects.create(user=self.user, mode='mode2', status=status)
+        session.summary_text = '### Project Requirements Summary\nTodo app with two modules'
+        session.save(update_fields=['summary_text'])
+        modules = ['app/models.py', 'app/views.py']
+        ProjectPlan.objects.create(session=session, version=1, plan_data={'files': [{'path': m} for m in modules]}, generation_order=modules)
+        for path in generated:
+            ProjectFile.objects.create(session=session, path=path, content='# v1', status='generated')
+        Message.objects.create(session=session, role='assistant', content='### Module 1/2\nDo you approve this module?')
+        return session
+
+    def _send(self, session, message, action=None):
+        payload = {'message': message, 'provider': 'mock'}
+        if action:
+            payload['action'] = action
+        return self.client.post(f'/api/chat/{session.id}/send/', data=payload, content_type='application/json')
+
+    def test_mode2_question_mid_build_does_not_rewrite_module(self):
+        session = self._mode2_session()
+        response = self._send(session, 'what does this file do?')
+        self.assertEqual(response.status_code, 200)
+        pf = ProjectFile.objects.get(session=session, path='app/models.py')
+        self.assertEqual(pf.current_version, 1)
+        self.assertEqual(pf.content, '# v1')
+        self.assertFalse(ProjectFile.objects.filter(session=session, path='app/views.py').exists())
+
+    def test_mode2_change_request_on_last_module_edits_instead_of_completing(self):
+        session = self._mode2_session(generated=('app/models.py', 'app/views.py'))
+        response = self._send(session, 'add a due date filter to the task list')
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('Incremental Generation Complete', response.json().get('response', ''))
+        session.refresh_from_db()
+        self.assertEqual(session.status, 'generating')
+        self.assertEqual(ProjectFile.objects.get(session=session, path='app/views.py').current_version, 2)
+
+    def test_mode2_approve_button_on_last_module_completes(self):
+        session = self._mode2_session(generated=('app/models.py', 'app/views.py'))
+        response = self._send(session, 'Approved. Proceed to the next module.', action='approve_module')
+        self.assertIn('Incremental Generation Complete', response.json().get('response', ''))
+        session.refresh_from_db()
+        self.assertIn(session.status, ['ready', 'needs_attention'])
+
+    def test_mode2_requirement_change_before_any_module_updates_summary(self):
+        session = self._mode2_session(generated=(), status='srs_ready')
+        response = self._send(session, 'Please modify the requirements to: add an admin panel', action='changes')
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(session.project_files.exists())
+        self.assertFalse(session.plans.exists())  # stale plan dropped
+
+    def test_mode2_change_question_is_treated_as_change(self):
+        from chat.views import _looks_like_question
+        self.assertTrue(_looks_like_question('what does this file do?'))
+        self.assertTrue(_looks_like_question('how do I run it'))
+        self.assertFalse(_looks_like_question('can you add a due date?'))
+        self.assertFalse(_looks_like_question('add a due date filter'))
+
+    def test_mode2_module_step_runs_as_background_job(self):
+        from unittest import mock
+        from chat.models import Job
+        session = self._mode2_session()
+        with mock.patch('threading.Thread') as thread_cls:
+            response = self.client.post(
+                f'/api/chat/{session.id}/send/',
+                data={'message': 'yes', 'provider': 'mock', 'action': 'approve_module'},
+                content_type='application/json', HTTP_X_RUN_SYNC='false'
+            )
+        self.assertEqual(response.status_code, 200)
+        job_id = response.json().get('job_id')
+        self.assertIsNotNone(job_id)
+        self.assertEqual(Job.objects.get(id=job_id).job_type, 'module')
+        thread_cls.return_value.start.assert_called_once()
+
+    def test_affirmative_with_change_is_not_approval(self):
+        session = self._mode2_session(generated=(), status='srs_ready')
+        self._send(session, 'yes, but add an admin panel')
+        self.assertFalse(session.project_files.exists())
