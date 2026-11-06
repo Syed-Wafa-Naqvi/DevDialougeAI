@@ -1473,11 +1473,6 @@ textarea.form-control {
         font-size: 36px;
     }
 
-    .nav-menu {
-        display: none;
-        /* simple hidden mobile menu for mock purposes */
-    }
-
     .dashboard-header-panel {
         flex-direction: column;
         align-items: flex-start;
@@ -4208,4 +4203,169 @@ body.chat-page-body .main-content-wrapper {
 .diff-remove {
     background: rgba(239, 68, 68, 0.15);
     color: #f87171;
+}
+
+/* ==========================================================================
+   Mobile Responsive Navigation & General Mobile Safety
+   ========================================================================== */
+
+.mobile-menu-btn {
+    display: none;
+    padding: 6px 8px;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink);
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: var(--r-md, 8px);
+    cursor: pointer;
+}
+
+.mobile-nav-panel {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+    padding: 8px 16px 16px;
+    box-sizing: border-box;
+    z-index: 1000;
+}
+
+.mobile-nav-panel.is-open {
+    display: block;
+}
+
+.mobile-nav-links {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+}
+
+.mobile-nav-link {
+    display: flex;
+    align-items: center;
+    min-height: 44px; /* Min 44px tall tap targets (§1) */
+    padding: 0 14px;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--ink);
+    text-decoration: none;
+    border-radius: var(--r-md, 8px);
+    transition: background-color 0.15s ease, color 0.15s ease;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.mobile-nav-link:hover,
+.mobile-nav-link:active {
+    background-color: var(--surface-hover, rgba(0, 0, 0, 0.04));
+    color: var(--brand);
+}
+
+.mobile-logout-btn {
+    background: none;
+    border: none;
+    font-family: inherit;
+    font-size: 15px;
+    text-align: left;
+    color: var(--error-text, #e5484d);
+    cursor: pointer;
+}
+
+.hero-title-main {
+    font-size: clamp(2.25rem, 9vw, 4.5rem);
+    line-height: 1.05;
+    overflow-wrap: anywhere;
+    word-break: normal;
+}
+
+@media (max-width: 767.98px) {
+    /* Navbar below 768px */
+    .nav-links-desktop {
+        display: none !important;
+    }
+    .mobile-menu-btn {
+        display: inline-flex !important;
+    }
+    .nav-container {
+        padding: 10px 16px !important;
+        gap: 8px;
+    }
+    .nav-menu {
+        gap: 8px !important;
+    }
+    .btn-cta-nav {
+        padding: 6px 12px !important;
+        font-size: 13px !important;
+        white-space: nowrap !important;
+    }
+    .nav-brand-text {
+        font-size: 1rem !important;
+        white-space: nowrap !important;
+    }
+
+    /* General mobile section padding 16px (§4) */
+    .hero-section {
+        padding: 48px 16px 60px !important;
+    }
+    .pipeline-section {
+        padding: 60px 16px !important;
+    }
+    .features-section,
+    .pricing-section,
+    .about-section,
+    .contact-section {
+        padding: 60px 16px !important;
+    }
+
+    /* Product mockup safety on mobile */
+    .floating-card {
+        display: none !important;
+    }
+    .product-frame-viewport {
+        padding: 10px 0 !important;
+        max-width: 100% !important;
+        overflow: hidden !important;
+    }
+    #hero-product-group {
+        transform: none !important;
+    }
+    .product-frame-main {
+        display: flex !important;
+        flex-direction: column !important;
+        height: auto !important;
+        max-width: 100% !important;
+    }
+    .product-frame-sidebar {
+        display: none !important;
+    }
+    .product-frame-chat,
+    .product-frame-code {
+        width: 100% !important;
+        box-sizing: border-box !important;
+        border-right: none !important;
+    }
+}
+
+/* Mobile buttons below 480px (§3) */
+@media (max-width: 480px) {
+    .hero-cta-group {
+        flex-direction: column !important;
+        width: 100% !important;
+        gap: 12px !important;
+        padding: 0 16px !important;
+        box-sizing: border-box !important;
+        margin-bottom: 40px !important;
+    }
+    .hero-cta-group .btn {
+        width: 100% !important;
+        display: flex !important;
+        justify-content: center !important;
+        box-sizing: border-box !important;
+    }
 }

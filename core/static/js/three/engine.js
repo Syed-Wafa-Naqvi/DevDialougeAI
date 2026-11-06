@@ -208,6 +208,12 @@ export class LandingNebulaScene extends ThreeEngine {
         this.reducedMotion = prefersReducedMotion || this.tier === 'Reduced';
         this.hasMouse = window.matchMedia && window.matchMedia('(any-hover: hover) and (any-pointer: fine)').matches;
 
+        // Mobile coarse pointer detection (Item 6): reduce particles & skip connecting lines
+        const isMobileCoarse = window.matchMedia &&
+            window.matchMedia('(any-pointer: coarse)').matches &&
+            !window.matchMedia('(any-pointer: fine)').matches;
+        this.isMobileCoarse = isMobileCoarse;
+
         // Size dynamically from the enclosing hero section
         this.heroSection = this.canvas.closest('.hero-section') || this.canvas.parentElement || this.canvas;
         this.initSectionResizeObserver();
@@ -245,7 +251,8 @@ export class LandingNebulaScene extends ThreeEngine {
         this.pointTexture = createGlowingPointTexture();
 
         // 1. Soft glowing background particle cloud across full width and height
-        this.particleCount = (this.tier === 'High') ? 220 : 100;
+        // Mobile battery saving: ~60 particles on coarse-only mobile displays
+        this.particleCount = this.isMobileCoarse ? 60 : ((this.tier === 'High') ? 220 : 100);
         const particleGeo = new THREE.BufferGeometry();
         const positions = new Float32Array(this.particleCount * 3);
         const colors = new Float32Array(this.particleCount * 3);
@@ -256,9 +263,15 @@ export class LandingNebulaScene extends ThreeEngine {
         const colorSoft = new THREE.Color(0x60A5FA);
 
         for (let i = 0; i < this.particleCount; i++) {
-            const x = (Math.random() - 0.5) * 110;
-            const y = (Math.random() - 0.5) * 44;
-            const z = (Math.random() - 0.5) * 22;
+            let x, y, z;
+            let attempts = 0;
+            // Widen keep-out zone around headline, paragraph, and buttons (|x| < 30 and y in [-14, 20])
+            do {
+                x = (Math.random() - 0.5) * 110;
+                y = (Math.random() - 0.5) * 44;
+                z = (Math.random() - 0.5) * 22;
+                attempts++;
+            } while (attempts < 100 && (Math.abs(x) < 30 && y > -14 && y < 20));
 
             positions[i * 3] = x;
             positions[i * 3 + 1] = y;
@@ -294,23 +307,23 @@ export class LandingNebulaScene extends ThreeEngine {
         this.particles = new THREE.Points(particleGeo, particleMat);
         this.masterGroup.add(this.particles);
 
-        // 2. 12 larger "node" points placed strictly at the left and right sides
+        // 2. 12 larger "node" points placed strictly at the left and right perimeters
         const leftNodes = [
-            new THREE.Vector3(-44, 12, -2),
-            new THREE.Vector3(-35, 4, 3),
-            new THREE.Vector3(-42, -7, 1),
-            new THREE.Vector3(-25, 14, 0),
-            new THREE.Vector3(-21, -3, -1),
-            new THREE.Vector3(-29, -12, 2)
+            new THREE.Vector3(-46, 12, -2),
+            new THREE.Vector3(-36, 4, 3),
+            new THREE.Vector3(-44, -7, 1),
+            new THREE.Vector3(-32, 14, 0),
+            new THREE.Vector3(-33, -3, -1),
+            new THREE.Vector3(-35, -12, 2)
         ];
 
         const rightNodes = [
-            new THREE.Vector3(44, 12, -2),
-            new THREE.Vector3(35, 4, 3),
-            new THREE.Vector3(42, -7, 1),
-            new THREE.Vector3(25, 14, 0),
-            new THREE.Vector3(21, -3, -1),
-            new THREE.Vector3(29, -12, 2)
+            new THREE.Vector3(46, 12, -2),
+            new THREE.Vector3(36, 4, 3),
+            new THREE.Vector3(44, -7, 1),
+            new THREE.Vector3(32, 14, 0),
+            new THREE.Vector3(33, -3, -1),
+            new THREE.Vector3(35, -12, 2)
         ];
 
         const allNodes = [...leftNodes, ...rightNodes];
@@ -329,38 +342,40 @@ export class LandingNebulaScene extends ThreeEngine {
         this.nodePoints = new THREE.Points(nodeGeo, nodeMat);
         this.masterGroup.add(this.nodePoints);
 
-        // 3. Faint connecting lines strictly within left side and right side (no center crossing)
-        const lineConnections = [
-            // Left loose graph
-            leftNodes[0], leftNodes[1],
-            leftNodes[1], leftNodes[2],
-            leftNodes[0], leftNodes[3],
-            leftNodes[3], leftNodes[4],
-            leftNodes[1], leftNodes[4],
-            leftNodes[2], leftNodes[5],
-            leftNodes[4], leftNodes[5],
+        // 3. Faint connecting lines strictly within side clusters (skipped on mobile to save battery)
+        if (!this.isMobileCoarse) {
+            const lineConnections = [
+                // Left loose graph
+                leftNodes[0], leftNodes[1],
+                leftNodes[1], leftNodes[2],
+                leftNodes[0], leftNodes[3],
+                leftNodes[3], leftNodes[4],
+                leftNodes[1], leftNodes[4],
+                leftNodes[2], leftNodes[5],
+                leftNodes[4], leftNodes[5],
 
-            // Right loose graph
-            rightNodes[0], rightNodes[1],
-            rightNodes[1], rightNodes[2],
-            rightNodes[0], rightNodes[3],
-            rightNodes[3], rightNodes[4],
-            rightNodes[1], rightNodes[4],
-            rightNodes[2], rightNodes[5],
-            rightNodes[4], rightNodes[5]
-        ];
+                // Right loose graph
+                rightNodes[0], rightNodes[1],
+                rightNodes[1], rightNodes[2],
+                rightNodes[0], rightNodes[3],
+                rightNodes[3], rightNodes[4],
+                rightNodes[1], rightNodes[4],
+                rightNodes[2], rightNodes[5],
+                rightNodes[4], rightNodes[5]
+            ];
 
-        const lineGeo = new THREE.BufferGeometry().setFromPoints(lineConnections);
-        const lineMat = new THREE.LineBasicMaterial({
-            color: 0x60A5FA,
-            transparent: true,
-            opacity: 0.25,
-            blending: THREE.AdditiveBlending,
-            linewidth: 1
-        });
+            const lineGeo = new THREE.BufferGeometry().setFromPoints(lineConnections);
+            const lineMat = new THREE.LineBasicMaterial({
+                color: 0x60A5FA,
+                transparent: true,
+                opacity: 0.25,
+                blending: THREE.AdditiveBlending,
+                linewidth: 1
+            });
 
-        this.connectionLines = new THREE.LineSegments(lineGeo, lineMat);
-        this.masterGroup.add(this.connectionLines);
+            this.connectionLines = new THREE.LineSegments(lineGeo, lineMat);
+            this.masterGroup.add(this.connectionLines);
+        }
 
         this.scene.add(this.masterGroup);
     }
