@@ -1,12 +1,11 @@
 /**
  * DevDialogue AI — Master Application Entry Point (v3 Rebuild)
- * Modular ES Architecture, WebGL 3D, GSAP Motion Engine, Lenis & Barba.js
+ * Modular ES Architecture, WebGL 3D, GSAP Motion Engine, Lenis & Native View Transitions
  */
 
 import { registerEases } from './motion/ease.js';
 import { initScrollReveals, initTiltCards, initMagneticButtons } from './motion/presets.js';
 import { initSmoothScroll } from './motion/scroll.js';
-import { initPageTransitions } from './motion/transitions.js';
 import { qualityManager } from './motion/quality.js';
 import { LandingNebulaScene } from './three/engine.js';
 import { CommandPalette } from './components/commandPalette.js';
@@ -28,7 +27,6 @@ class App {
             initScrollReveals();
             initTiltCards();
             initMagneticButtons();
-            initPageTransitions();
             CommandPalette.init();
             toast.init();
             this.initCustomCursor();

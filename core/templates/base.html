@@ -37,12 +37,11 @@
     <script src="{% static 'vendor/ScrollTrigger.min.js' %}"></script>
     <script src="{% static 'vendor/Flip.min.js' %}"></script>
     <script src="{% static 'vendor/lenis.min.js' %}"></script>
-    <script src="{% static 'vendor/barba.min.js' %}"></script>
     <script src="{% static 'vendor/three.min.js' %}"></script>
     {% endblock %}
 
-    <!-- Lucide Icons (Pinned version) -->
-    <script src="https://unpkg.com/lucide@0.441.0"></script>
+    <!-- Vendored Lucide Icons -->
+    <script src="{% static 'vendor/lucide.min.js' %}"></script>
 
     <!-- Stylesheets -->
     <link rel="stylesheet" href="{% static 'css/tokens.css' %}">
@@ -53,13 +52,44 @@
     <link rel="stylesheet" href="{% static 'css/components/command_palette.css' %}">
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
 
+    <!-- Native View Transitions (§6.4) -->
+    <style>
+        @view-transition {
+            navigation: auto;
+        }
+        ::view-transition-old(root) {
+            animation: 180ms ease-in both vt-fade-out;
+        }
+        ::view-transition-new(root) {
+            animation: 250ms ease-out both vt-fade-in;
+        }
+        @keyframes vt-fade-out {
+            from { opacity: 1; transform: scale(1); }
+            to { opacity: 0; transform: scale(0.99); }
+        }
+        @keyframes vt-fade-in {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            ::view-transition-group(*),
+            ::view-transition-old(*),
+            ::view-transition-new(*) {
+                animation: none !important;
+            }
+        }
+        .user-dropdown-menu .dropdown-item:hover {
+            background-color: var(--surface-hover);
+        }
+    </style>
+
     <!-- App Entry -->
     {% block app_scripts %}
     <script type="module" src="{% static 'js/app.js' %}"></script>
     {% endblock %}
     {% block extra_head %}{% endblock %}
 </head>
-<body data-barba="wrapper" class="{% block body_class %}{% endblock %}">
+<body class="{% block body_class %}{% endblock %}">
     <!-- Top Progress Bar -->
     <div class="top-progress-bar"></div>
 
@@ -78,13 +108,37 @@
                 
                 {% if user.is_authenticated %}
                     <a href="{% url 'dashboard' %}" class="btn btn-secondary btn-sm">Projects</a>
-                    <a href="{% url 'settings' %}" class="btn btn-ghost btn-sm" aria-label="Settings"><i data-lucide="settings"></i></a>
-                    <form action="{% url 'logout' %}" method="POST" style="display:inline; margin:0;">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-ghost btn-sm text-danger" aria-label="Logout" title="Logout" style="background:none; border:none; cursor:pointer;">
-                            <i data-lucide="log-out"></i>
+                    
+                    <!-- User Profile & Dropdown -->
+                    <div class="user-dropdown-container" style="position: relative;">
+                        <button type="button" id="user-menu-btn" class="user-avatar-btn" aria-haspopup="true" aria-expanded="false" style="display: flex; align-items: center; gap: 8px; background: none; border: 1px solid var(--border); border-radius: 9999px; padding: 3px 10px 3px 4px; cursor: pointer; color: var(--ink);">
+                            <div class="user-avatar-circle" style="width: 28px; height: 28px; border-radius: 50%; background: var(--brand); color: white; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;">
+                                {{ user.username|slice:":1"|upper }}
+                            </div>
+                            <span class="user-nav-name" style="font-size: 13px; font-weight: 500;">{{ user.username }}</span>
+                            <i data-lucide="chevron-down" style="width: 14px; height: 14px; color: var(--ink-3);"></i>
                         </button>
-                    </form>
+                        
+                        <div id="user-menu-dropdown" class="user-dropdown-menu" style="display: none; position: absolute; right: 0; top: calc(100% + 8px); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md, 8px); box-shadow: var(--shadow-lg, 0 10px 25px rgba(0,0,0,0.1)); min-width: 190px; z-index: 1000; padding: 6px 0;">
+                            <div style="padding: 8px 16px; border-bottom: 1px solid var(--border); font-size: 12px;">
+                                <div style="font-weight: 600; color: var(--ink);">{{ user.username }}</div>
+                                <div style="color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ user.email|default:"Signed in" }}</div>
+                            </div>
+                            <a href="{% url 'dashboard' %}" class="dropdown-item" style="display: flex; align-items: center; gap: 8px; padding: 8px 16px; color: var(--ink); text-decoration: none; font-size: 13px;">
+                                <i data-lucide="layout-grid" style="width: 15px; height: 15px;"></i> Projects
+                            </a>
+                            <a href="{% url 'settings' %}" class="dropdown-item" style="display: flex; align-items: center; gap: 8px; padding: 8px 16px; color: var(--ink); text-decoration: none; font-size: 13px;">
+                                <i data-lucide="settings" style="width: 15px; height: 15px;"></i> Settings
+                            </a>
+                            <div style="height: 1px; background: var(--border); margin: 4px 0;"></div>
+                            <form action="{% url 'logout' %}" method="POST" style="margin: 0;">
+                                {% csrf_token %}
+                                <button type="submit" class="dropdown-item" style="width: 100%; display: flex; align-items: center; gap: 8px; padding: 8px 16px; color: var(--error-text, #e5484d); background: none; border: none; font-size: 13px; cursor: pointer; text-align: left;">
+                                    <i data-lucide="log-out" style="width: 15px; height: 15px;"></i> Log Out
+                                </button>
+                            </form>
+                        </div>
+                    </div>
                 {% else %}
                     <a href="{% url 'login' %}" class="btn btn-ghost">Log In</a>
                     <a href="{% url 'signup' %}" class="btn btn-primary">Start Building</a>
@@ -133,7 +187,7 @@
     </dialog>
 
     <!-- Main Container -->
-    <main data-barba="container" data-barba-namespace="{% block page_namespace %}default{% endblock %}" class="page-container">
+    <main class="page-container">
         {% block content %}{% endblock %}
     </main>
 
@@ -175,6 +229,33 @@
             const themeBtn = document.getElementById('theme-toggle');
             if (themeBtn) {
                 themeBtn.addEventListener('click', window.toggleTheme);
+            }
+
+            // User Profile Menu Dropdown (§8)
+            const userMenuBtn = document.getElementById('user-menu-btn');
+            const userMenuDropdown = document.getElementById('user-menu-dropdown');
+            if (userMenuBtn && userMenuDropdown) {
+                const toggleDropdown = (e) => {
+                    e.stopPropagation();
+                    const isVisible = userMenuDropdown.style.display === 'block';
+                    userMenuDropdown.style.display = isVisible ? 'none' : 'block';
+                    userMenuBtn.setAttribute('aria-expanded', !isVisible);
+                };
+                userMenuBtn.addEventListener('click', toggleDropdown);
+
+                document.addEventListener('click', (e) => {
+                    if (!userMenuDropdown.contains(e.target) && !userMenuBtn.contains(e.target)) {
+                        userMenuDropdown.style.display = 'none';
+                        userMenuBtn.setAttribute('aria-expanded', 'false');
+                    }
+                });
+
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        userMenuDropdown.style.display = 'none';
+                        userMenuBtn.setAttribute('aria-expanded', 'false');
+                    }
+                });
             }
         });
     </script>

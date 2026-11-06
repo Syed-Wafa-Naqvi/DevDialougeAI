@@ -213,33 +213,28 @@
                         {% if session.mode == 'mode1' %}All at once{% else %}File by file{% endif %}
                     </span>
                 {% endif %}
-
-                <!-- Model Picker Chip -->
-                <span class="badge badge-brand" style="font-size: 11px; font-weight: 500;">
-                    Auto (Recommended)
-                </span>
             </div>
 
             <!-- 5-Stage Stepper Bar (§4) -->
             <div class="stage-stepper-container" id="stage-stepper-row">
-                <button type="button" class="stage-step-btn {% if session.status == 'active' or session.status == 'interviewing' %}active{% endif %}" data-stage="discover" onclick="switchWorkspaceStage('discover')">
-                    <span class="stage-step-num">1</span> Discover
+                <button type="button" class="stage-step-btn {% if session.status == 'active' or session.status == 'interviewing' %}active{% endif %}" data-stage="discover" onclick="switchWorkspaceStage('discover')" title="1. Requirement Discovery">
+                    <span class="stage-step-num">1</span> <span class="stage-step-label">Discover</span>
                 </button>
                 <span class="stage-step-divider"></span>
-                <button type="button" class="stage-step-btn {% if session.status == 'srs_ready' or session.status == 'plan_draft' or session.status == 'plan_approved' %}active{% endif %}" data-stage="blueprint" onclick="switchWorkspaceStage('blueprint')">
-                    <span class="stage-step-num">2</span> Blueprint
+                <button type="button" class="stage-step-btn {% if session.status == 'srs_ready' or session.status == 'plan_draft' or session.status == 'plan_approved' %}active{% endif %}" data-stage="blueprint" onclick="switchWorkspaceStage('blueprint')" title="2. System Blueprint">
+                    <span class="stage-step-num">2</span> <span class="stage-step-label">Blueprint</span>
                 </button>
                 <span class="stage-step-divider"></span>
-                <button type="button" class="stage-step-btn {% if session.status == 'generating' %}active{% endif %}" data-stage="build" onclick="switchWorkspaceStage('build')">
-                    <span class="stage-step-num">3</span> Build
+                <button type="button" class="stage-step-btn {% if session.status == 'generating' %}active{% endif %}" data-stage="build" onclick="switchWorkspaceStage('build')" title="3. Code Synthesizer">
+                    <span class="stage-step-num">3</span> <span class="stage-step-label">Build</span>
                 </button>
                 <span class="stage-step-divider"></span>
-                <button type="button" class="stage-step-btn {% if session.status == 'ready' or session.status == 'needs_attention' %}active{% endif %}" data-stage="review" onclick="switchWorkspaceStage('review')">
-                    <span class="stage-step-num">4</span> Review
+                <button type="button" class="stage-step-btn {% if session.status == 'ready' or session.status == 'needs_attention' %}active{% endif %}" data-stage="review" onclick="switchWorkspaceStage('review')" title="4. Verification & Review">
+                    <span class="stage-step-num">4</span> <span class="stage-step-label">Review</span>
                 </button>
                 <span class="stage-step-divider"></span>
-                <button type="button" class="stage-step-btn {% if session.status == 'completed' %}active{% endif %}" data-stage="export" onclick="switchWorkspaceStage('export')">
-                    <span class="stage-step-num">5</span> Export
+                <button type="button" class="stage-step-btn {% if session.status == 'completed' %}active{% endif %}" data-stage="export" onclick="switchWorkspaceStage('export')" title="5. Turnkey Export">
+                    <span class="stage-step-num">5</span> <span class="stage-step-label">Export</span>
                 </button>
             </div>
             
@@ -322,8 +317,17 @@
                                         <span class="msg-author-name">DevDialogue AI</span>
                                     {% endif %}
                                 </div>
-                                <div class="msg-content">
-                                    {{ msg.content|linebreaksbr }}
+                                <div class="msg-content {% if msg.role == 'assistant' %}prose-content assistant-content{% endif %}">
+                                    {% if msg.role == 'assistant' %}
+                                        {% with s=forloop.counter|stringformat:"s" %}
+                                            {% with el_id="history-msg-"|add:s %}
+                                                {{ msg.content|json_script:el_id }}
+                                                <div class="msg-markdown-body" data-script-id="{{ el_id }}"></div>
+                                            {% endwith %}
+                                        {% endwith %}
+                                    {% else %}
+                                        {{ msg.content|linebreaksbr }}
+                                    {% endif %}
                                 </div>
                             </div>
                         </div>
@@ -975,6 +979,36 @@
         });
     }
     
+    // Safe Markdown Rendering Helper
+    function renderMarkdownToHtml(rawMarkdown) {
+        if (!rawMarkdown) return '';
+        if (typeof window.renderSanitizedMarkdown === 'function') {
+            return window.renderSanitizedMarkdown(rawMarkdown);
+        }
+        if (typeof window.marked !== 'undefined' && typeof window.DOMPurify !== 'undefined') {
+            const parsed = window.marked.parse(rawMarkdown, { gfm: true, breaks: true });
+            return window.DOMPurify.sanitize(parsed);
+        }
+        return rawMarkdown;
+    }
+
+    // Hydrate historical assistant chat messages on page load
+    function hydrateHistoricalMessages() {
+        document.querySelectorAll('.msg-markdown-body[data-script-id]').forEach(target => {
+            const scriptId = target.getAttribute('data-script-id');
+            const scriptEl = document.getElementById(scriptId);
+            if (scriptEl) {
+                try {
+                    const raw = JSON.parse(scriptEl.textContent);
+                    target.innerHTML = renderMarkdownToHtml(raw);
+                } catch (e) {
+                    console.error('Failed to parse history markdown:', e);
+                }
+            }
+        });
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
     // Append chat bubbles safely (§4.3, §7.3)
     function appendMessageBubble(role, content) {
         const rowDiv = document.createElement('div');
@@ -997,14 +1031,7 @@
         contentDiv.className = 'msg-content prose-content';
         
         if (role === 'assistant') {
-            if (typeof window.renderSanitizedMarkdown === 'function') {
-                contentDiv.innerHTML = window.renderSanitizedMarkdown(content);
-            } else if (typeof window.marked !== 'undefined' && typeof window.DOMPurify !== 'undefined') {
-                const raw = window.marked.parse(content, { gfm: true, breaks: true });
-                contentDiv.innerHTML = window.DOMPurify.sanitize(raw);
-            } else {
-                contentDiv.textContent = content;
-            }
+            contentDiv.innerHTML = renderMarkdownToHtml(content);
         } else {
             contentDiv.textContent = content;
         }
@@ -1750,6 +1777,9 @@
     };
 
     document.addEventListener('DOMContentLoaded', () => {
+        // Hydrate raw markdown in assistant chat history
+        hydrateHistoricalMessages();
+
         try {
             const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
             if (tz) {

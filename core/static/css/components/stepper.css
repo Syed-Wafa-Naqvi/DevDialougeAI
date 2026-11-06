@@ -73,3 +73,23 @@
     background: var(--g-brand);
 }
 
+/* Responsive Stepper: Collapse text labels on <= 1440px to prevent header overflow */
+@media (max-width: 1440px) {
+    .stage-step-label {
+        display: none;
+    }
+    .stage-step-btn {
+        padding: 4px 8px;
+        gap: 0;
+    }
+    .stage-step-divider {
+        width: 8px;
+    }
+}
+
+@media (max-width: 1024px) {
+    .stage-stepper-container {
+        display: none;
+    }
+}
+

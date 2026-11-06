@@ -6,8 +6,11 @@
 
 {% block content %}
 <!-- Studio Light Hero Section (§7.2, §8) -->
-<section class="hero-section" style="padding: 80px 24px 100px; text-align: center; overflow: hidden; background: var(--canvas);">
-    <div style="max-width: 900px; margin: 0 auto; position: relative; z-index: 2;">
+<section class="hero-section" style="padding: 80px 24px 100px; text-align: center; overflow: hidden; background: var(--canvas); position: relative;">
+    <!-- 3D Architecture Nebula WebGL Canvas -->
+    <canvas id="hero-canvas" class="hero-canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; opacity: 0.85;"></canvas>
+
+    <div style="max-width: 900px; margin: 0 auto; position: relative; z-index: 2;" data-reveal="up">
         <span class="badge badge-brand" style="margin-bottom: 20px; font-size: 13px; padding: 6px 14px;">
             Studio Light Architecture Engine
         </span>
@@ -35,8 +38,8 @@
     </div>
 
     <!-- Signature 3D Product Perspective Composition (§7.2) -->
-    <div class="product-frame-viewport" style="perspective: 2000px; max-width: 1100px; margin: 0 auto; padding: 20px 0;">
-        <div id="hero-product-group" style="transform: rotateX(15deg) rotateY(-6deg); transform-style: preserve-3d; transition: transform 0.2s ease-out; position: relative;">
+    <div class="product-frame-viewport" style="perspective: 2000px; max-width: 1100px; margin: 0 auto; padding: 20px 0; position: relative; z-index: 2;" data-reveal="up">
+        <div id="hero-product-group" style="transform: rotateX(15deg) rotateY(-6deg); transform-style: preserve-3d; will-change: transform; position: relative;">
             
             <!-- Main Workspace Product Frame (HTML/CSS) -->
             <div class="product-frame-main" style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-xl); box-shadow: var(--shadow-lg); overflow: hidden; text-align: left; display: grid; grid-template-columns: 200px 1fr 1fr; height: 520px; position: relative;">
@@ -96,7 +99,7 @@
             </div>
 
             <!-- Floating UI Card 1: Chat Message Card -->
-            <div class="floating-card" style="position: absolute; top: -20px; left: -30px; transform: translateZ(60px); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 16px 20px; box-shadow: var(--shadow-lg); width: 280px; text-align: left;">
+            <div class="floating-card floating-card-1" style="position: absolute; top: -24px; left: -32px; transform: translateZ(70px); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 16px 20px; box-shadow: var(--shadow-lg); width: 280px; text-align: left;">
                 <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--brand); margin-bottom: 6px;">
                     <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--brand);"></span> Natural Dialogue Interview
                 </div>
@@ -104,7 +107,7 @@
             </div>
 
             <!-- Floating UI Card 2: Blueprint Node Card -->
-            <div class="floating-card" style="position: absolute; bottom: -20px; right: -20px; transform: translateZ(80px); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 16px 20px; box-shadow: var(--shadow-lg); width: 260px; text-align: left;">
+            <div class="floating-card floating-card-2" style="position: absolute; bottom: -24px; right: -24px; transform: translateZ(90px); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 16px 20px; box-shadow: var(--shadow-lg); width: 260px; text-align: left;">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
                     <span style="font-size: 12px; font-weight: 600; color: var(--ink);">System Architecture</span>
                     <span class="badge badge-brand">SRS Spec</span>
@@ -120,51 +123,87 @@
     </div>
 </section>
 
-<!-- Scroll Story Sections (§7.2) -->
-<section style="padding: 100px 24px; max-width: 1200px; margin: 0 auto;">
-    <div style="text-align: center; margin-bottom: 60px;">
-        <span class="badge badge-brand" style="margin-bottom: 12px;">4-Stage Pipeline</span>
-        <h2 style="font-size: var(--text-hero); color: var(--ink); font-weight: 700;">How DevDialogue AI Works</h2>
+<!-- Pinned 5-Stage Story Sequence Section (§7.2, §8) -->
+<section id="pipeline-story-section" class="pipeline-section" style="padding: 100px 24px; max-width: 1200px; margin: 0 auto;">
+    <div style="text-align: center; margin-bottom: 60px;" data-reveal="up">
+        <span class="badge badge-brand" style="margin-bottom: 12px;">5-Stage Pipeline</span>
+        <h2 style="font-size: var(--text-hero); color: var(--ink); font-weight: 700; letter-spacing: -0.02em;">How DevDialogue AI Works</h2>
+        <p style="color: var(--ink-2); font-size: var(--text-lead); max-width: 600px; margin: 12px auto 0;">From elicitation questions to a fully tested, turnkey repository package.</p>
     </div>
 
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px;">
-        <div style="background: var(--surface); border: 1px solid var(--border); padding: 32px 24px; border-radius: var(--r-lg); box-shadow: var(--shadow-sm);">
-            <div style="font-size: 28px; font-weight: 800; color: var(--brand); margin-bottom: 12px;">01</div>
-            <h3 style="font-size: var(--text-title-md); font-weight: 600; color: var(--ink); margin-bottom: 10px;">Interactive Interview</h3>
-            <p style="color: var(--ink-2); font-size: 14px; line-height: 1.6;">Our Dialogue Engine asks clarifying questions to reveal hidden assumptions before generating code.</p>
+    <!-- 5 Stage Interactive Cards Grid with 3D Tilt -->
+    <div class="pipeline-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px;">
+        <div class="tilt-card" data-reveal="up" style="background: var(--surface); border: 1px solid var(--border); padding: 28px 22px; border-radius: var(--r-lg); box-shadow: var(--shadow-sm); position: relative; overflow: hidden;">
+            <div style="font-size: 26px; font-weight: 800; color: var(--brand); margin-bottom: 12px;">01</div>
+            <h3 style="font-size: var(--text-title-sm); font-weight: 600; color: var(--ink); margin-bottom: 10px;">1. Discover</h3>
+            <p style="color: var(--ink-2); font-size: 13.5px; line-height: 1.6;">Conducts structured requirement interviews to clarify stack choices, authentication roles, schemas, and hidden edge cases.</p>
         </div>
 
-        <div style="background: var(--surface); border: 1px solid var(--border); padding: 32px 24px; border-radius: var(--r-lg); box-shadow: var(--shadow-sm);">
-            <div style="font-size: 28px; font-weight: 800; color: var(--brand); margin-bottom: 12px;">02</div>
-            <h3 style="font-size: var(--text-title-md); font-weight: 600; color: var(--ink); margin-bottom: 10px;">Blueprint Synthesis</h3>
-            <p style="color: var(--ink-2); font-size: 14px; line-height: 1.6;">Compiles an interactive 3D architecture graph and SRS specification for review.</p>
+        <div class="tilt-card" data-reveal="up" style="background: var(--surface); border: 1px solid var(--border); padding: 28px 22px; border-radius: var(--r-lg); box-shadow: var(--shadow-sm); position: relative; overflow: hidden;">
+            <div style="font-size: 26px; font-weight: 800; color: var(--brand); margin-bottom: 12px;">02</div>
+            <h3 style="font-size: var(--text-title-sm); font-weight: 600; color: var(--ink); margin-bottom: 10px;">2. Blueprint</h3>
+            <p style="color: var(--ink-2); font-size: 13.5px; line-height: 1.6;">Generates a comprehensive SRS specification and interactive 3D architecture graph before synthesizing code.</p>
         </div>
 
-        <div style="background: var(--surface); border: 1px solid var(--border); padding: 32px 24px; border-radius: var(--r-lg); box-shadow: var(--shadow-sm);">
-            <div style="font-size: 28px; font-weight: 800; color: var(--brand); margin-bottom: 12px;">03</div>
-            <h3 style="font-size: var(--text-title-md); font-weight: 600; color: var(--ink); margin-bottom: 10px;">Verified Compilation</h3>
-            <p style="color: var(--ink-2); font-size: 14px; line-height: 1.6;">Executes static analysis and unit tests in an autonomous loop before presenting the codebase.</p>
+        <div class="tilt-card" data-reveal="up" style="background: var(--surface); border: 1px solid var(--border); padding: 28px 22px; border-radius: var(--r-lg); box-shadow: var(--shadow-sm); position: relative; overflow: hidden;">
+            <div style="font-size: 26px; font-weight: 800; color: var(--brand); margin-bottom: 12px;">03</div>
+            <h3 style="font-size: var(--text-title-sm); font-weight: 600; color: var(--ink); margin-bottom: 10px;">3. Build</h3>
+            <p style="color: var(--ink-2); font-size: 13.5px; line-height: 1.6;">Multi-file code synthesis with full dependency manifests, environment configurations, and database migrations.</p>
         </div>
 
-        <div style="background: var(--surface); border: 1px solid var(--border); padding: 32px 24px; border-radius: var(--r-lg); box-shadow: var(--shadow-sm);">
-            <div style="font-size: 28px; font-weight: 800; color: var(--success-solid); margin-bottom: 12px;">04</div>
-            <h3 style="font-size: var(--text-title-md); font-weight: 600; color: var(--ink); margin-bottom: 10px;">Export Repository</h3>
-            <p style="color: var(--ink-2); font-size: 14px; line-height: 1.6;">Download a complete ZIP package with README, requirements.txt, models, views, and tests.</p>
+        <div class="tilt-card" data-reveal="up" style="background: var(--surface); border: 1px solid var(--border); padding: 28px 22px; border-radius: var(--r-lg); box-shadow: var(--shadow-sm); position: relative; overflow: hidden;">
+            <div style="font-size: 26px; font-weight: 800; color: var(--brand); margin-bottom: 12px;">04</div>
+            <h3 style="font-size: var(--text-title-sm); font-weight: 600; color: var(--ink); margin-bottom: 10px;">4. Review</h3>
+            <p style="color: var(--ink-2); font-size: 13.5px; line-height: 1.6;">Runs autonomous static AST analysis and test validation. Inspect files or request module adjustments with instant feedback.</p>
+        </div>
+
+        <div class="tilt-card" data-reveal="up" style="background: var(--surface); border: 1px solid var(--border); padding: 28px 22px; border-radius: var(--r-lg); box-shadow: var(--shadow-sm); position: relative; overflow: hidden;">
+            <div style="font-size: 26px; font-weight: 800; color: var(--success-solid); margin-bottom: 12px;">05</div>
+            <h3 style="font-size: var(--text-title-sm); font-weight: 600; color: var(--ink); margin-bottom: 10px;">5. Export</h3>
+            <p style="color: var(--ink-2); font-size: 13.5px; line-height: 1.6;">Download complete turnkey ZIP package with runnable harness scripts (`run.sh`), requirements, and verified code.</p>
         </div>
     </div>
 </section>
 
-<!-- 3D Perspective Tilt Mouse Script -->
+<!-- Smooth Parallax & Floating 3D Scripts -->
 <script>
     document.addEventListener('DOMContentLoaded', () => {
         const productGroup = document.getElementById('hero-product-group');
         if (!productGroup) return;
 
-        window.addEventListener('mousemove', (e) => {
-            const rotY = (e.clientX / window.innerWidth - 0.5) * 8;
-            const rotX = (e.clientY / window.innerHeight - 0.5) * -8 + 15;
-            productGroup.style.transform = `rotateX(${rotX}deg) rotateY(${rotY}deg)`;
-        });
+        const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (prefersReducedMotion || 'ontouchstart' in window) return;
+
+        // Smooth GSAP QuickTo Parallax Tilt for 60fps responsiveness
+        if (typeof gsap !== 'undefined') {
+            const setRotX = gsap.quickTo(productGroup, 'rotationX', { duration: 0.6, ease: 'power2.out' });
+            const setRotY = gsap.quickTo(productGroup, 'rotationY', { duration: 0.6, ease: 'power2.out' });
+
+            window.addEventListener('mousemove', (e) => {
+                const nx = (e.clientX / window.innerWidth - 0.5) * 2;
+                const ny = (e.clientY / window.innerHeight - 0.5) * 2;
+                setRotX(-ny * 8 + 15);
+                setRotY(nx * 8 - 6);
+            });
+
+            // Gentle ambient floating effect on the 3D cards
+            gsap.to('.floating-card-1', {
+                y: -8,
+                duration: 2.8,
+                repeat: -1,
+                yoyo: true,
+                ease: 'sine.inOut'
+            });
+
+            gsap.to('.floating-card-2', {
+                y: 8,
+                duration: 3.2,
+                repeat: -1,
+                yoyo: true,
+                ease: 'sine.inOut',
+                delay: 0.4
+            });
+        }
     });
 </script>
 {% endblock %}

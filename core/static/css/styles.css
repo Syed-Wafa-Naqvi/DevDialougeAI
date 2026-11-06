@@ -1237,9 +1237,8 @@ textarea.form-control {
 .file-tabs-bar {
     display: flex;
     align-items: center;
-    background: rgba(15, 23, 42, 0.75);
-    backdrop-filter: blur(8px);
-    border-bottom: 1px solid var(--border-color);
+    background: var(--surface-sunken, #EFF1F4);
+    border-bottom: 1px solid var(--border, #E2E5EA);
     overflow-x: auto;
     overflow-y: hidden;
     padding: 8px 12px;
@@ -1247,7 +1246,7 @@ textarea.form-control {
     min-height: 48px;
     box-sizing: border-box;
     scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+    scrollbar-color: var(--border-strong, #C9CED6) transparent;
 }
 
 .file-tabs-bar::-webkit-scrollbar {
@@ -1259,23 +1258,23 @@ textarea.form-control {
 }
 
 .file-tabs-bar::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--border-strong, #C9CED6);
     border-radius: 4px;
 }
 
 .file-tabs-bar::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.35);
+    background: var(--ink-3, #5B6472);
 }
 
 .file-tab {
     flex-shrink: 0;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--surface, #FFFFFF);
+    border: 1px solid var(--border, #E2E5EA);
     padding: 6px 14px;
-    color: var(--text-secondary);
+    color: var(--ink-2, #374151);
     font-size: 12.5px;
     font-weight: 500;
-    font-family: 'Fira Code', var(--font-mono, monospace);
+    font-family: var(--font-mono, monospace);
     cursor: pointer;
     border-radius: 6px;
     display: inline-flex;
@@ -1288,17 +1287,17 @@ textarea.form-control {
 }
 
 .file-tab:hover {
-    color: #f8fafc;
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.16);
+    color: var(--ink, #0B1220);
+    background: var(--surface-hover, #F2F4F7);
+    border-color: var(--border-strong, #C9CED6);
 }
 
 .file-tab.active {
-    color: #38bdf8;
-    background: rgba(56, 189, 248, 0.12);
-    border-color: rgba(56, 189, 248, 0.4);
+    color: var(--brand, #2548E8);
+    background: var(--brand-tint, #EEF2FF);
+    border-color: var(--brand, #2548E8);
     font-weight: 600;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 1px 3px rgba(37, 72, 232, 0.12);
 }
 
 .no-files-tab {
@@ -2158,36 +2157,31 @@ body.chat-page-body .main-content-wrapper {
     font-family: 'Inter', system-ui, sans-serif;
 }
 
-/* Themes local overrides to match Claude.ai */
+/* Themes local overrides to match Cobalt Studio Light Design System */
 [data-theme="light"] .chat-app-layout {
-    --bg-primary: #f9f8f6;
-    /* Claude's signature warm/creamy white */
-    --bg-secondary: #f3f2ee;
-    --border-color: rgba(0, 0, 0, 0.08);
-    --border-focus: #cca580;
-    --accent: #d97706;
-    /* warm clay/accent color */
-    --card-bg: #ffffff;
-    --text-primary: #191919;
-    --text-secondary: #6b7280;
+    --bg-primary: var(--canvas, #F6F7F9);
+    --bg-secondary: var(--surface-sunken, #EFF1F4);
+    --border-color: var(--border, #E2E5EA);
+    --border-focus: var(--brand, #2548E8);
+    --accent: var(--brand, #2548E8);
+    --card-bg: var(--surface, #FFFFFF);
+    --text-primary: var(--ink, #0B1220);
+    --text-secondary: var(--ink-2, #374151);
 }
 
-[data-theme="dark"] .chat-app-layout {
-    --bg-primary: #181818;
-    /* soft near-black page bg */
-    --bg-secondary: #1E1E1E;
-    /* sidebar bg */
-    --nav-bg: #1E1E1E;
-    --border-color: rgba(255, 255, 255, 0.06);
-    /* subtle border */
-    --border-focus: #10A37F;
-    --accent: #10A37F;
-    --card-bg: #212121;
-    /* cards/panels bg */
-    --card-hover-bg: #2C2C2C;
-    --input-bg: #212121;
-    --text-primary: #ECECEC;
-    --text-secondary: #8A8A85;
+[data-theme="dark"] .chat-app-layout,
+[data-theme="dim"] .chat-app-layout {
+    --bg-primary: #121824;
+    --bg-secondary: #182234;
+    --nav-bg: #182234;
+    --border-color: rgba(255, 255, 255, 0.08);
+    --border-focus: #3B82F6;
+    --accent: #3B82F6;
+    --card-bg: #1E293B;
+    --card-hover-bg: #27354A;
+    --input-bg: #1E293B;
+    --text-primary: #F1F5F9;
+    --text-secondary: #94A3B8;
 }
 
 /* Sidebar Styling */
@@ -2638,10 +2632,12 @@ body.chat-page-body .main-content-wrapper {
     display: flex;
     align-items: center;
     gap: 12px;
+    min-width: 0;
+    flex-shrink: 1;
 }
 
 .topbar-title {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 600;
     color: var(--text-primary);
     margin: 0;
@@ -2652,6 +2648,23 @@ body.chat-page-body .main-content-wrapper {
     padding: 4px 8px;
     border-radius: 6px;
     transition: background-color 150ms ease;
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#active-topbar-title-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
 }
 
 .topbar-title:hover {
