@@ -156,16 +156,19 @@
 
             updateThemeIcon();
 
+            // Expose toggleTheme globally for onclick handlers (e.g. chat sidebar)
+            window.toggleTheme = function() {
+                const current = document.documentElement.getAttribute('data-theme') || 'light';
+                const next = current === 'light' ? 'dim' : 'light';
+                document.documentElement.setAttribute('data-theme', next);
+                localStorage.setItem('devdialogue_theme', next);
+                localStorage.setItem('theme', next);
+                updateThemeIcon();
+            };
+
             const themeBtn = document.getElementById('theme-toggle');
             if (themeBtn) {
-                themeBtn.addEventListener('click', () => {
-                    const current = document.documentElement.getAttribute('data-theme') || 'light';
-                    const next = current === 'light' ? 'dim' : 'light';
-                    document.documentElement.setAttribute('data-theme', next);
-                    localStorage.setItem('devdialogue_theme', next);
-                    localStorage.setItem('theme', next);
-                    updateThemeIcon();
-                });
+                themeBtn.addEventListener('click', window.toggleTheme);
             }
         });
     </script>

@@ -198,10 +198,16 @@
                 </h3>
                 
                 <!-- Build Style Pill / Mode Toggle -->
-                {% if session.status == 'active' or session.status == 'interviewing' and not project_files %}
+                {% if session.status == 'active' or session.status == 'interviewing' %}
+                    {% if not project_files %}
                     <button type="button" class="badge badge-brand" id="mode-toggle-btn" onclick="toggleSessionMode()" style="font-size: 11px; font-weight: 500; cursor: pointer; border: none; background: rgba(255, 255, 255, 0.1); color: var(--ink); padding: 4px 8px; border-radius: 4px;" title="Click to toggle build style (All at once vs File by file)">
                         <span id="mode-label">{% if session.mode == 'mode1' %}All at once{% else %}File by file{% endif %}</span> 🔄
                     </button>
+                    {% else %}
+                    <span class="badge badge-brand" id="mode-label" style="font-size: 11px; font-weight: 500;" title="Build style locked for this workspace">
+                        {% if session.mode == 'mode1' %}All at once{% else %}File by file{% endif %}
+                    </span>
+                    {% endif %}
                 {% else %}
                     <span class="badge badge-brand" id="mode-label" style="font-size: 11px; font-weight: 500;" title="Build style locked for this workspace">
                         {% if session.mode == 'mode1' %}All at once{% else %}File by file{% endif %}
@@ -430,7 +436,7 @@
                     <div id="file-tabs-inner" style="display: flex; gap: 4px; overflow-x: auto; flex: 1; align-items: center;">
                         {% if project_files %}
                             {% for file in project_files %}
-                                <button class="file-tab {% if forloop.first %}active{% endif %}" data-code-id="{{ file.id }}" onclick="loadCodeFile({{ file.id }}, this)">
+                                <button class="file-tab {% if forloop.first %}active{% endif %}" data-code-id="{{ file.id }}" data-path="{{ file.path }}" onclick="loadCodeFile({{ file.id }}, this)">
                                     <i data-lucide="file-code" class="icon-inline"></i> {{ file.path }}
                                 </button>
                             {% endfor %}
@@ -1073,6 +1079,7 @@
             const btn = document.createElement('button');
             btn.className = `file-tab ${((activeId && activeId == code.id) || (!activeId && index === 0)) ? 'active' : ''}`;
             btn.setAttribute('data-code-id', code.id);
+            btn.setAttribute('data-path', code.module_name);
             btn.setAttribute('onclick', `loadCodeFile(${code.id}, this)`);
             btn.innerHTML = '<i data-lucide="file-code" class="icon-inline"></i> ';
             btn.appendChild(document.createTextNode(code.module_name));
@@ -1676,7 +1683,10 @@
     window.jumpToIssueLine = function(filePath, lineNum) {
         switchRightPanel('tree');
         const tabsBox = document.getElementById('file-tabs-inner') || fileTabsContainer;
-        const activeTab = Array.from(tabsBox ? tabsBox.querySelectorAll('.file-tab') : []).find(t => t.textContent.includes(filePath));
+        const activeTab = Array.from(tabsBox ? tabsBox.querySelectorAll('.file-tab') : []).find(t => {
+            const tabPath = t.getAttribute('data-path') || '';
+            return tabPath === filePath || tabPath.endsWith('/' + filePath) || filePath.endsWith('/' + tabPath);
+        });
         if (activeTab) {
             activeTab.click();
         }

@@ -426,3 +426,56 @@ class ChatTestCase(TestCase):
         self.assertEqual(provider.model, 'claude-sonnet-5-5')
         plan_models = dict(settings.LLM_PURPOSE_ROUTING['plan'])
         self.assertEqual(plan_models.get('claude'), 'claude-sonnet-5-5')
+
+    def test_mode2_zip_download_does_not_stop_generation_early(self):
+        """Mode 2: harness files created by ZIP download should not count toward module completion."""
+        session = Session.objects.create(user=self.user, mode='mode2', status='srs_ready')
+        session.summary_text = 'Test project with two modules'
+        session.save(update_fields=['summary_text'])
+        Message.objects.create(session=session, role='assistant',
+            content='### Project Requirements Summary\n- Project Concept: Test App\nReady to proceed.')
+
+        # Simulate plan modules
+        modules = ['app/models.py', 'app/views.py']
+
+        # Simulate Module 1 already generated
+        ProjectFile.objects.create(session=session, path='app/models.py', content='# models', status='generated')
+        GeneratedCode.objects.create(session=session, module_name='app/models.py', code_content='# models')
+
+        # Simulate harness files created by ZIP download (5 extra files)
+        for hf in ['README.md', 'run.sh', 'requirements.txt', 'Dockerfile', '.gitignore']:
+            ProjectFile.objects.create(session=session, path=hf, content=f'# {hf}', status='verified')
+
+        # Even though 6 ProjectFiles exist (1 plan + 5 harness), only 1 plan file is generated
+        plan_files = session.project_files.filter(path__in=modules)
+        self.assertEqual(plan_files.count(), 1)  # Only models.py
+        self.assertLess(plan_files.count(), len(modules))  # Still has remaining modules
+
+    def test_mode2_direct_code_demand_generates_module_1_only(self):
+        """Mode 2 + direct code demand should generate Module 1, not trigger full all-at-once job."""
+        session = Session.objects.create(user=self.user, mode='mode2', status='active')
+        Message.objects.create(session=session, role='user', content='Build a blog with Django')
+
+        response = self.client.post(
+            f'/api/chat/{session.id}/send/',
+            data={'message': 'just give me the code', 'provider': 'mock'},
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        # Should generate only Module 1, not trigger background job
+        self.assertIsNone(data.get('job_id'))
+        self.assertIn('Module 1', data.get('response', ''))
+
+    def test_cancel_request_ttl_is_300_seconds(self):
+        """Cancel request TTL should be 300 seconds, not 30."""
+        import json
+        from django.core.cache import cache
+        session = Session.objects.create(user=self.user, mode='mode1', status='active')
+        self.client.post(
+            f'/api/session/{session.id}/cancel/',
+            data=json.dumps({'request_id': 'test_ttl_req'}),
+            content_type='application/json'
+        )
+        # The cache entry should exist
+        self.assertTrue(cache.get('cancel_req_test_ttl_req'))

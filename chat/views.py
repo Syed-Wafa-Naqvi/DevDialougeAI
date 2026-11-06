@@ -467,7 +467,8 @@ def send_message_api(request, session_id):
                     except Exception:
                         plan_obj = None
                 modules = plan_obj.generation_order if plan_obj else FilePlanner.get_module_list(summary)
-                existing_files = list(session.project_files.all())
+                # Only count files that are part of the plan, not harness files from ZIP download
+                existing_files = list(session.project_files.filter(path__in=modules))
                 
                 # Check if all modules have already been generated and approved
                 if session.status in ('completed', 'ready', 'needs_attention') or (len(existing_files) >= len(modules) and len(modules) > 0):
@@ -560,9 +561,12 @@ def send_message_api(request, session_id):
                     )
                 else:
                     # User approved or starting next module
-                    if len(existing_files) < len(modules):
-                        current_mod = modules[len(existing_files)]
-                        existing_files_dict = {pf.path: pf.content for pf in session.project_files.all()}
+                    generated_paths = set(pf.path for pf in existing_files)
+                    remaining = [m for m in modules if m not in generated_paths]
+                    if remaining:
+                        current_mod = remaining[0]
+                        module_num = len(modules) - len(remaining) + 1
+                        existing_files_dict = {pf.path: pf.content for pf in existing_files}
                         code = CodeBuilder.generate_code_for_module(
                             current_mod, 
                             summary, 
@@ -576,7 +580,7 @@ def send_message_api(request, session_id):
                         ProjectFile.objects.create(session=session, path=current_mod, content=code, status='generated')
                         
                         response_text = (
-                            f"### Module {len(existing_files)+1}/{len(modules)}: `{current_mod}`\n\n"
+                            f"### Module {module_num}/{len(modules)}: `{current_mod}`\n\n"
                             f"I have generated the code for `{current_mod}`. Inspect it in the right panel.\n\n"
                             f"Do you approve this module? (Say **yes** to move to the next module, or describe what changes you want)."
                         )
@@ -620,7 +624,40 @@ def send_message_api(request, session_id):
                     is_direct_code_demand = True
 
             if is_direct_code_demand:
-                active_job, response_text = _trigger_generation_job(session, request.user, provider_name, run_async=run_async)
+                if session.mode == 'mode2':
+                    # Mode 2: synthesize summary, create plan, generate Module 1 only
+                    summary = SRSSynthesizer.synthesize_summary(history, is_mode2=True, provider_name=provider_name, session=session, user=request.user)
+                    session.summary_text = summary
+                    session.save(update_fields=['summary_text'])
+                    SessionStateMachine.transition_to(session, 'srs_ready')
+
+                    from generator.planner import PlanGenerator
+                    try:
+                        plan_obj = PlanGenerator.generate_plan(summary, session, provider_name=provider_name)
+                    except Exception:
+                        plan_obj = None
+                    modules = plan_obj.generation_order if plan_obj else FilePlanner.get_module_list(summary)
+
+                    if modules:
+                        current_mod = modules[0]
+                        code = CodeBuilder.generate_code_for_module(
+                            current_mod, summary, all_files=modules,
+                            existing_files={},
+                            provider_name=provider_name,
+                            session=session, user=request.user
+                        )
+                        GeneratedCode.objects.create(session=session, module_name=current_mod, code_content=code)
+                        ProjectFile.objects.create(session=session, path=current_mod, content=code, status='generated')
+
+                        response_text = (
+                            f"### Module 1/{len(modules)}: `{current_mod}`\n\n"
+                            f"I have generated the code for `{current_mod}`. Inspect it in the right panel.\n\n"
+                            f"Do you approve this module? (Say **yes** to move to the next module, or describe what changes you want)."
+                        )
+                    else:
+                        response_text = "I couldn't determine the module list for your project. Please provide more details about your requirements."
+                else:
+                    active_job, response_text = _trigger_generation_job(session, request.user, provider_name, run_async=run_async)
             elif CompletenessEngine.should_synthesize_summary(history, user_content, provider_name=provider_name):
                 response_text = SRSSynthesizer.synthesize_summary(history, is_mode2=(session.mode == 'mode2'), provider_name=provider_name, session=session, user=request.user)
                 session.summary_text = response_text
@@ -813,7 +850,7 @@ def cancel_session_api(request, session_id):
         except Exception:
             request_id = request.POST.get('request_id')
     if request_id:
-        cache.set(f"cancel_req_{request_id}", True, 30)
+        cache.set(f"cancel_req_{request_id}", True, 300)
 
     active_jobs = session.jobs.filter(status__in=['queued', 'running'])
     for j in active_jobs:
