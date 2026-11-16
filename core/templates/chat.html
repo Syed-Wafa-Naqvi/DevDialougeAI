@@ -638,6 +638,7 @@
     }
     
     function renderAttachmentPreview(filename) {
+        if (!previewArea) return;
         previewArea.innerHTML = `
             <div class="attachment-preview-chip">
                 <div class="attachment-info">
@@ -659,8 +660,10 @@
         if (fileInput) {
             fileInput.value = '';
         }
-        previewArea.innerHTML = '';
-        previewArea.classList.add('hidden');
+        if (previewArea) {
+            previewArea.innerHTML = '';
+            previewArea.classList.add('hidden');
+        }
     }
     
     // Code panel refs
