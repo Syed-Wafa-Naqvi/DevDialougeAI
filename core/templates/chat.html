@@ -570,13 +570,26 @@
         button.classList.toggle('active');
     }
 
-    // Fill suggested prompt text into textarea
+    // Fill suggested prompt text into textarea & auto-dispatch
     window.fillPromptText = function(button) {
         const text = button.textContent.trim();
         if (inputField) {
             inputField.value = text;
             inputField.dispatchEvent(new Event('input'));
             inputField.focus();
+            
+            // Auto-submit so clicking a chip immediately triggers generation!
+            setTimeout(() => {
+                const sendBtn = document.getElementById('btn-send-message');
+                if (sendBtn) sendBtn.removeAttribute('disabled');
+                if (chatForm) {
+                    if (typeof chatForm.requestSubmit === 'function') {
+                        chatForm.requestSubmit();
+                    } else {
+                        chatForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                    }
+                }
+            }, 60);
         }
     }
 
@@ -600,8 +613,12 @@
         inputField.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if (inputField.value.trim().length > 0) {
-                    chatForm.dispatchEvent(new Event('submit'));
+                if (inputField.value.trim().length > 0 && chatForm) {
+                    if (typeof chatForm.requestSubmit === 'function') {
+                        chatForm.requestSubmit();
+                    } else {
+                        chatForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                    }
                 }
             }
         });
@@ -780,6 +797,24 @@
     
     // Submit message via AJAX
     if (chatForm) {
+        const sendBtnInit = document.getElementById('btn-send-message');
+        if (sendBtnInit) {
+            sendBtnInit.addEventListener('click', (e) => {
+                if (sendBtnInit.classList.contains('generating')) {
+                    // Handled inside submit handler
+                    return;
+                }
+                if (!sendBtnInit.disabled && inputField && inputField.value.trim().length > 0) {
+                    e.preventDefault();
+                    if (typeof chatForm.requestSubmit === 'function') {
+                        chatForm.requestSubmit();
+                    } else {
+                        chatForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                    }
+                }
+            });
+        }
+
         chatForm.addEventListener('submit', async (e) => {
             e.preventDefault();
 
