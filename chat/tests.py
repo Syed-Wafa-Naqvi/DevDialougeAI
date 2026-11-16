@@ -20,6 +20,20 @@ class ChatTestCase(TestCase):
         self.assertIsNotNone(session)
         self.assertEqual(session.messages.count(), 2)
 
+    def test_new_chat_view(self):
+        # 1. Accessing /new-chat/ creates a new active session
+        response = self.client.get('/new-chat/')
+        self.assertEqual(response.status_code, 302)
+        session = Session.objects.filter(user=self.user, status='active').first()
+        self.assertIsNotNone(session)
+        self.assertEqual(response.url, f'/chat/{session.id}/')
+
+        # 2. Accessing /new-chat/ again reuses the empty active session instead of creating duplicate
+        response2 = self.client.get('/new-chat/')
+        self.assertEqual(response2.status_code, 302)
+        self.assertEqual(response2.url, f'/chat/{session.id}/')
+        self.assertEqual(Session.objects.filter(user=self.user, status='active').count(), 1)
+
     def test_send_message_api(self):
         session = Session.objects.create(user=self.user, mode='mode1', status='active')
         response = self.client.post(

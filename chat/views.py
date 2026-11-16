@@ -5,6 +5,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, StreamingHttpResponse
 from django.utils import timezone
 from django.conf import settings
+from django.db import models
 
 from accounts.decorators import verification_required
 from chat.models import Session, Message, GeneratedCode, ProjectFile
