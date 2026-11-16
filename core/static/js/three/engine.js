@@ -282,10 +282,10 @@ export class LandingNebulaScene extends ThreeEngine {
 
         const particleMat = new THREE.PointsMaterial({
             map: this.pointTexture,
-            size: 3.8,
+            size: 4.2,
             sizeAttenuation: true,
             transparent: true,
-            opacity: 0.72,
+            opacity: 0.80,
             vertexColors: true,
             blending: THREE.AdditiveBlending,
             depthWrite: false
@@ -538,20 +538,25 @@ export class LandingNebulaScene extends ThreeEngine {
             this.camera.lookAt(0, 0, 0);
         }
 
-        // Slow organic drift: sine-based y offset per particle and slow whole-group rotation
+        // Dynamic organic drift: sine-based y offset per particle and cosmic rotation
+        const time = performance.now() * 0.001;
         if (this.particles && this.particles.geometry.attributes.position) {
-            const time = performance.now() * 0.001;
             const posAttr = this.particles.geometry.attributes.position;
             const arr = posAttr.array;
             for (let i = 0; i < this.particleCount; i++) {
                 const idx = i * 3 + 1;
-                arr[idx] = this.basePositions[idx] + Math.sin(time * 0.7 + this.phases[i]) * 0.8;
+                arr[idx] = this.basePositions[idx] + Math.sin(time * 1.2 + this.phases[i]) * 2.2;
             }
             posAttr.needsUpdate = true;
         }
 
         if (this.masterGroup) {
-            this.masterGroup.rotation.y += 0.0003;
+            this.masterGroup.rotation.y += 0.0010;
+        }
+
+        // Gentle breathing pulse on constellation lines
+        if (this.connectionLines && this.connectionLines.material) {
+            this.connectionLines.material.opacity = 0.22 + Math.sin(time * 1.5) * 0.12;
         }
 
         this.renderer.render(this.scene, this.camera);

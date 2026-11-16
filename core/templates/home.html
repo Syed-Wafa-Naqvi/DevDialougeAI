@@ -65,30 +65,33 @@
                 <!-- Chat Thread Fragment -->
                 <div class="product-frame-chat" style="background: var(--surface); border-right: 1px solid var(--border); padding: 20px; display: flex; flex-direction: column; justify-content: space-between;">
                     <div style="display: flex; flex-direction: column; gap: 16px;">
-                        <div style="align-self: flex-end; background: var(--brand-tint); color: var(--ink); border: 1px solid var(--brand-tint-2); padding: 10px 14px; border-radius: 12px 12px 2px 12px; font-size: 13px; max-width: 85%;">
+                        <div id="demo-user-bubble" style="align-self: flex-end; background: var(--brand-tint); color: var(--ink); border: 1px solid var(--brand-tint-2); padding: 10px 14px; border-radius: 12px 12px 2px 12px; font-size: 13px; max-width: 85%; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);">
                             Build a REST API for appointment booking with doctor schedules and SMS notifications.
                         </div>
-                        <div style="align-self: flex-start; background: var(--surface-sunken); color: var(--ink); border: 1px solid var(--border); padding: 12px 16px; border-radius: 12px 12px 12px 2px; font-size: 13px; max-width: 90%;">
-                            <div style="font-weight: 600; font-size: 12px; color: var(--brand); margin-bottom: 4px;">DevDialogue Assistant</div>
-                            I've structured a 4-model Django schema (`Doctor`, `Patient`, `Appointment`, `Notification`). Should appointments require pre-payment confirmation?
+                        <div id="demo-assistant-bubble" style="align-self: flex-start; background: var(--surface-sunken); color: var(--ink); border: 1px solid var(--border); padding: 12px 16px; border-radius: 12px 12px 12px 2px; font-size: 13px; max-width: 90%; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);">
+                            <div style="font-weight: 600; font-size: 12px; color: var(--brand); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                                <span style="width: 7px; height: 7px; border-radius: 50%; background: var(--brand); display: inline-block;"></span>
+                                DevDialogue Assistant
+                            </div>
+                            <span id="demo-assistant-text">I've structured a 4-model Django schema (`Doctor`, `Patient`, `Appointment`, `Notification`). Synthesizing appointments/models.py...</span>
                         </div>
                     </div>
                     <div style="border: 1px solid var(--border-strong); border-radius: 8px; padding: 10px 14px; background: var(--surface); display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--ink-3);">
-                        Type requirement refinement…
-                        <span class="btn btn-primary btn-sm" style="padding: 4px 8px;">Send</span>
+                        <span id="demo-input-text" style="color: var(--ink-3); font-family: inherit; font-size: 13px;">Type requirement refinement…</span>
+                        <span id="demo-send-btn" class="btn btn-primary btn-sm" style="padding: 4px 8px; transition: transform 0.15s ease;">Send</span>
                     </div>
                 </div>
 
                 <!-- Workspace Code & Checks Fragment -->
                 <div class="product-frame-code" style="background: var(--surface-sunken); padding: 20px; display: flex; flex-direction: column; gap: 16px;">
                     <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
-                        <div style="font-family: var(--font-mono); font-size: 13px; font-weight: 500; color: var(--ink);">
+                        <div style="font-family: var(--font-mono); font-size: 13px; font-weight: 500; color: var(--ink); display: flex; align-items: center; gap: 6px;">
+                            <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #3B82F6;"></span>
                             appointments/models.py
                         </div>
-                        <span class="badge badge-success">✓ 12/12 Checks Passed</span>
+                        <span id="demo-checks-badge" class="badge badge-success" style="transition: all 0.3s ease;">✓ 12/12 Checks Passed</span>
                     </div>
-                    <pre style="font-family: var(--font-mono); font-size: 12px; line-height: 1.6; color: var(--ink); background: var(--surface); padding: 16px; border-radius: 8px; border: 1px solid var(--border); overflow-x: auto; max-width: 100%;">
-<span style="color: var(--code-keyword);">class</span> <span style="color: var(--code-type);">Appointment</span>(models.Model):
+                    <pre id="demo-code-block" style="font-family: var(--font-mono); font-size: 12px; line-height: 1.6; color: var(--ink); background: var(--surface); padding: 16px; border-radius: 8px; border: 1px solid var(--border); overflow-x: auto; max-width: 100%; min-height: 180px; margin: 0;"><span style="color: var(--code-keyword);">class</span> <span style="color: var(--code-type);">Appointment</span>(models.Model):
     doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE)
     scheduled_at = models.DateTimeField()
@@ -134,77 +137,86 @@
     <!-- 5 Stage Interactive Cards Grid with 3D Tilt -->
     <div class="pipeline-grid">
         <div class="tilt-card" data-reveal="up" style="background: var(--surface); border: 1px solid var(--border); padding: 28px 22px; border-radius: var(--r-lg); box-shadow: var(--shadow-sm); position: relative; overflow: hidden;">
-            <div style="font-size: 26px; font-weight: 800; color: var(--brand); margin-bottom: 12px;">01</div>
+            <div class="pipeline-active-indicator"></div>
+            <div class="pipeline-stage-num" style="font-size: 26px; font-weight: 800; color: var(--brand); margin-bottom: 12px;">01</div>
             <h3 style="font-size: var(--text-title-sm); font-weight: 600; color: var(--ink); margin-bottom: 10px;">1. Discover</h3>
             <p style="color: var(--ink-2); font-size: 13.5px; line-height: 1.6;">Conducts structured requirement interviews to clarify stack choices, authentication roles, schemas, and hidden edge cases.</p>
         </div>
 
         <div class="tilt-card" data-reveal="up" style="background: var(--surface); border: 1px solid var(--border); padding: 28px 22px; border-radius: var(--r-lg); box-shadow: var(--shadow-sm); position: relative; overflow: hidden;">
-            <div style="font-size: 26px; font-weight: 800; color: var(--brand); margin-bottom: 12px;">02</div>
+            <div class="pipeline-active-indicator"></div>
+            <div class="pipeline-stage-num" style="font-size: 26px; font-weight: 800; color: var(--brand); margin-bottom: 12px;">02</div>
             <h3 style="font-size: var(--text-title-sm); font-weight: 600; color: var(--ink); margin-bottom: 10px;">2. Blueprint</h3>
             <p style="color: var(--ink-2); font-size: 13.5px; line-height: 1.6;">Generates a comprehensive SRS specification and interactive 3D architecture graph before synthesizing code.</p>
         </div>
 
         <div class="tilt-card" data-reveal="up" style="background: var(--surface); border: 1px solid var(--border); padding: 28px 22px; border-radius: var(--r-lg); box-shadow: var(--shadow-sm); position: relative; overflow: hidden;">
-            <div style="font-size: 26px; font-weight: 800; color: var(--brand); margin-bottom: 12px;">03</div>
+            <div class="pipeline-active-indicator"></div>
+            <div class="pipeline-stage-num" style="font-size: 26px; font-weight: 800; color: var(--brand); margin-bottom: 12px;">03</div>
             <h3 style="font-size: var(--text-title-sm); font-weight: 600; color: var(--ink); margin-bottom: 10px;">3. Build</h3>
             <p style="color: var(--ink-2); font-size: 13.5px; line-height: 1.6;">Multi-file code synthesis with full dependency manifests, environment configurations, and database migrations.</p>
         </div>
 
         <div class="tilt-card" data-reveal="up" style="background: var(--surface); border: 1px solid var(--border); padding: 28px 22px; border-radius: var(--r-lg); box-shadow: var(--shadow-sm); position: relative; overflow: hidden;">
-            <div style="font-size: 26px; font-weight: 800; color: var(--brand); margin-bottom: 12px;">04</div>
+            <div class="pipeline-active-indicator"></div>
+            <div class="pipeline-stage-num" style="font-size: 26px; font-weight: 800; color: var(--brand); margin-bottom: 12px;">04</div>
             <h3 style="font-size: var(--text-title-sm); font-weight: 600; color: var(--ink); margin-bottom: 10px;">4. Review</h3>
             <p style="color: var(--ink-2); font-size: 13.5px; line-height: 1.6;">Runs autonomous static AST analysis and test validation. Inspect files or request module adjustments with instant feedback.</p>
         </div>
 
         <div class="tilt-card" data-reveal="up" style="background: var(--surface); border: 1px solid var(--border); padding: 28px 22px; border-radius: var(--r-lg); box-shadow: var(--shadow-sm); position: relative; overflow: hidden;">
-            <div style="font-size: 26px; font-weight: 800; color: var(--success-solid); margin-bottom: 12px;">05</div>
+            <div class="pipeline-active-indicator"></div>
+            <div class="pipeline-stage-num" style="font-size: 26px; font-weight: 800; color: var(--success-solid); margin-bottom: 12px;">05</div>
             <h3 style="font-size: var(--text-title-sm); font-weight: 600; color: var(--ink); margin-bottom: 10px;">5. Export</h3>
             <p style="color: var(--ink-2); font-size: 13.5px; line-height: 1.6;">Download complete turnkey ZIP package with runnable harness scripts (`run.sh`), requirements, and verified code.</p>
         </div>
     </div>
 </section>
 
-<!-- Smooth Parallax & Floating 3D Scripts -->
+<!-- Smooth Parallax, Ambient 3D Float, Live Demo Loop & Active Pipeline Cycle -->
 <script>
     document.addEventListener('DOMContentLoaded', () => {
         const productGroup = document.getElementById('hero-product-group');
-        if (!productGroup) return;
-
         const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         if (prefersReducedMotion) return;
 
-        if (typeof gsap !== 'undefined') {
-            // 1. Ambient idle floating/breathing on the main product mockup group
+        // -------------------------------------------------------------
+        // 1. Fluid Ambient 3D Floating Motion on Mockup & Cards
+        // -------------------------------------------------------------
+        if (typeof gsap !== 'undefined' && productGroup) {
+            // Main product mockup group breathes in 3D
             gsap.to(productGroup, {
-                y: -8,
-                duration: 3.8,
+                y: -14,
+                rotationZ: -0.6,
+                duration: 3.6,
                 repeat: -1,
                 yoyo: true,
                 ease: 'sine.inOut'
             });
 
-            // 2. Ambient floating effect on the 3D cards with preserved translateZ depth
+            // Floating cards glide at distinct depths with wobble
             gsap.to('.floating-card-1', {
-                y: -10,
+                y: -18,
+                rotationZ: 1.5,
                 z: 70,
-                duration: 3.2,
+                duration: 3.0,
                 repeat: -1,
                 yoyo: true,
                 ease: 'sine.inOut'
             });
 
             gsap.to('.floating-card-2', {
-                y: 10,
+                y: 16,
+                rotationZ: -1.6,
                 z: 90,
-                duration: 3.6,
+                duration: 3.4,
                 repeat: -1,
                 yoyo: true,
                 ease: 'sine.inOut',
-                delay: 0.5
+                delay: 0.3
             });
 
-            // 3. Smooth mouse parallax tilt (active when a fine-pointer / mouse is detected)
+            // Smooth mouse parallax tilt (active when a fine-pointer / mouse is detected)
             const hasMouse = matchMedia('(any-hover: hover) and (any-pointer: fine)').matches;
             if (hasMouse) {
                 const setRotX = gsap.quickTo(productGroup, 'rotationX', { duration: 0.6, ease: 'power2.out' });
@@ -218,6 +230,144 @@
                 });
             }
         }
+
+        // -------------------------------------------------------------
+        // 2. Live Interactive Product Demo Loop Inside Hero Mockup
+        // -------------------------------------------------------------
+        (function initHeroMockupDemo() {
+            const userBubble = document.getElementById('demo-user-bubble');
+            const assistantBubble = document.getElementById('demo-assistant-bubble');
+            const assistantText = document.getElementById('demo-assistant-text');
+            const inputText = document.getElementById('demo-input-text');
+            const sendBtn = document.getElementById('demo-send-btn');
+            const checksBadge = document.getElementById('demo-checks-badge');
+            const codeBlock = document.getElementById('demo-code-block');
+
+            if (!userBubble || !assistantBubble || !codeBlock || !inputText) return;
+
+            const fullPrompt = "Build a REST API for appointment booking with doctor schedules and SMS notifications.";
+            const assistantFull = "I've structured a 4-model Django schema (`Doctor`, `Patient`, `Appointment`, `Notification`). Synthesizing appointments/models.py...";
+            const codeLines = [
+                '<span style="color: var(--code-keyword);">class</span> <span style="color: var(--code-type);">Appointment</span>(models.Model):',
+                '    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)',
+                '    patient = models.ForeignKey(Patient, on_delete=models.CASCADE)',
+                '    scheduled_at = models.DateTimeField()',
+                '    status = models.CharField(max_length=20, default=<span style="color: var(--code-string);">&#39;pending&#39;</span>)',
+                '    created_at = models.DateTimeField(auto_now_add=<span style="color: var(--code-keyword);">True</span>)'
+            ];
+
+            const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+            async function runDemoCycle() {
+                while (true) {
+                    // Reset to idle prompt state
+                    inputText.style.color = 'var(--ink)';
+                    inputText.innerHTML = '<span class="demo-typing-cursor">|</span>';
+                    userBubble.style.opacity = '0';
+                    userBubble.style.transform = 'translateY(8px) scale(0.97)';
+                    assistantBubble.style.opacity = '0';
+                    assistantBubble.style.transform = 'translateY(8px) scale(0.97)';
+                    checksBadge.className = 'badge badge-brand';
+                    checksBadge.innerHTML = '⚡ AST Validating...';
+                    codeBlock.innerHTML = '<span style="color: var(--ink-disabled);"># Synthesizing models...</span>';
+
+                    await sleep(900);
+
+                    // Type user prompt into input box
+                    let typed = '';
+                    const words = fullPrompt.split(' ');
+                    for (let w = 0; w < words.length; w++) {
+                        typed += (w === 0 ? '' : ' ') + words[w];
+                        inputText.innerHTML = typed + '<span class="demo-typing-cursor">|</span>';
+                        await sleep(70 + Math.random() * 40);
+                    }
+                    await sleep(400);
+
+                    // Click Send
+                    if (sendBtn) sendBtn.style.transform = 'scale(0.92)';
+                    await sleep(140);
+                    if (sendBtn) sendBtn.style.transform = 'scale(1)';
+                    inputText.innerHTML = 'Type requirement refinement…';
+                    inputText.style.color = 'var(--ink-3)';
+
+                    // User speech bubble appears
+                    userBubble.style.opacity = '1';
+                    userBubble.style.transform = 'translateY(0) scale(1)';
+                    await sleep(500);
+
+                    // Assistant typing indicator
+                    assistantText.innerHTML = '<span class="typing-dots"><span>.</span><span>.</span><span>.</span></span>';
+                    assistantBubble.style.opacity = '1';
+                    assistantBubble.style.transform = 'translateY(0) scale(1)';
+                    await sleep(1100);
+
+                    // Assistant streams answer
+                    assistantText.innerHTML = assistantFull;
+                    await sleep(500);
+
+                    // Code pane synthesizes lines
+                    codeBlock.innerHTML = '';
+                    for (let i = 0; i < codeLines.length; i++) {
+                        codeBlock.innerHTML += (i === 0 ? '' : '\n') + codeLines[i];
+                        if (i === 1) {
+                            checksBadge.className = 'badge badge-brand';
+                            checksBadge.innerHTML = '⚡ Schema Check: 4/12';
+                        } else if (i === 3) {
+                            checksBadge.className = 'badge badge-brand';
+                            checksBadge.innerHTML = '⚡ Migrations: 8/12';
+                        }
+                        await sleep(260);
+                    }
+                    await sleep(350);
+
+                    // Checks Passed celebration
+                    checksBadge.className = 'badge badge-success';
+                    checksBadge.innerHTML = '✓ 12/12 Checks Passed';
+                    checksBadge.style.boxShadow = '0 0 16px rgba(34, 197, 94, 0.45)';
+                    await sleep(400);
+                    checksBadge.style.boxShadow = 'none';
+
+                    // Hold complete state for 6.5s before looping
+                    await sleep(6500);
+                }
+            }
+
+            // Start demo loop after initial delay
+            setTimeout(runDemoCycle, 600);
+        })();
+
+        // -------------------------------------------------------------
+        // 3. Active Workflow Sequence on 5-Stage Pipeline Cards
+        // -------------------------------------------------------------
+        (function initPipelineActiveCycle() {
+            const cards = Array.from(document.querySelectorAll('.pipeline-grid .tilt-card'));
+            if (!cards.length) return;
+
+            let current = 0;
+            let isHovered = false;
+
+            cards.forEach((card, idx) => {
+                card.addEventListener('mouseenter', () => {
+                    isHovered = true;
+                    cards.forEach(c => c.classList.remove('pipeline-active'));
+                    card.classList.add('pipeline-active');
+                });
+                card.addEventListener('mouseleave', () => {
+                    isHovered = false;
+                });
+            });
+
+            // Auto-advance active stage highlight every 2.4 seconds
+            setInterval(() => {
+                if (isHovered) return;
+                cards.forEach(c => c.classList.remove('pipeline-active'));
+                current = (current + 1) % cards.length;
+                cards[current].classList.add('pipeline-active');
+            }, 2400);
+
+            // Start with card 0 active
+            cards[0].classList.add('pipeline-active');
+        })();
     });
 </script>
 {% endblock %}

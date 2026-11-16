@@ -2,7 +2,7 @@ import json
 import re
 from datetime import timedelta
 from django.shortcuts import render, redirect, get_object_or_404
-from django.http import JsonResponse
+from django.http import JsonResponse, StreamingHttpResponse
 from django.utils import timezone
 from django.conf import settings
 
@@ -116,19 +116,18 @@ def welcome_view(request):
 
 @verification_required
 def dashboard_view(request):
-    sessions = request.user.sessions.all().order_by('-started_at')
-    profile = request.user.profile
+    sessions = request.user.sessions.all().only('id', 'mode', 'title', 'started_at', 'status', 'user_id').order_by('-started_at')
+    profile = getattr(request, '_cached_profile', None) or request.user.profile
     return render(request, 'dashboard.html', {'sessions': sessions, 'profile': profile})
 
 @verification_required
 def new_chat_view(request):
-    active_sessions = Session.objects.filter(user=request.user, status='active')
-    unused_session = None
-    for s in active_sessions:
-        if s.messages.count() == 0:
-            unused_session = s
-            break
-            
+    unused_session = (
+        Session.objects.filter(user=request.user, status='active')
+        .annotate(msg_count=models.Count('messages'))
+        .filter(msg_count=0)
+        .first()
+    )
     if unused_session:
         return redirect('chat', session_id=unused_session.id)
 
@@ -161,8 +160,8 @@ def create_session_view(request):
 
 @verification_required
 def chat_view(request, session_id):
-    session = get_object_or_404(Session, id=session_id, user=request.user)
-    messages_list = session.messages.all()
+    session = get_object_or_404(Session.objects.select_related('user'), id=session_id, user=request.user)
+    messages_list = session.messages.all().order_by('timestamp')
     
     # ProjectFile is single source of truth; backfill if legacy GeneratedCode exists (#27)
     from chat.models import ProjectFile
@@ -177,7 +176,7 @@ def chat_view(request, session_id):
     yesterday_start = today_start - timedelta(days=1)
     seven_days_ago = today_start - timedelta(days=7)
     
-    all_sessions = Session.objects.filter(user=request.user).order_by('-started_at')
+    all_sessions = Session.objects.filter(user=request.user).only('id', 'title', 'started_at', 'status', 'user_id').order_by('-started_at')
     
     today_sessions = [s for s in all_sessions if timezone.localtime(s.started_at) >= today_start]
     yesterday_sessions = [s for s in all_sessions if today_start > timezone.localtime(s.started_at) >= yesterday_start]
@@ -613,7 +612,7 @@ def send_message_api(request, session_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST request required'}, status=400)
         
-    session = get_object_or_404(Session, id=session_id, user=request.user)
+    session = get_object_or_404(Session.objects.select_related('user'), id=session_id, user=request.user)
     active_job = None
     if request.headers.get('X-Run-Sync') == 'false':
         run_async = True
@@ -814,6 +813,50 @@ def send_message_api(request, session_id):
         'rubric_cats': rubric_cats,
         'job_id': active_job.id if active_job else None
     })
+
+@verification_required
+def stream_chat_api(request, session_id):
+    """
+    Real-time Server-Sent Events (SSE) streaming endpoint for DevDialogue AI.
+    Emits structured agent activity feed events (thinking, tool_call, tool_result,
+    source, file_action, answer_chunk, error, done) directly as each step occurs.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST request required'}, status=400)
+
+    session = get_object_or_404(Session.objects.select_related('user'), id=session_id, user=request.user)
+
+    try:
+        data = json.loads(request.body)
+        user_content = data.get('message', '').strip()
+        provider_name = data.get('provider', None)
+        action = data.get('action', None)
+        req_id = data.get('request_id', None)
+    except Exception:
+        user_content = request.POST.get('message', '').strip()
+        provider_name = None
+        action = request.POST.get('action', None)
+        req_id = request.POST.get('request_id', None)
+
+    if not user_content:
+        return JsonResponse({'error': 'Message content cannot be empty'}, status=400)
+
+    from chat.events import stream_agent_response
+
+    response = StreamingHttpResponse(
+        stream_agent_response(
+            session=session,
+            user_content=user_content,
+            provider_name=provider_name,
+            action=action,
+            user=request.user,
+            request_id=req_id
+        ),
+        content_type='text/event-stream'
+    )
+    response['Cache-Control'] = 'no-cache, no-transform'
+    response['X-Accel-Buffering'] = 'no'
+    return response
 
 @verification_required
 def delete_session_view(request, session_id):

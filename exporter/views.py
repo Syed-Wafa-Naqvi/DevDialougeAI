@@ -6,7 +6,11 @@ from exporter.archiver import ZipArchiver
 
 @verification_required
 def download_project_zip_api(request, session_id):
-    session = get_object_or_404(Session, id=session_id, user=request.user)
+    session = get_object_or_404(
+        Session.objects.prefetch_related('plans', 'messages', 'project_files', 'generated_codes'),
+        id=session_id,
+        user=request.user
+    )
     zip_bytes = ZipArchiver.create_project_zip(session)
     
     project_name = ZipArchiver.get_project_name(session)

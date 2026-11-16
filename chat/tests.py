@@ -591,3 +591,49 @@ class ChatTestCase(TestCase):
         session = self._mode2_session(generated=(), status='srs_ready')
         self._send(session, 'yes, but add an admin panel')
         self.assertFalse(session.project_files.exists())
+
+    def test_stream_chat_api_emits_structured_events(self):
+        import json
+        session = Session.objects.create(user=self.user, mode='mode1', status='active')
+        response = self.client.post(
+            f'/api/chat/{session.id}/stream/',
+            data={'message': 'Build a REST API for appointments', 'provider': 'mock'},
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'text/event-stream')
+
+        # Read streaming response content
+        content = b"".join(response.streaming_content).decode('utf-8')
+        lines = [line.strip() for line in content.split('\n') if line.startswith('data: ')]
+        self.assertGreater(len(lines), 0)
+
+        event_types = []
+        for line in lines:
+            raw_json = line[len('data: '):]
+            data = json.loads(raw_json)
+            event_types.append(data.get('type'))
+
+        self.assertIn('thinking', event_types)
+        self.assertIn('tool_call', event_types)
+        self.assertIn('tool_result', event_types)
+        self.assertIn('answer_chunk', event_types)
+        self.assertIn('done', event_types)
+
+    def test_stream_chat_api_cancellation(self):
+        import json
+        from django.core.cache import cache
+        session = Session.objects.create(user=self.user, mode='mode1', status='active')
+        cache.set(f"cancel_session_{session.id}", True, 60)
+
+        response = self.client.post(
+            f'/api/chat/{session.id}/stream/',
+            data={'message': 'Cancelled stream request', 'provider': 'mock'},
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+        content = b"".join(response.streaming_content).decode('utf-8')
+        lines = [line.strip() for line in content.split('\n') if line.startswith('data: ')]
+        
+        last_event = json.loads(lines[-1][len('data: '):])
+        self.assertEqual(last_event.get('status'), 'cancelled')

@@ -335,15 +335,19 @@
                     {% endfor %}
                     
                     <div class="message-row assistant-row typing-indicator-row hidden" id="typing-indicator">
-                        <div class="message-bubble">
+                        <div class="message-bubble" style="max-width: 90%;">
                             <div class="msg-author">
                                 <div class="msg-avatar-initials assistant-avatar">AI</div>
                                 <span class="msg-author-name">DevDialogue AI</span>
+                                <span class="live-response-timer" id="live-response-timer">⏱️ 0.0s</span>
                             </div>
-                            <div class="typing-loader">
-                                <span></span>
-                                <span></span>
-                                <span></span>
+                            <div class="typing-status-wrap">
+                                <div class="typing-loader">
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                </div>
+                                <span class="typing-status-text" id="typing-status-text">Understanding your request…</span>
                             </div>
                         </div>
                     </div>
@@ -850,6 +854,24 @@
             const thisRequestId = 'req_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8);
             window.currentRequestId = thisRequestId;
 
+            // Start Stopwatch Timer
+            const liveTimer = document.getElementById('live-response-timer');
+            const typingStatus = document.getElementById('typing-status-text');
+            const streamStartTs = Date.now();
+            if (liveTimer) liveTimer.textContent = '⏱️ 0.0s';
+            if (typingStatus) typingStatus.textContent = 'Understanding your request…';
+
+            let timerInterval = setInterval(() => {
+                const elapsedSec = ((Date.now() - streamStartTs) / 1000).toFixed(1);
+                if (liveTimer) liveTimer.textContent = `⏱️ ${elapsedSec}s`;
+                if (typingStatus) {
+                    const s = parseFloat(elapsedSec);
+                    if (s < 0.8) typingStatus.textContent = 'Understanding your request…';
+                    else if (s < 2.0) typingStatus.textContent = 'Checking system architecture & dependencies…';
+                    else typingStatus.textContent = 'Synthesizing output & AST verification…';
+                }
+            }, 100);
+
             try {
                 const providerSelect = document.getElementById('provider-selector');
                 const selectedProvider = providerSelect ? providerSelect.value : 'auto';
@@ -857,122 +879,345 @@
                 const actionToSend = pendingAction;
                 pendingAction = null;
 
-                const response = await fetch("{% url 'send_message_api' session_id=session.id %}", {
-                    method: 'POST',
-                    signal: currentAbortController.signal,
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': '{{ csrf_token }}'
-                    },
-                    body: JSON.stringify({ message: messageText, provider: providerVal, action: actionToSend, request_id: thisRequestId })
-                });
-                
-                let data;
+                const streamUrl = "{% url 'stream_chat_api' session_id=session.id %}";
+                let streamSuccess = false;
+
                 try {
-                    data = await response.json();
-                } catch (parseErr) {
-                    data = { error: 'Invalid response from server' };
-                }
-                
-                // Hide typing indicator & clear generating state
-                typingIndicator.classList.add('hidden');
-                if (card) card.classList.remove('generating');
-                if (sendBtn) {
-                    sendBtn.classList.remove('generating');
-                    sendBtn.setAttribute('disabled', 'true');
-                    sendBtn.innerHTML = '<i data-lucide="arrow-up" id="send-btn-icon"></i>';
-                    lucide.createIcons();
-                }
-                
-                if (response.ok) {
-                    appendMessageBubble('assistant', data.response);
-                    
-                    if (data.job_id) {
-                        pollActiveJobEvents(data.job_id);
-                    }
-                    
-                    // Update session status badge & stepper stage
-                    if (data.status) {
-                        updateStatusBadge(data.status);
-                        updateStepperStage(data.status);
-                        
-                        updateModuleReviewBar(data.status, !!data.job_id);
-                        // Toggle action bar visibility
-                        const actionBar = document.getElementById('chat-action-bar');
-                        if (actionBar) {
-                            if (['srs_ready', 'plan_draft', 'plan_approved'].includes(data.status)) {
-                                actionBar.classList.remove('hidden');
-                            } else {
-                                actionBar.classList.add('hidden');
+                    const response = await fetch(streamUrl, {
+                        method: 'POST',
+                        signal: currentAbortController.signal,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': '{{ csrf_token }}'
+                        },
+                        body: JSON.stringify({ message: messageText, provider: providerVal, action: actionToSend, request_id: thisRequestId })
+                    });
+
+                    if (response.ok && response.headers.get('content-type')?.includes('text/event-stream')) {
+                        streamSuccess = true;
+                        typingIndicator.classList.add('hidden');
+
+                        // Create live message bubble for streamed assistant response
+                        const feedId = 'feed_' + Date.now();
+                        const rowDiv = document.createElement('div');
+                        rowDiv.className = 'message-row assistant-row';
+                        rowDiv.id = `row-${feedId}`;
+
+                        rowDiv.innerHTML = `
+                            <div class="message-bubble" style="max-width: 90%;">
+                                <div class="msg-author">
+                                    <div class="msg-avatar-initials assistant-avatar">AI</div>
+                                    <span class="msg-author-name">DevDialogue AI</span>
+                                    <span class="live-response-timer" id="timer-${feedId}">⏱️ 0.0s</span>
+                                </div>
+                                <div class="agent-activity-feed is-running" id="feed-${feedId}">
+                                    <div class="activity-feed-header" onclick="toggleActivityFeed('${feedId}')">
+                                        <div class="activity-header-left">
+                                            <span class="activity-status-icon spinner" id="status-icon-${feedId}"></span>
+                                            <span class="activity-header-title">Reasoning & Tools</span>
+                                            <span class="activity-step-count" id="step-count-${feedId}">(0 steps)</span>
+                                        </div>
+                                        <div class="activity-header-right">
+                                            <span class="activity-elapsed-badge" id="elapsed-${feedId}">⏱️ 0.0s</span>
+                                            <svg class="activity-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                        </div>
+                                    </div>
+                                    <div class="activity-timeline" id="timeline-${feedId}"></div>
+                                </div>
+                                <div class="msg-content prose-content" id="content-${feedId}">
+                                    <span id="text-${feedId}"></span><span class="stream-cursor" id="cursor-${feedId}"></span>
+                                </div>
+                            </div>
+                        `;
+
+                        messagesBox.insertBefore(rowDiv, typingIndicator);
+                        scrollToBottom();
+
+                        const timeline = document.getElementById(`timeline-${feedId}`);
+                        const textElem = document.getElementById(`text-${feedId}`);
+                        const cursorElem = document.getElementById(`cursor-${feedId}`);
+                        const feedBox = document.getElementById(`feed-${feedId}`);
+                        const statusIcon = document.getElementById(`status-icon-${feedId}`);
+                        const stepCountElem = document.getElementById(`step-count-${feedId}`);
+                        const timerFeedBadge = document.getElementById(`timer-${feedId}`);
+                        const elapsedBadge = document.getElementById(`elapsed-${feedId}`);
+
+                        let totalSteps = 0;
+                        let accumulatedText = '';
+                        const reader = response.body.getReader();
+                        const decoder = new TextDecoder();
+                        let sseBuffer = '';
+
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
+
+                            sseBuffer += decoder.decode(value, { stream: true });
+                            const lines = sseBuffer.split('\n');
+                            sseBuffer = lines.pop();
+
+                            for (const line of lines) {
+                                const trimmed = line.trim();
+                                if (!trimmed.startsWith('data: ')) continue;
+                                const raw = trimmed.slice(6);
+                                if (!raw) continue;
+
+                                let ev;
+                                try { ev = JSON.parse(raw); } catch (e) { continue; }
+
+                                const curElapsed = ((Date.now() - streamStartTs) / 1000).toFixed(1) + 's';
+                                if (timerFeedBadge) timerFeedBadge.textContent = '⏱️ ' + curElapsed;
+                                if (elapsedBadge) elapsedBadge.textContent = '⏱️ ' + curElapsed;
+
+                                if (ev.type === 'thinking') {
+                                    let stepDiv = document.getElementById(`step-${ev.id}`);
+                                    if (!stepDiv) {
+                                        totalSteps++;
+                                        stepDiv = document.createElement('div');
+                                        stepDiv.className = `activity-step ${ev.status}`;
+                                        stepDiv.id = `step-${ev.id}`;
+                                        stepDiv.innerHTML = `
+                                            <div class="step-icon ${ev.status}">${ev.status === 'running' ? '<div class="step-spinner"></div>' : '✓'}</div>
+                                            <div class="step-content">
+                                                <div class="step-title">${escapeHtml(ev.title)}</div>
+                                                ${ev.content ? `<div class="step-detail">${escapeHtml(ev.content)}</div>` : ''}
+                                            </div>
+                                        `;
+                                        timeline.appendChild(stepDiv);
+                                    } else {
+                                        stepDiv.className = `activity-step ${ev.status}`;
+                                        const iconDiv = stepDiv.querySelector('.step-icon');
+                                        if (iconDiv) {
+                                            iconDiv.className = `step-icon ${ev.status}`;
+                                            iconDiv.innerHTML = ev.status === 'running' ? '<div class="step-spinner"></div>' : (ev.status === 'cancelled' ? '✗' : '✓');
+                                        }
+                                        const titleDiv = stepDiv.querySelector('.step-title');
+                                        if (titleDiv) titleDiv.textContent = ev.title;
+                                        if (ev.content) {
+                                            let detailDiv = stepDiv.querySelector('.step-detail');
+                                            if (!detailDiv) {
+                                                detailDiv = document.createElement('div');
+                                                detailDiv.className = 'step-detail';
+                                                stepDiv.querySelector('.step-content').appendChild(detailDiv);
+                                            }
+                                            detailDiv.textContent = ev.content;
+                                        }
+                                    }
+                                    if (stepCountElem) stepCountElem.textContent = `(${totalSteps} step${totalSteps > 1 ? 's' : ''})`;
+                                    scrollToBottom();
+
+                                } else if (ev.type === 'tool_call') {
+                                    totalSteps++;
+                                    const stepDiv = document.createElement('div');
+                                    stepDiv.className = 'activity-step running';
+                                    stepDiv.id = `step-call-${ev.id}`;
+                                    stepDiv.innerHTML = `
+                                        <div class="step-icon running"><div class="step-spinner"></div></div>
+                                        <div class="step-content">
+                                            <div class="step-title">Tool: <code>${escapeHtml(ev.tool)}</code></div>
+                                            <div class="step-detail">${escapeHtml(ev.summary || '')}</div>
+                                        </div>
+                                    `;
+                                    timeline.appendChild(stepDiv);
+                                    if (stepCountElem) stepCountElem.textContent = `(${totalSteps} step${totalSteps > 1 ? 's' : ''})`;
+                                    scrollToBottom();
+
+                                } else if (ev.type === 'tool_result') {
+                                    const stepDiv = document.getElementById(`step-call-${ev.id}`);
+                                    if (stepDiv) {
+                                        stepDiv.className = 'activity-step completed';
+                                        const iconDiv = stepDiv.querySelector('.step-icon');
+                                        if (iconDiv) {
+                                            iconDiv.className = 'step-icon completed';
+                                            iconDiv.textContent = '✓';
+                                        }
+                                        const durText = ev.duration_ms ? ` (${ev.duration_ms}ms)` : '';
+                                        const detailDiv = stepDiv.querySelector('.step-detail');
+                                        if (detailDiv) {
+                                            detailDiv.innerHTML += ` <span style="color:var(--ink-disabled);">${durText}</span>`;
+                                        }
+                                    }
+                                    scrollToBottom();
+
+                                } else if (ev.type === 'file_action') {
+                                    totalSteps++;
+                                    const stepDiv = document.createElement('div');
+                                    stepDiv.className = 'activity-step completed';
+                                    stepDiv.innerHTML = `
+                                        <div class="step-icon completed">✓</div>
+                                        <div class="step-content">
+                                            <div class="step-title">
+                                                <span class="action-badge ${ev.action}">${ev.action.toUpperCase()}</span>
+                                                <a href="javascript:void(0)" onclick="openFileByPath('${escapeHtml(ev.path)}')" class="file-link"><code>${escapeHtml(ev.path)}</code></a>
+                                            </div>
+                                            <div class="step-detail">${escapeHtml(ev.summary || '')}</div>
+                                        </div>
+                                    `;
+                                    timeline.appendChild(stepDiv);
+                                    if (stepCountElem) stepCountElem.textContent = `(${totalSteps} step${totalSteps > 1 ? 's' : ''})`;
+                                    scrollToBottom();
+
+                                } else if (ev.type === 'source') {
+                                    totalSteps++;
+                                    const stepDiv = document.createElement('div');
+                                    stepDiv.className = 'activity-step completed';
+                                    stepDiv.innerHTML = `
+                                        <div class="step-icon source">🔗</div>
+                                        <div class="step-content">
+                                            <div class="step-title">Source: <span class="source-badge">${escapeHtml(ev.kind)}</span> <strong>${escapeHtml(ev.title)}</strong></div>
+                                            <div class="step-detail"><a href="${escapeHtml(ev.url_or_path)}" target="_blank" class="source-url">${escapeHtml(ev.url_or_path)}</a></div>
+                                        </div>
+                                    `;
+                                    timeline.appendChild(stepDiv);
+                                    if (stepCountElem) stepCountElem.textContent = `(${totalSteps} step${totalSteps > 1 ? 's' : ''})`;
+                                    scrollToBottom();
+
+                                } else if (ev.type === 'answer_chunk') {
+                                    accumulatedText += ev.delta;
+                                    textElem.textContent = accumulatedText;
+                                    scrollToBottom();
+
+                                } else if (ev.type === 'done') {
+                                    clearInterval(timerInterval);
+                                    if (feedBox) feedBox.classList.remove('is-running');
+                                    if (statusIcon) {
+                                        statusIcon.className = 'activity-status-icon completed';
+                                        statusIcon.textContent = '✓';
+                                    }
+                                    if (cursorElem) cursorElem.remove();
+                                    
+                                    // Render complete markdown
+                                    const contentBox = document.getElementById(`content-${feedId}`);
+                                    if (contentBox) contentBox.innerHTML = renderMarkdownToHtml(accumulatedText);
+
+                                    const finalSec = (ev.total_duration_ms ? (ev.total_duration_ms / 1000).toFixed(1) : ((Date.now() - streamStartTs) / 1000).toFixed(1)) + 's';
+                                    if (timerFeedBadge) timerFeedBadge.textContent = '⏱️ ' + finalSec;
+                                    if (elapsedBadge) elapsedBadge.textContent = '⏱️ ' + finalSec;
+
+                                    if (ev.session_status) {
+                                        updateStatusBadge(ev.session_status);
+                                        updateStepperStage(ev.session_status);
+                                    }
+
+                                    if (ev.codes && ev.codes.length > 0) {
+                                        updateCodeFilesPanel(ev.codes);
+                                        if (workspaceWrapper && workspaceWrapper.classList.contains('collapsed-code')) {
+                                            workspaceWrapper.classList.remove('collapsed-code');
+                                        }
+                                    }
+
+                                    if (ev.completeness_score !== undefined) {
+                                        const scoreVal = document.getElementById('completeness-score-val');
+                                        const barFill = document.getElementById('completeness-bar-fill');
+                                        if (scoreVal) scoreVal.textContent = `${ev.completeness_score}%`;
+                                        if (barFill) barFill.style.width = `${ev.completeness_score}%`;
+                                    }
+
+                                    if (ev.title) {
+                                        const activeItem = document.querySelector('.history-item.active');
+                                        if (activeItem) {
+                                            const textSpan = activeItem.querySelector('.item-text');
+                                            if (textSpan) textSpan.textContent = ev.title;
+                                        }
+                                        const topbarTitleText = document.getElementById('active-topbar-title-text');
+                                        if (topbarTitleText) topbarTitleText.textContent = ev.title;
+                                    }
+                                }
                             }
                         }
+                    }
+                } catch (streamErr) {
+                    if (streamErr.name === 'AbortError') throw streamErr;
+                    console.warn('Stream failed or was interrupted, falling back to sync endpoint:', streamErr);
+                    streamSuccess = false;
+                }
 
-                        // Check if Completed & update placeholder
-                        if ((data.status === 'completed' || data.status === 'ready') && inputField) {
-                            inputField.placeholder = "Codebase generated! Ask to edit files, add features, or how to run the project...";
-                        }
+                // If streaming didn't handle it, fall back to synchronous JSON endpoint
+                if (!streamSuccess) {
+                    const response = await fetch("{% url 'send_message_api' session_id=session.id %}", {
+                        method: 'POST',
+                        signal: currentAbortController.signal,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': '{{ csrf_token }}'
+                        },
+                        body: JSON.stringify({ message: messageText, provider: providerVal, action: actionToSend, request_id: thisRequestId })
+                    });
+                    
+                    let data;
+                    try {
+                        data = await response.json();
+                    } catch (parseErr) {
+                        data = { error: 'Invalid response from server' };
                     }
                     
-                    // Update code files panel
-                    if (data.codes && data.codes.length > 0) {
-                        updateCodeFilesPanel(data.codes);
+                    if (response.ok) {
+                        appendMessageBubble('assistant', data.response);
                         
-                        // Auto-expand panel when new code is generated
-                        if (workspaceWrapper.classList.contains('collapsed-code')) {
-                            workspaceWrapper.classList.remove('collapsed-code');
+                        if (data.job_id) {
+                            pollActiveJobEvents(data.job_id);
                         }
-                    }
-                    
-                    // Update live completeness score & rubric badges (§4.5, §8)
-                    if (data.completeness_score !== undefined) {
-                        const scoreVal = document.getElementById('completeness-score-val');
-                        const barFill = document.getElementById('completeness-bar-fill');
-                        if (scoreVal) scoreVal.textContent = `${data.completeness_score}%`;
-                        if (barFill) barFill.style.width = `${data.completeness_score}%`;
+                        
+                        if (data.status) {
+                            updateStatusBadge(data.status);
+                            updateStepperStage(data.status);
+                            updateModuleReviewBar(data.status, !!data.job_id);
+                            const actionBar = document.getElementById('chat-action-bar');
+                            if (actionBar) {
+                                if (['srs_ready', 'plan_draft', 'plan_approved'].includes(data.status)) {
+                                    actionBar.classList.remove('hidden');
+                                } else {
+                                    actionBar.classList.add('hidden');
+                                }
+                            }
+                            if ((data.status === 'completed' || data.status === 'ready') && inputField) {
+                                inputField.placeholder = "Codebase generated! Ask to edit files, add features, or how to run the project...";
+                            }
+                        }
+                        
+                        if (data.codes && data.codes.length > 0) {
+                            updateCodeFilesPanel(data.codes);
+                            if (workspaceWrapper.classList.contains('collapsed-code')) {
+                                workspaceWrapper.classList.remove('collapsed-code');
+                            }
+                        }
+                        
+                        if (data.completeness_score !== undefined) {
+                            const scoreVal = document.getElementById('completeness-score-val');
+                            const barFill = document.getElementById('completeness-bar-fill');
+                            if (scoreVal) scoreVal.textContent = `${data.completeness_score}%`;
+                            if (barFill) barFill.style.width = `${data.completeness_score}%`;
+                        }
 
-                        const ticksRow = document.getElementById('completeness-ticks-row');
-                        if (ticksRow) {
-                            const score = data.completeness_score;
-                            const cats = data.rubric_cats || {};
-                            ticksRow.innerHTML = `
-                                <span class="rubric-tick ${cats.core_features === 'covered' || cats.core_features === 'partial' || score >= 20 ? 'active' : ''}">Features ${cats.core_features === 'covered' || cats.core_features === 'partial' || score >= 20 ? '✓' : ''}</span>
-                                <span class="rubric-tick ${cats.tech_stack === 'covered' || cats.tech_stack === 'partial' || score >= 35 ? 'active' : ''}">Stack ${cats.tech_stack === 'covered' || cats.tech_stack === 'partial' || score >= 35 ? '✓' : ''}</span>
-                                <span class="rubric-tick ${cats.auth_and_roles === 'covered' || cats.auth_and_roles === 'partial' || score >= 50 ? 'active' : ''}">Roles ${cats.auth_and_roles === 'covered' || cats.auth_and_roles === 'partial' || score >= 50 ? '✓' : ''}</span>
-                                <span class="rubric-tick ${cats.data_model === 'covered' || cats.data_model === 'partial' || score >= 65 ? 'active' : ''}">Schema ${cats.data_model === 'covered' || cats.data_model === 'partial' || score >= 65 ? '✓' : ''}</span>
-                                <span class="rubric-tick ${cats.integrations === 'covered' || score >= 80 ? 'active' : ''}">Security ${cats.integrations === 'covered' || score >= 80 ? '✓' : ''}</span>
-                                <span class="rubric-tick ${cats.deployment === 'covered' || score >= 90 ? 'active' : ''}">Infra ${cats.deployment === 'covered' || score >= 90 ? '✓' : ''}</span>
-                            `;
+                        if (data.title) {
+                            const activeItem = document.querySelector('.history-item.active');
+                            if (activeItem) {
+                                const textSpan = activeItem.querySelector('.item-text');
+                                if (textSpan) textSpan.textContent = data.title;
+                            }
+                            const topbarTitleText = document.getElementById('active-topbar-title-text');
+                            if (topbarTitleText) topbarTitleText.textContent = data.title;
                         }
+                    } else {
+                        appendMessageBubble('assistant', `⚠️ ${data.error || 'Something went wrong.'}`);
                     }
-
-                    // Auto-update sidebar title after first exchange
-                    if (data.title) {
-                        const activeItem = document.querySelector('.history-item.active');
-                        if (activeItem) {
-                            const textSpan = activeItem.querySelector('.item-text');
-                            if (textSpan) textSpan.textContent = data.title;
-                        }
-                        const topbarTitleText = document.getElementById('active-topbar-title-text');
-                        if (topbarTitleText) topbarTitleText.textContent = data.title;
-                    }
-                } else {
-                    appendMessageBubble('assistant', `⚠️ ${data.error || 'Something went wrong.'}`);
                 }
             } catch (err) {
-                typingIndicator.classList.add('hidden');
-                if (card) card.classList.remove('generating');
-                if (sendBtn) {
-                    sendBtn.classList.remove('generating');
-                    sendBtn.setAttribute('disabled', 'true');
-                    sendBtn.innerHTML = '<i data-lucide="arrow-up" id="send-btn-icon"></i>';
-                    lucide.createIcons();
-                }
                 if (err.name === 'AbortError') {
                     appendMessageBubble('assistant', '⚠️ Message processing cancelled.');
                 } else {
                     appendMessageBubble('assistant', '⚠️ Network error. Please check your connection and try again.');
                 }
             } finally {
+                clearInterval(timerInterval);
+                typingIndicator.classList.add('hidden');
+                if (card) card.classList.remove('generating');
+                if (sendBtn) {
+                    sendBtn.classList.remove('generating');
+                    sendBtn.setAttribute('disabled', 'true');
+                    sendBtn.innerHTML = '<i data-lucide="arrow-up" id="send-btn-icon"></i>';
+                    lucide.createIcons();
+                }
                 currentAbortController = null;
             }
             scrollToBottom();
@@ -1044,6 +1289,27 @@
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
     
+    // Live Agent Activity Feed Controls
+    window.toggleActivityFeed = function(feedId) {
+        const feed = document.getElementById(`feed-${feedId}`);
+        if (feed) {
+            feed.classList.toggle('collapsed');
+        }
+    };
+
+    window.openFileByPath = function(path) {
+        const inner = document.getElementById('file-tabs-inner') || fileTabsContainer;
+        const tabs = inner ? Array.from(inner.querySelectorAll('.file-tab')) : [];
+        const matched = tabs.find(t => t.textContent.trim() === path);
+        if (matched) {
+            const id = matched.getAttribute('data-code-id');
+            loadCodeFile(id, matched);
+            if (workspaceWrapper && workspaceWrapper.classList.contains('collapsed-code')) {
+                workspaceWrapper.classList.remove('collapsed-code');
+            }
+        }
+    };
+
     // Hierarchical Tree Explorer Component
     window.toggleTreeExplorer = function() {
         const sidebar = document.getElementById('file-tree-sidebar');
