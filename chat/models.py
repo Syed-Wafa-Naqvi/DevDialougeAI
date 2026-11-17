@@ -1,7 +1,9 @@
+import uuid
 from django.db import models
 from django.contrib.auth.models import User
 
 class Session(models.Model):
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
     MODE_CHOICES = [
         ('mode1', 'Mode 1: Dialogue-Driven'),
         ('mode2', 'Mode 2: Incremental'),
@@ -30,7 +32,11 @@ class Session(models.Model):
     summary_text = models.TextField(blank=True, default='')
 
     def __str__(self):
-        return f"Session {self.id} ({self.get_mode_display()}) - {self.user.username}"
+        return f"Session {self.uuid} ({self.get_mode_display()}) - {self.user.username}"
+
+    def get_absolute_url(self):
+        from django.urls import reverse
+        return reverse('chat', kwargs={'session_id': str(self.uuid)})
 
 
 class ProjectPlan(models.Model):

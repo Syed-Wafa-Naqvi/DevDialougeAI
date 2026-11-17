@@ -2,14 +2,43 @@ import json
 import logging
 import os
 import re
+import uuid
 from datetime import timedelta
 from django.shortcuts import render, redirect, get_object_or_404
-from django.http import JsonResponse, StreamingHttpResponse
+from django.http import JsonResponse, StreamingHttpResponse, Http404
 from django.utils import timezone
 from django.conf import settings
 from django.db import models
 
 logger = logging.getLogger('chat.views')
+
+def _get_session(session_id, user, select_related=None, prefetch_related=None):
+    """
+    Retrieves a Session for the user by UUID or by integer ID (for backwards compatibility).
+    """
+    qs = Session.objects
+    if select_related:
+        qs = qs.select_related(*select_related)
+    if prefetch_related:
+        qs = qs.prefetch_related(*prefetch_related)
+
+    is_uuid = False
+    if isinstance(session_id, uuid.UUID):
+        is_uuid = True
+    else:
+        try:
+            uuid.UUID(str(session_id))
+            is_uuid = True
+        except (ValueError, AttributeError):
+            is_uuid = False
+
+    if is_uuid:
+        return get_object_or_404(qs, uuid=session_id, user=user)
+    else:
+        try:
+            return get_object_or_404(qs, id=int(session_id), user=user)
+        except (ValueError, TypeError):
+            raise Http404("Session not found")
 
 from accounts.decorators import verification_required
 from chat.models import Session, Message, GeneratedCode, ProjectFile
@@ -121,7 +150,7 @@ def welcome_view(request):
 
 @verification_required
 def dashboard_view(request):
-    sessions = request.user.sessions.all().only('id', 'mode', 'title', 'started_at', 'status', 'user_id').order_by('-started_at')
+    sessions = request.user.sessions.all().only('id', 'uuid', 'mode', 'title', 'started_at', 'status', 'user_id').order_by('-started_at')
     profile = getattr(request, '_cached_profile', None) or request.user.profile
     return render(request, 'dashboard.html', {'sessions': sessions, 'profile': profile})
 
@@ -134,12 +163,12 @@ def new_chat_view(request):
         .first()
     )
     if unused_session:
-        logger.info("[NEW CHAT] Redirecting %s to existing empty Session #%s", request.user, unused_session.id)
-        return redirect('chat', session_id=unused_session.id)
+        logger.info("[NEW CHAT] Redirecting %s to existing empty Session #%s (%s)", request.user, unused_session.id, unused_session.uuid)
+        return redirect('chat', session_id=unused_session.uuid)
 
     session = Session.objects.create(user=request.user, mode='mode1', status='active')
-    logger.info("[NEW CHAT] Created fresh Session #%s for %s", session.id, request.user)
-    return redirect('chat', session_id=session.id)
+    logger.info("[NEW CHAT] Created fresh Session #%s (%s) for %s", session.id, session.uuid, request.user)
+    return redirect('chat', session_id=session.uuid)
 
 @verification_required
 def create_session_view(request):
@@ -163,14 +192,14 @@ def create_session_view(request):
         history = list(session.messages.values('role', 'content'))
         first_q = InterviewerService.generate_next_question(history)
         Message.objects.create(session=session, role='assistant', content=first_q)
-        return redirect('chat', session_id=session.id)
+        return redirect('chat', session_id=session.uuid)
     return redirect('dashboard')
 
 @verification_required
 def chat_view(request, session_id):
-    session = get_object_or_404(Session.objects.select_related('user'), id=session_id, user=request.user)
+    session = _get_session(session_id, request.user, select_related=['user'])
     messages_list = session.messages.all().order_by('timestamp').prefetch_related('attachments')
-    logger.info("[OPEN CHAT] Session #%s '%s' (status: %s) | %d messages | User: %s", session.id, session.title, session.status, messages_list.count(), request.user)
+    logger.info("[OPEN CHAT] Session #%s (%s) '%s' (status: %s) | %d messages | User: %s", session.id, session.uuid, session.title, session.status, messages_list.count(), request.user)
     
     # ProjectFile is single source of truth; backfill if legacy GeneratedCode exists (#27)
     from chat.models import ProjectFile
@@ -185,7 +214,7 @@ def chat_view(request, session_id):
     yesterday_start = today_start - timedelta(days=1)
     seven_days_ago = today_start - timedelta(days=7)
     
-    all_sessions = Session.objects.filter(user=request.user).only('id', 'title', 'started_at', 'status', 'user_id').order_by('-started_at')
+    all_sessions = Session.objects.filter(user=request.user).only('id', 'uuid', 'title', 'started_at', 'status', 'user_id').order_by('-started_at')
     
     today_sessions = [s for s in all_sessions if timezone.localtime(s.started_at) >= today_start]
     yesterday_sessions = [s for s in all_sessions if today_start > timezone.localtime(s.started_at) >= yesterday_start]
@@ -703,7 +732,7 @@ def send_message_api(request, session_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST request required'}, status=400)
         
-    session = get_object_or_404(Session.objects.select_related('user'), id=session_id, user=request.user)
+    session = _get_session(session_id, request.user, select_related=['user'])
     active_job = None
     if request.headers.get('X-Run-Sync') == 'false':
         run_async = True
@@ -995,7 +1024,7 @@ def stream_chat_api(request, session_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST request required'}, status=400)
 
-    session = get_object_or_404(Session.objects.select_related('user'), id=session_id, user=request.user)
+    session = _get_session(session_id, request.user, select_related=['user'])
 
     file_bytes = None
     file_name = None
@@ -1097,7 +1126,7 @@ def stream_chat_api(request, session_id):
 @verification_required
 def delete_session_view(request, session_id):
     if request.method == 'POST':
-        session = get_object_or_404(Session, id=session_id, user=request.user)
+        session = _get_session(session_id, request.user)
         session.delete()
         return JsonResponse({'status': 'success'})
     return JsonResponse({'status': 'error', 'message': 'Invalid method'}, status=400)
@@ -1114,7 +1143,7 @@ def rename_session_api(request, session_id):
         if not new_title:
             return JsonResponse({'error': 'Title cannot be empty'}, status=400)
             
-        session = get_object_or_404(Session, id=session_id, user=request.user)
+        session = _get_session(session_id, request.user)
         session.title = new_title[:255]
         session.has_custom_title = True
         session.save()
@@ -1197,7 +1226,7 @@ def cancel_job_api(request, job_id):
 def cancel_session_api(request, session_id):
     from django.core.cache import cache
     from django.utils import timezone
-    session = get_object_or_404(Session, id=session_id, user=request.user)
+    session = _get_session(session_id, request.user)
     
     # Specific per-request cancellation (#2)
     request_id = None
@@ -1231,7 +1260,7 @@ def cancel_session_api(request, session_id):
 
 @verification_required
 def update_session_mode_api(request, session_id):
-    session = get_object_or_404(Session, id=session_id, user=request.user)
+    session = _get_session(session_id, request.user)
     if request.method == 'POST':
         # Lock mode switching if generation has started or files exist
         if session.status not in ('active', 'interviewing') or session.project_files.exists() or session.jobs.filter(status__in=['running', 'queued', 'succeeded']).exists():
@@ -1254,7 +1283,7 @@ def approve_plan_api(request, session_id):
     from chat.models import ProjectPlan
     from chat.state_machine import SessionStateMachine
     if request.method == 'POST':
-        session = get_object_or_404(Session, id=session_id, user=request.user)
+        session = _get_session(session_id, request.user)
         plan = session.plans.order_by('-version').first()
         if not plan:
             return JsonResponse({'error': 'No plan found for this session'}, status=404)
@@ -1270,7 +1299,7 @@ def approve_plan_api(request, session_id):
 @verification_required
 def get_plan_api(request, session_id):
     from chat.models import ProjectPlan
-    session = get_object_or_404(Session, id=session_id, user=request.user)
+    session = _get_session(session_id, request.user)
     plan = session.plans.order_by('-version').first()
     if not plan:
         return JsonResponse({'has_plan': False})
@@ -1286,7 +1315,7 @@ def get_plan_api(request, session_id):
 @verification_required
 def get_verification_api(request, session_id):
     from chat.models import VerificationRun
-    session = get_object_or_404(Session, id=session_id, user=request.user)
+    session = _get_session(session_id, request.user)
     verif = session.verification_runs.order_by('-created_at').first()
     if not verif:
         return JsonResponse({'has_verification': False})
@@ -1303,7 +1332,7 @@ def get_verification_api(request, session_id):
 @verification_required
 def get_session_diffs_api(request, session_id):
     import difflib
-    session = get_object_or_404(Session, id=session_id, user=request.user)
+    session = _get_session(session_id, request.user)
     files = session.project_files.prefetch_related('versions').all().order_by('path')
 
     file_diffs = []
@@ -1393,7 +1422,7 @@ def get_session_diffs_api(request, session_id):
 @verification_required
 def get_file_tree_api(request, session_id):
     from chat.models import ProjectFile
-    session = get_object_or_404(Session, id=session_id, user=request.user)
+    session = _get_session(session_id, request.user)
     p_files = list(session.project_files.order_by('path').values('id', 'path', 'status', 'current_version', 'updated_at'))
     
     return JsonResponse({
@@ -1411,7 +1440,7 @@ def delete_message_api(request, session_id, message_id):
     if request.method not in ('POST', 'DELETE'):
         return JsonResponse({'error': 'POST or DELETE request required'}, status=405)
 
-    session = get_object_or_404(Session.objects.select_related('user'), id=session_id, user=request.user)
+    session = _get_session(session_id, request.user, select_related=['user'])
     target_msg = session.messages.filter(id=message_id).first()
     if not target_msg:
         return JsonResponse({'error': 'Message not found'}, status=404)

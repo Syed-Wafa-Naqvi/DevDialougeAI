@@ -29,13 +29,40 @@ class ChatTestCase(TestCase):
         self.assertEqual(response.status_code, 302)
         session = Session.objects.filter(user=self.user, status='active').first()
         self.assertIsNotNone(session)
-        self.assertEqual(response.url, f'/chat/{session.id}/')
+        self.assertEqual(response.url, f'/chat/{session.uuid}/')
 
         # 2. Accessing /new-chat/ again reuses the empty active session instead of creating duplicate
         response2 = self.client.get('/new-chat/')
         self.assertEqual(response2.status_code, 302)
-        self.assertEqual(response2.url, f'/chat/{session.id}/')
+        self.assertEqual(response2.url, f'/chat/{session.uuid}/')
         self.assertEqual(Session.objects.filter(user=self.user, status='active').count(), 1)
+
+    def test_chat_view_and_api_via_uuid(self):
+        session = Session.objects.create(user=self.user, mode='mode1', status='active')
+        
+        # 1. Browser accesses workspace via UUID
+        res = self.client.get(f'/chat/{session.uuid}/')
+        self.assertEqual(res.status_code, 200)
+
+        # 2. API accesses send via UUID
+        res_api = self.client.post(
+            f'/api/chat/{session.uuid}/send/',
+            data={'message': 'Hello from UUID endpoint', 'provider': 'mock'},
+            content_type='application/json'
+        )
+        self.assertEqual(res_api.status_code, 200)
+
+        # 3. Plan API via UUID
+        res_plan = self.client.get(f'/api/session/{session.uuid}/plan/')
+        self.assertEqual(res_plan.status_code, 200)
+
+        # 4. Backwards compatibility via integer ID
+        res_legacy = self.client.get(f'/chat/{session.id}/')
+        self.assertEqual(res_legacy.status_code, 200)
+
+        # 5. Invalid UUID raises 404
+        res_404 = self.client.get('/chat/00000000-0000-0000-0000-000000000000/')
+        self.assertEqual(res_404.status_code, 404)
 
     def test_send_message_api(self):
         session = Session.objects.create(user=self.user, mode='mode1', status='active')

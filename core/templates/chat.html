@@ -367,8 +367,8 @@
                 <div class="history-group">
                     <div class="group-title">Today</div>
                     {% for s in today_sessions %}
-                        <div class="history-item {% if s.id == session.id %}active{% endif %}" data-session-id="{{ s.id }}">
-                            <a href="{% url 'chat' session_id=s.id %}" class="history-item-link">
+                        <div class="history-item {% if s.uuid == session.uuid %}active{% endif %}" data-session-id="{{ s.uuid }}">
+                            <a href="{% url 'chat' session_id=s.uuid %}" class="history-item-link">
                                 <i data-lucide="message-square" class="item-icon"></i>
                                 <span class="item-text">{{ s.title }}</span>
                             </a>
@@ -377,10 +377,10 @@
                                     <i data-lucide="more-horizontal" class="menu-dots-icon"></i>
                                 </button>
                                 <div class="item-dropdown-menu">
-                                    <button type="button" class="dropdown-menu-item rename-btn" data-session-id="{{ s.id }}" data-rename-url="{% url 'rename_session' session_id=s.id %}" onclick="startRenameSession(event, this)">
+                                    <button type="button" class="dropdown-menu-item rename-btn" data-session-id="{{ s.uuid }}" data-rename-url="{% url 'rename_session' session_id=s.uuid %}" onclick="startRenameSession(event, this)">
                                         <i data-lucide="edit-2"></i> Rename
                                     </button>
-                                    <button type="button" class="dropdown-menu-item delete-btn" data-session-id="{{ s.id }}" data-delete-url="{% url 'delete_session' session_id=s.id %}" data-is-active="{% if s.id == session.id %}true{% else %}false{% endif %}" onclick="deleteSession(event, this)">
+                                    <button type="button" class="dropdown-menu-item delete-btn" data-session-id="{{ s.uuid }}" data-delete-url="{% url 'delete_session' session_id=s.uuid %}" data-is-active="{% if s.uuid == session.uuid %}true{% else %}false{% endif %}" onclick="deleteSession(event, this)">
                                         <i data-lucide="trash-2"></i> Delete
                                     </button>
                                 </div>
@@ -394,8 +394,8 @@
                 <div class="history-group">
                     <div class="group-title">Yesterday</div>
                     {% for s in yesterday_sessions %}
-                        <div class="history-item {% if s.id == session.id %}active{% endif %}" data-session-id="{{ s.id }}">
-                            <a href="{% url 'chat' session_id=s.id %}" class="history-item-link">
+                        <div class="history-item {% if s.uuid == session.uuid %}active{% endif %}" data-session-id="{{ s.uuid }}">
+                            <a href="{% url 'chat' session_id=s.uuid %}" class="history-item-link">
                                 <i data-lucide="message-square" class="item-icon"></i>
                                 <span class="item-text">{{ s.title }}</span>
                             </a>
@@ -404,10 +404,10 @@
                                     <i data-lucide="more-horizontal" class="menu-dots-icon"></i>
                                 </button>
                                 <div class="item-dropdown-menu">
-                                    <button type="button" class="dropdown-menu-item rename-btn" data-session-id="{{ s.id }}" data-rename-url="{% url 'rename_session' session_id=s.id %}" onclick="startRenameSession(event, this)">
+                                    <button type="button" class="dropdown-menu-item rename-btn" data-session-id="{{ s.uuid }}" data-rename-url="{% url 'rename_session' session_id=s.uuid %}" onclick="startRenameSession(event, this)">
                                         <i data-lucide="edit-2"></i> Rename
                                     </button>
-                                    <button type="button" class="dropdown-menu-item delete-btn" data-session-id="{{ s.id }}" data-delete-url="{% url 'delete_session' session_id=s.id %}" data-is-active="{% if s.id == session.id %}true{% else %}false{% endif %}" onclick="deleteSession(event, this)">
+                                    <button type="button" class="dropdown-menu-item delete-btn" data-session-id="{{ s.uuid }}" data-delete-url="{% url 'delete_session' session_id=s.uuid %}" data-is-active="{% if s.uuid == session.uuid %}true{% else %}false{% endif %}" onclick="deleteSession(event, this)">
                                         <i data-lucide="trash-2"></i> Delete
                                     </button>
                                 </div>
@@ -421,8 +421,8 @@
                 <div class="history-group">
                     <div class="group-title">Previous 7 Days</div>
                     {% for s in last_7_days_sessions %}
-                        <div class="history-item {% if s.id == session.id %}active{% endif %}" data-session-id="{{ s.id }}">
-                            <a href="{% url 'chat' session_id=s.id %}" class="history-item-link">
+                        <div class="history-item {% if s.uuid == session.uuid %}active{% endif %}" data-session-id="{{ s.uuid }}">
+                            <a href="{% url 'chat' session_id=s.uuid %}" class="history-item-link">
                                 <i data-lucide="message-square" class="item-icon"></i>
                                 <span class="item-text">{{ s.title }}</span>
                             </a>
@@ -431,10 +431,10 @@
                                     <i data-lucide="more-horizontal" class="menu-dots-icon"></i>
                                 </button>
                                 <div class="item-dropdown-menu">
-                                    <button type="button" class="dropdown-menu-item rename-btn" data-session-id="{{ s.id }}" data-rename-url="{% url 'rename_session' session_id=s.id %}" onclick="startRenameSession(event, this)">
+                                    <button type="button" class="dropdown-menu-item rename-btn" data-session-id="{{ s.uuid }}" data-rename-url="{% url 'rename_session' session_id=s.uuid %}" onclick="startRenameSession(event, this)">
                                         <i data-lucide="edit-2"></i> Rename
                                     </button>
-                                    <button type="button" class="dropdown-menu-item delete-btn" data-session-id="{{ s.id }}" data-delete-url="{% url 'delete_session' session_id=s.id %}" data-is-active="{% if s.id == session.id %}true{% else %}false{% endif %}" onclick="deleteSession(event, this)">
+                                    <button type="button" class="dropdown-menu-item delete-btn" data-session-id="{{ s.uuid }}" data-delete-url="{% url 'delete_session' session_id=s.uuid %}" data-is-active="{% if s.uuid == session.uuid %}true{% else %}false{% endif %}" onclick="deleteSession(event, this)">
                                         <i data-lucide="trash-2"></i> Delete
                                     </button>
                                 </div>
@@ -448,8 +448,8 @@
                 <div class="history-group">
                     <div class="group-title">Older Chats</div>
                     {% for s in older_sessions %}
-                        <div class="history-item {% if s.id == session.id %}active{% endif %}" data-session-id="{{ s.id }}">
-                            <a href="{% url 'chat' session_id=s.id %}" class="history-item-link">
+                        <div class="history-item {% if s.uuid == session.uuid %}active{% endif %}" data-session-id="{{ s.uuid }}">
+                            <a href="{% url 'chat' session_id=s.uuid %}" class="history-item-link">
                                 <i data-lucide="message-square" class="item-icon"></i>
                                 <span class="item-text">{{ s.title }}</span>
                             </a>
@@ -458,10 +458,10 @@
                                     <i data-lucide="more-horizontal" class="menu-dots-icon"></i>
                                 </button>
                                 <div class="item-dropdown-menu">
-                                    <button type="button" class="dropdown-menu-item rename-btn" data-session-id="{{ s.id }}" data-rename-url="{% url 'rename_session' session_id=s.id %}" onclick="startRenameSession(event, this)">
+                                    <button type="button" class="dropdown-menu-item rename-btn" data-session-id="{{ s.uuid }}" data-rename-url="{% url 'rename_session' session_id=s.uuid %}" onclick="startRenameSession(event, this)">
                                         <i data-lucide="edit-2"></i> Rename
                                     </button>
-                                    <button type="button" class="dropdown-menu-item delete-btn" data-session-id="{{ s.id }}" data-delete-url="{% url 'delete_session' session_id=s.id %}" data-is-active="{% if s.id == session.id %}true{% else %}false{% endif %}" onclick="deleteSession(event, this)">
+                                    <button type="button" class="dropdown-menu-item delete-btn" data-session-id="{{ s.uuid }}" data-delete-url="{% url 'delete_session' session_id=s.uuid %}" data-is-active="{% if s.uuid == session.uuid %}true{% else %}false{% endif %}" onclick="deleteSession(event, this)">
                                         <i data-lucide="trash-2"></i> Delete
                                     </button>
                                 </div>
@@ -500,7 +500,7 @@
                 <button type="button" class="sidebar-toggle-btn" onclick="toggleSidebarMobile()" style="background: none; border: none; color: var(--ink-2); cursor: pointer;">
                     <i data-lucide="menu"></i>
                 </button>
-                <h3 class="topbar-title" id="active-topbar-title" data-session-id="{{ session.id }}" data-rename-url="{% url 'rename_session' session_id=session.id %}" onclick="startRenameSession(event, this)" title="Click to rename workspace" style="font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer; display: flex; align-items: center;">
+                <h3 class="topbar-title" id="active-topbar-title" data-session-id="{{ session.uuid }}" data-rename-url="{% url 'rename_session' session_id=session.uuid %}" onclick="startRenameSession(event, this)" title="Click to rename workspace" style="font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer; display: flex; align-items: center;">
                     <span id="active-topbar-title-text">{{ session.title }}</span>
                     <i data-lucide="edit-2" style="width: 12px; color: var(--ink-3); margin-left: 6px;"></i>
                 </h3>
@@ -553,7 +553,7 @@
                     <span class="status-pill-label" id="session-status-badge">{{ session.get_status_display }}</span>
                 </div>
 
-                <a href="{% url 'download_project_zip_api' session_id=session.id %}" class="btn btn-primary btn-sm" id="btn-topbar-export">
+                <a href="{% url 'download_project_zip_api' session_id=session.uuid %}" class="btn btn-primary btn-sm" id="btn-topbar-export">
                     <i data-lucide="archive"></i> Export ZIP
                 </a>
             </div>
@@ -915,7 +915,7 @@
                                 <button class="btn btn-secondary btn-sm" id="btn-download-code" onclick="downloadCodeContent()">
                                     <i data-lucide="download" class="icon-inline"></i> Download File
                                 </button>
-                                <a href="{% url 'download_project_zip_api' session_id=session.id %}" class="btn btn-primary btn-sm" id="btn-download-zip" title="Download Full Project ZIP">
+                                <a href="{% url 'download_project_zip_api' session_id=session.uuid %}" class="btn btn-primary btn-sm" id="btn-download-zip" title="Download Full Project ZIP">
                                     <i data-lucide="archive" class="icon-inline"></i> Download ZIP
                                 </a>
                             </div>
@@ -1362,7 +1362,7 @@
                 }
                 const reqToCancel = window.currentRequestId;
                 window.currentRequestId = null;
-                fetch("{% url 'cancel_session_api' session_id=session.id %}", {
+                fetch("{% url 'cancel_session_api' session_id=session.uuid %}", {
                     method: 'POST',
                     headers: { 'X-CSRFToken': '{{ csrf_token }}', 'Content-Type': 'application/json' },
                     body: JSON.stringify({ request_id: reqToCancel })
@@ -1477,7 +1477,7 @@
                 const actionToSend = pendingAction;
                 pendingAction = null;
 
-                const streamUrl = "{% url 'stream_chat_api' session_id=session.id %}";
+                const streamUrl = "{% url 'stream_chat_api' session_id=session.uuid %}";
                 let streamSuccess = false;
 
                 let requestHeaders = {
@@ -1768,7 +1768,7 @@
 
                 // If streaming didn't handle it, fall back to synchronous JSON endpoint
                 if (!streamSuccess) {
-                    const response = await fetch("{% url 'send_message_api' session_id=session.id %}", {
+                    const response = await fetch("{% url 'send_message_api' session_id=session.uuid %}", {
                         method: 'POST',
                         signal: currentAbortController.signal,
                         headers: requestHeaders,
@@ -2065,7 +2065,7 @@
         }
 
         try {
-            const deleteUrl = `/api/chat/{{ session.id }}/message/${finalMsgId}/delete/`;
+            const deleteUrl = `/api/chat/{{ session.uuid }}/message/${finalMsgId}/delete/`;
             const resp = await fetch(deleteUrl, {
                 method: 'POST',
                 headers: {
@@ -2787,7 +2787,7 @@
                             if (banner) banner.classList.add('hidden');
                         }, 3000);
                         if (data.status === 'succeeded') {
-                            fetch(`/api/session/{{ session.id }}/tree/`)
+                            fetch(`/api/session/{{ session.uuid }}/tree/`)
                                 .then(r => r.json())
                                 .then(treeData => {
                                     const fileList = (treeData.project_files && treeData.project_files.length > 0)
@@ -3125,7 +3125,7 @@
 
     async function renderPlanViewPanel() {
         try {
-            const resp = await fetch(`/api/session/{{ session.id }}/plan/`);
+            const resp = await fetch(`/api/session/{{ session.uuid }}/plan/`);
             if (resp.ok) {
                 const data = await resp.json();
                 cachedPlanData = data;
@@ -3182,7 +3182,7 @@
     window.approveArchitecturePlan = async function(btn) {
         if (btn) btn.disabled = true;
         try {
-            const resp = await fetch(`/api/session/{{ session.id }}/plan/approve/`, {
+            const resp = await fetch(`/api/session/{{ session.uuid }}/plan/approve/`, {
                 method: 'POST',
                 headers: {
                     'X-CSRFToken': '{{ csrf_token }}',
@@ -3397,8 +3397,8 @@
     async function renderVerificationPanel() {
         try {
             const [verifResp, diffsResp] = await Promise.all([
-                fetch(`/api/session/{{ session.id }}/verification/`),
-                fetch(`/api/session/{{ session.id }}/diffs/`)
+                fetch(`/api/session/{{ session.uuid }}/verification/`),
+                fetch(`/api/session/{{ session.uuid }}/diffs/`)
             ]);
             
             if (verifResp.ok) cachedVerifData = await verifResp.json();
@@ -3430,14 +3430,14 @@
     // Export Package Panel Implementation
     async function renderExportPanel() {
         try {
-            const resp = await fetch(`/api/session/{{ session.id }}/tree/`);
+            const resp = await fetch(`/api/session/{{ session.uuid }}/tree/`);
             let files = [];
             if (resp.ok) {
                 const treeData = await resp.json();
                 files = treeData.project_files || treeData.generated_codes || [];
             }
 
-            const downloadUrl = `{% url 'download_project_zip_api' session_id=session.id %}`;
+            const downloadUrl = `{% url 'download_project_zip_api' session_id=session.uuid %}`;
             const fileCount = files.length || 1;
 
             let fileRowsHTML = files.map(f => {
@@ -3531,7 +3531,7 @@ chmod +x run.sh && ./run.sh
 
     window.toggleSessionMode = async function() {
         try {
-            const resp = await fetch("{% url 'update_session_mode_api' session_id=session.id %}", {
+            const resp = await fetch("{% url 'update_session_mode_api' session_id=session.uuid %}", {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
