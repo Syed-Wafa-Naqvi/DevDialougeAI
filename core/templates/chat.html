@@ -69,10 +69,10 @@
                                     <i data-lucide="more-horizontal" class="menu-dots-icon"></i>
                                 </button>
                                 <div class="item-dropdown-menu">
-                                    <button type="button" class="dropdown-menu-item rename-btn" onclick="startRenameSession(event, {{ s.id }}, '{% url 'rename_session' session_id=s.id %}')">
+                                    <button type="button" class="dropdown-menu-item rename-btn" data-session-id="{{ s.id }}" data-rename-url="{% url 'rename_session' session_id=s.id %}" onclick="startRenameSession(event, this)">
                                         <i data-lucide="edit-2"></i> Rename
                                     </button>
-                                    <button type="button" class="dropdown-menu-item delete-btn" onclick="deleteSession(event, this, {{ s.id }}, '{% url 'delete_session' session_id=s.id %}', {% if s.id == session.id %}true{% else %}false{% endif %})">
+                                    <button type="button" class="dropdown-menu-item delete-btn" data-session-id="{{ s.id }}" data-delete-url="{% url 'delete_session' session_id=s.id %}" data-is-active="{% if s.id == session.id %}true{% else %}false{% endif %}" onclick="deleteSession(event, this)">
                                         <i data-lucide="trash-2"></i> Delete
                                     </button>
                                 </div>
@@ -96,10 +96,10 @@
                                     <i data-lucide="more-horizontal" class="menu-dots-icon"></i>
                                 </button>
                                 <div class="item-dropdown-menu">
-                                    <button type="button" class="dropdown-menu-item rename-btn" onclick="startRenameSession(event, {{ s.id }}, '{% url 'rename_session' session_id=s.id %}')">
+                                    <button type="button" class="dropdown-menu-item rename-btn" data-session-id="{{ s.id }}" data-rename-url="{% url 'rename_session' session_id=s.id %}" onclick="startRenameSession(event, this)">
                                         <i data-lucide="edit-2"></i> Rename
                                     </button>
-                                    <button type="button" class="dropdown-menu-item delete-btn" onclick="deleteSession(event, this, {{ s.id }}, '{% url 'delete_session' session_id=s.id %}', {% if s.id == session.id %}true{% else %}false{% endif %})">
+                                    <button type="button" class="dropdown-menu-item delete-btn" data-session-id="{{ s.id }}" data-delete-url="{% url 'delete_session' session_id=s.id %}" data-is-active="{% if s.id == session.id %}true{% else %}false{% endif %}" onclick="deleteSession(event, this)">
                                         <i data-lucide="trash-2"></i> Delete
                                     </button>
                                 </div>
@@ -123,10 +123,10 @@
                                     <i data-lucide="more-horizontal" class="menu-dots-icon"></i>
                                 </button>
                                 <div class="item-dropdown-menu">
-                                    <button type="button" class="dropdown-menu-item rename-btn" onclick="startRenameSession(event, {{ s.id }}, '{% url 'rename_session' session_id=s.id %}')">
+                                    <button type="button" class="dropdown-menu-item rename-btn" data-session-id="{{ s.id }}" data-rename-url="{% url 'rename_session' session_id=s.id %}" onclick="startRenameSession(event, this)">
                                         <i data-lucide="edit-2"></i> Rename
                                     </button>
-                                    <button type="button" class="dropdown-menu-item delete-btn" onclick="deleteSession(event, this, {{ s.id }}, '{% url 'delete_session' session_id=s.id %}', {% if s.id == session.id %}true{% else %}false{% endif %})">
+                                    <button type="button" class="dropdown-menu-item delete-btn" data-session-id="{{ s.id }}" data-delete-url="{% url 'delete_session' session_id=s.id %}" data-is-active="{% if s.id == session.id %}true{% else %}false{% endif %}" onclick="deleteSession(event, this)">
                                         <i data-lucide="trash-2"></i> Delete
                                     </button>
                                 </div>
@@ -150,10 +150,10 @@
                                     <i data-lucide="more-horizontal" class="menu-dots-icon"></i>
                                 </button>
                                 <div class="item-dropdown-menu">
-                                    <button type="button" class="dropdown-menu-item rename-btn" onclick="startRenameSession(event, {{ s.id }}, '{% url 'rename_session' session_id=s.id %}')">
+                                    <button type="button" class="dropdown-menu-item rename-btn" data-session-id="{{ s.id }}" data-rename-url="{% url 'rename_session' session_id=s.id %}" onclick="startRenameSession(event, this)">
                                         <i data-lucide="edit-2"></i> Rename
                                     </button>
-                                    <button type="button" class="dropdown-menu-item delete-btn" onclick="deleteSession(event, this, {{ s.id }}, '{% url 'delete_session' session_id=s.id %}', {% if s.id == session.id %}true{% else %}false{% endif %})">
+                                    <button type="button" class="dropdown-menu-item delete-btn" data-session-id="{{ s.id }}" data-delete-url="{% url 'delete_session' session_id=s.id %}" data-is-active="{% if s.id == session.id %}true{% else %}false{% endif %}" onclick="deleteSession(event, this)">
                                         <i data-lucide="trash-2"></i> Delete
                                     </button>
                                 </div>
@@ -192,7 +192,7 @@
                 <button type="button" class="sidebar-toggle-btn" onclick="toggleSidebarMobile()" style="background: none; border: none; color: var(--ink-2); cursor: pointer;">
                     <i data-lucide="menu"></i>
                 </button>
-                <h3 class="topbar-title" onclick="startRenameSession(event, {{ session.id }}, '{% url 'rename_session' session_id=session.id %}')" title="Click to rename workspace" style="view-transition-name: project-{{ session.id }}; font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer; display: flex; align-items: center;">
+                <h3 class="topbar-title" id="active-topbar-title" data-session-id="{{ session.id }}" data-rename-url="{% url 'rename_session' session_id=session.id %}" onclick="startRenameSession(event, this)" title="Click to rename workspace" style="font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer; display: flex; align-items: center;">
                     <span id="active-topbar-title-text">{{ session.title }}</span>
                     <i data-lucide="edit-2" style="width: 12px; color: var(--ink-3); margin-left: 6px;"></i>
                 </h3>
@@ -267,7 +267,8 @@
                     <strong id="completeness-score-val">{{ completeness_score|default:0 }}%</strong>
                 </div>
                 <div class="completeness-bar-track">
-                    <div class="completeness-bar-fill" id="completeness-bar-fill" style="width: {{ completeness_score|default:0 }}%;"></div>
+                    <div class="completeness-bar-fill" id="completeness-bar-fill" data-score="{{ completeness_score|default:0 }}"></div>
+                    <script>(function(){ var b = document.getElementById('completeness-bar-fill'); if (b && b.dataset.score) b.style.width = b.dataset.score + '%'; })();</script>
                 </div>
                 <div class="completeness-ticks" id="completeness-ticks-row">
                     <span class="rubric-tick {% if rubric_cats.core_features == 'covered' or rubric_cats.core_features == 'partial' or completeness_score >= 20 %}active{% endif %}">Features {% if rubric_cats.core_features == 'covered' or rubric_cats.core_features == 'partial' or completeness_score >= 20 %}✓{% endif %}</span>
@@ -497,7 +498,7 @@
                     <div id="file-tabs-inner" style="display: flex; gap: 4px; overflow-x: auto; flex: 1; align-items: center;">
                         {% if project_files %}
                             {% for file in project_files %}
-                                <button class="file-tab {% if forloop.first %}active{% endif %}" data-code-id="{{ file.id }}" data-path="{{ file.path }}" onclick="loadCodeFile({{ file.id }}, this)">
+                                <button class="file-tab {% if forloop.first %}active{% endif %}" data-code-id="{{ file.id }}" data-path="{{ file.path }}" onclick="loadCodeFile(this)">
                                     <i data-lucide="file-code" class="icon-inline"></i> {{ file.path }}
                                 </button>
                             {% endfor %}
@@ -554,6 +555,7 @@
             </div>
         </div>
     </div>
+    <div id="active-job-data" data-active-job-id="{% if active_job %}{{ active_job.id }}{% endif %}" style="display:none;"></div>
 </div>
 {% endblock %}
 
@@ -1662,6 +1664,10 @@
     
     // Fetch file code content
     async function loadCodeFile(codeId, tabElement) {
+        if (typeof codeId === 'object' && codeId !== null) {
+            tabElement = codeId;
+            codeId = tabElement.dataset.codeId;
+        }
         if (!tabElement) {
             tabElement = document.querySelector(`.file-tab[data-code-id="${codeId}"]`);
         }
@@ -1757,9 +1763,15 @@
     }
 
     // Rename session title logic
-    window.startRenameSession = function(event, sessionId, renameUrl) {
+    window.startRenameSession = function(event, target, renameUrl) {
         event.stopPropagation();
         event.preventDefault();
+
+        let sessionId = target;
+        if (typeof target === 'object' && target !== null && target.dataset) {
+            sessionId = target.dataset.sessionId;
+            renameUrl = target.dataset.renameUrl || renameUrl;
+        }
         
         // Close any open option menus
         document.querySelectorAll('.item-dropdown-menu.open').forEach(menu => {
@@ -1859,6 +1871,14 @@
     async function deleteSession(event, button, sessionId, deleteUrl, isActive) {
         event.preventDefault();
         event.stopPropagation();
+
+        if (button && button.dataset) {
+            sessionId = sessionId || button.dataset.sessionId;
+            deleteUrl = deleteUrl || button.dataset.deleteUrl;
+            if (isActive === undefined) {
+                isActive = button.dataset.isActive === 'true';
+            }
+        }
         
         if (!button.classList.contains('confirming')) {
             button.classList.add('confirming');
@@ -2297,9 +2317,16 @@
             }
         } catch (e) {}
 
-        {% if active_job %}
-        pollActiveJobEvents({{ active_job.id }});
-        {% endif %}
+        const topbarTitle = document.getElementById('active-topbar-title');
+        if (topbarTitle && topbarTitle.dataset.sessionId) {
+            topbarTitle.style.viewTransitionName = 'project-' + topbarTitle.dataset.sessionId;
+        }
+
+        const activeJobEl = document.getElementById('active-job-data');
+        const activeJobId = activeJobEl && activeJobEl.dataset.activeJobId ? parseInt(activeJobEl.dataset.activeJobId, 10) : null;
+        if (activeJobId) {
+            pollActiveJobEvents(activeJobId);
+        }
     });
 </script>
 {% endblock %}
