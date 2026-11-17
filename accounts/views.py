@@ -498,6 +498,18 @@ def settings_view(request):
             else:
                 messages.error(request, "Failed to change password. Please check the errors.")
 
+        elif action == 'update_plan':
+            new_plan = request.POST.get('plan', '').strip().lower()
+            valid_plans = [p[0] for p in Profile.PLAN_CHOICES]
+            if new_plan in valid_plans:
+                profile.plan = new_plan
+                profile.save()
+                messages.success(request, f"Your subscription plan has been successfully updated to {profile.get_plan_display()}.")
+                return redirect('/settings/#billing')
+            else:
+                messages.error(request, "Invalid plan selection.")
+                return redirect('settings')
+
         elif action == 'update_keys':
             gemini_key = request.POST.get('gemini_api_key', '').strip()
             openai_key = request.POST.get('openai_api_key', '').strip()
@@ -519,11 +531,68 @@ def settings_view(request):
     password_form = PasswordChangeForm(user=user)
     usage_data = get_user_usage_stats(user)
     
+    current_plan = getattr(profile, 'plan', 'basic') or 'basic'
+    plan_details = [
+        {
+            'id': 'basic',
+            'name': 'Basic',
+            'price': '$0',
+            'period': '/month',
+            'subtitle': 'For student developers and hobby projects.',
+            'tokens': '1,000,000 Tokens/mo',
+            'features': [
+                '1,000,000 Monthly Tokens',
+                '5 Code Generation Workspaces',
+                'Standard Dialogue Engine',
+                'SQLite Default Database',
+                'Mode 1 (All at Once) & Mode 3 (Quick Code)'
+            ],
+            'is_current': (current_plan == 'basic'),
+            'badge': None
+        },
+        {
+            'id': 'pro',
+            'name': 'Pro Developer',
+            'price': '$19',
+            'period': '/month',
+            'subtitle': 'For professional developers building production apps.',
+            'tokens': '5,000,000 Tokens/mo',
+            'features': [
+                '5,000,000 Monthly Tokens',
+                'Unlimited Code Generations',
+                'Sub-8s Fast Generation Pipelines',
+                'Mode 2 (Incremental File-by-File)',
+                'PostgreSQL & Docker Compose Support',
+                'Self-Healing & AST Static Verification'
+            ],
+            'is_current': (current_plan == 'pro'),
+            'badge': 'Most Popular'
+        },
+        {
+            'id': 'premium',
+            'name': 'Premium Enterprise',
+            'price': '$49',
+            'period': '/month',
+            'subtitle': 'For startup engineering teams and agencies.',
+            'tokens': '20,000,000 Tokens/mo',
+            'features': [
+                '20,000,000 Monthly Tokens',
+                'Everything in Pro Developer',
+                'Dedicated High-Speed Inference Pipelines',
+                'Real-time Collaborative Mode',
+                'Priority Supervisor Support & Hot-Patching'
+            ],
+            'is_current': (current_plan == 'premium'),
+            'badge': 'Enterprise'
+        }
+    ]
+
     return render(request, 'settings.html', {
         'profile': profile,
         'user_form': user_form,
         'password_form': password_form,
         'usage': usage_data,
+        'plan_details': plan_details,
     })
 
 

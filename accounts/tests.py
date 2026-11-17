@@ -220,3 +220,31 @@ class AccountsTestCase(TestCase):
         self.assertEqual(stats_prem['monthly_quota'], 20_000_000)
         self.assertEqual(stats_prem['monthly_quota_formatted'], '20,000,000')
 
+    def test_settings_update_subscription_plan(self):
+        """
+        Verify that a user can change or upgrade their subscription plan via settings.
+        """
+        user = User.objects.create_user(username='sub_user', email='sub@example.com', password='Password123!')
+        user.profile.is_verified = True
+        user.profile.plan = 'basic'
+        user.profile.save()
+        self.client.login(username='sub_user', password='Password123!')
+
+        # Upgrade to pro
+        response = self.client.post('/settings/', {
+            'action': 'update_plan',
+            'plan': 'pro'
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/settings/#billing', response.url)
+
+        user.profile.refresh_from_db()
+        self.assertEqual(user.profile.plan, 'pro')
+
+        # Check settings view renders the updated pro plan
+        get_res = self.client.get('/settings/')
+        self.assertEqual(get_res.status_code, 200)
+        self.assertContains(get_res, 'Pro Developer')
+        self.assertContains(get_res, '5,000,000 Tokens')
+
+
