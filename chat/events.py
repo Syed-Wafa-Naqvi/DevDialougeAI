@@ -329,7 +329,44 @@ def stream_agent_response(
     active_job = None
 
     # Step 3: Handle Action Based on Lifecycle
-    if has_summary and is_approval:
+    if session.mode == 'mode3':
+        yield format_sse(AgentEvent.thinking(
+            step_id="step_quick_code",
+            title="Analyzing Request & Synthesizing Code",
+            content="Generating direct code solution, fix, or explanation...",
+            status="running"
+        ))
+
+        from chat.views import _handle_mode3_message, extract_code_files_from_markdown
+        active_job, response_text = _handle_mode3_message(
+            session=session,
+            user_content=user_content,
+            action=action,
+            provider_name=provider_name,
+            history=history,
+            user=user
+        )
+
+        yield format_sse(AgentEvent.thinking(
+            step_id="step_quick_code",
+            title="Code Solution Ready",
+            content="Direct code synthesis completed.",
+            status="completed"
+        ))
+
+        extracted = extract_code_files_from_markdown(response_text)
+        for fn, code_c in extracted:
+            pf, _ = ProjectFile.objects.get_or_create(session=session, path=fn, defaults={'content': code_c, 'status': 'verified'})
+            if pf.content != code_c:
+                pf.create_new_version(code_c, source='generator')
+            yield format_sse(AgentEvent.file_action(
+                action="create" if pf.current_version == 1 else "update",
+                path=fn,
+                summary=f"Synthesized code for {fn}",
+                version=pf.current_version
+            ))
+
+    elif has_summary and is_approval:
         yield format_sse(AgentEvent.thinking(
             step_id="step_code_gen",
             title="Planning and Synthesizing Codebase",

@@ -5,8 +5,9 @@ from django.contrib.auth.models import User
 class Session(models.Model):
     uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
     MODE_CHOICES = [
-        ('mode1', 'Mode 1: Dialogue-Driven'),
-        ('mode2', 'Mode 2: Incremental'),
+        ('mode1', 'Mode 1: All at Once'),
+        ('mode2', 'Mode 2: File by File'),
+        ('mode3', 'Mode 3: Quick Code / Snippet'),
     ]
     STATUS_CHOICES = [
         ('interviewing', 'Requirement Elicitation'),

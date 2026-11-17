@@ -22,12 +22,15 @@
                 <textarea name="description" rows="3" style="background: transparent; border: none; width: 100%; color: var(--ink); font-family: var(--font-sans); font-size: 15px; outline: none; resize: none;" placeholder="e.g. 'A real-time Library Management System with Django, SQLite schema, borrow limits, and fine notifications...'" required></textarea>
                 
                 <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 14px; border-top: 1px solid var(--border); margin-top: 12px; flex-wrap: wrap; gap: 12px;">
-                    <div style="display: flex; gap: 16px; align-items: center;">
+                    <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
                         <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); cursor: pointer; font-weight: 500;">
                             <input type="radio" name="mode" value="mode1" checked /> All at Once (Dialogue-Driven)
                         </label>
                         <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); cursor: pointer; font-weight: 500;">
                             <input type="radio" name="mode" value="mode2" /> File by File (Incremental)
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); cursor: pointer; font-weight: 500;">
+                            <input type="radio" name="mode" value="mode3" /> Quick Code (Direct Snippet & Fixer)
                         </label>
                     </div>
                     <button type="submit" class="btn btn-primary">

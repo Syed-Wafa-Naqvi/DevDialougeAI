@@ -381,19 +381,37 @@ class ChatTestCase(TestCase):
     def test_update_session_mode_api_toggles_mode(self):
         session = Session.objects.create(user=self.user, mode='mode1', status='active')
         
-        # Toggle without body: toggles mode1 -> mode2
+        # Toggle 1 without body: mode1 -> mode2
         response = self.client.post(f'/api/session/{session.id}/mode/')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['mode'], 'mode2')
         session.refresh_from_db()
         self.assertEqual(session.mode, 'mode2')
 
-        # Toggle again: mode2 -> mode1
+        # Toggle 2 without body: mode2 -> mode3
+        response = self.client.post(f'/api/session/{session.id}/mode/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['mode'], 'mode3')
+        session.refresh_from_db()
+        self.assertEqual(session.mode, 'mode3')
+
+        # Toggle 3 without body: mode3 -> mode1
         response = self.client.post(f'/api/session/{session.id}/mode/')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['mode'], 'mode1')
         session.refresh_from_db()
         self.assertEqual(session.mode, 'mode1')
+
+        # Explicit mode setting via JSON payload
+        response = self.client.post(
+            f'/api/session/{session.uuid}/mode/',
+            data=json.dumps({'mode': 'mode3'}),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['mode'], 'mode3')
+        session.refresh_from_db()
+        self.assertEqual(session.mode, 'mode3')
 
     def test_get_code_file_api_reads_project_file_and_protects_isolation(self):
         user_b = User.objects.create_user(username='otheruser', email='other@example.com', password='Password123!')
@@ -1007,6 +1025,65 @@ class ChatTestCase(TestCase):
             any(w in resp_text.lower() for w in ['repair', 'update', 'fix', 'resolved']),
             f"Expected repair acknowledgment in response: {resp_text}"
         )
+
+    def test_mode3_direct_code_generation(self):
+        """Mode 3 provides direct code generation without elicitation questions."""
+        session = Session.objects.create(user=self.user, mode='mode3', status='ready')
+        response = self.client.post(
+            f'/api/chat/{session.uuid}/send/',
+            data=json.dumps({'message': 'Write a Python function to compute Fibonacci numbers.'}),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data.get('status'), 'ready')
+        self.assertIn('response', data)
+        resp = data['response'].lower()
+        self.assertFalse('what kind of database' in resp)
+        self.assertEqual(session.messages.count(), 2)
+
+    def test_mode3_code_fixer(self):
+        """Mode 3 can take broken code and return fixed code directly."""
+        session = Session.objects.create(user=self.user, mode='mode3', status='ready')
+        buggy_code = "Fix this code: def add(a, b): return a - b"
+        response = self.client.post(
+            f'/api/chat/{session.uuid}/send/',
+            data=json.dumps({'message': buggy_code}),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data.get('status'), 'ready')
+        self.assertTrue(len(data.get('response', '')) > 0)
+
+    def test_mode3_create_session_view(self):
+        """Creating a session with mode='mode3' directly answers and sets status='ready'."""
+        response = self.client.post('/create-session/', {
+            'mode': 'mode3',
+            'description': 'How do I sort a list in Python?'
+        }, follow=True)
+        self.assertEqual(response.status_code, 200)
+        session = Session.objects.filter(user=self.user, mode='mode3').order_by('-started_at').first()
+        self.assertIsNotNone(session)
+        self.assertEqual(session.status, 'ready')
+        self.assertEqual(session.messages.count(), 2)
+        assistant_msg = session.messages.filter(role='assistant').first()
+        self.assertIsNotNone(assistant_msg)
+
+    def test_mode3_streaming_sse(self):
+        """Mode 3 stream endpoint streams answer_chunk and done events."""
+        session = Session.objects.create(user=self.user, mode='mode3', status='ready')
+        response = self.client.post(
+            f'/api/chat/{session.uuid}/stream/',
+            data=json.dumps({'message': 'Write a Python hello world'}),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+        content = b"".join(response.streaming_content).decode('utf-8')
+        self.assertIn('step_quick_code', content)
+        self.assertIn('answer_chunk', content)
+        self.assertIn('"type": "done"', content)
+        self.assertEqual(session.messages.count(), 2)
 
 
 class SelfHealingEngineTestCase(TestCase):

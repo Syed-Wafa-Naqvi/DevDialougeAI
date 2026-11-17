@@ -182,16 +182,25 @@ def create_session_view(request):
         session = Session.objects.create(
             user=request.user, 
             mode=mode, 
-            status='active',
+            status='ready' if mode == 'mode3' else 'active',
             title=generate_title_from_user_msg(description),
             has_custom_title=True
         )
-        logger.info("[CREATE SESSION] Created Session #%s '%s' for %s", session.id, session.title, request.user)
+        logger.info("[CREATE SESSION] Created Session #%s '%s' for %s (mode: %s)", session.id, session.title, request.user, mode)
         
         Message.objects.create(session=session, role='user', content=description)
         history = list(session.messages.values('role', 'content'))
-        first_q = InterviewerService.generate_next_question(history)
-        Message.objects.create(session=session, role='assistant', content=first_q)
+        if mode == 'mode3':
+            _, response_text = _handle_mode3_message(session, description, None, None, history, request.user)
+            Message.objects.create(session=session, role='assistant', content=response_text)
+            extracted = extract_code_files_from_markdown(response_text)
+            for fn, code_c in extracted:
+                pf, _ = ProjectFile.objects.get_or_create(session=session, path=fn, defaults={'content': code_c, 'status': 'verified'})
+                if pf.content != code_c:
+                    pf.create_new_version(code_c, source='generator')
+        else:
+            first_q = InterviewerService.generate_next_question(history)
+            Message.objects.create(session=session, role='assistant', content=first_q)
         return redirect('chat', session_id=session.uuid)
     return redirect('dashboard')
 
@@ -620,6 +629,53 @@ def _handle_mode1_message(session, user_content, action, is_approval, provider_n
         return None, InterviewerService.generate_next_question(history, provider_name=provider_name, session=session, user=user)
 
 
+def _handle_mode3_message(session, user_content, action, provider_name, history, user):
+    """
+    Mode 3: Quick Code / Code Snippet / Fixer Mode.
+    Provides direct code generation, bug fixing, script writing, refactoring, or programming answers
+    without multi-turn requirement elicitation or multi-file project scaffolding.
+    """
+    dialogue_context = ""
+    if history:
+        turns = []
+        for m in history[-6:]:
+            role = "User" if m.get('role') == 'user' else "Assistant"
+            turns.append(f"{role}: {m.get('content', '')}")
+        dialogue_context = "Recent Conversation History:\n" + "\n\n".join(turns) + "\n\n"
+
+    system_prompt = (
+        "You are DevDialogue AI in Quick Code / Direct Code Mode — an elite AI software engineer. "
+        "Your task is to provide direct, clean, robust code snippets, solutions, and bug fixes immediately "
+        "without unnecessary delay or multi-turn interview questions.\n"
+        "- When the user asks for code, a function, script, snippet, algorithm, or small program: write complete, production-ready code with concise explanations.\n"
+        "- When the user provides broken or buggy code, compiler errors, or tracebacks: diagnose the root cause, explain the fix concisely, and provide the fully corrected, working code.\n"
+        "- When the user asks a technical programming question: give a direct, accurate answer with practical code examples.\n"
+        "- Always format code inside markdown code blocks with the appropriate language identifier (e.g. ```python, ```dart, ```javascript).\n"
+        "- Strictly do not use any emojis in your response."
+    )
+
+    prompt = (
+        f"{dialogue_context}"
+        f"User Request:\n{user_content}\n\n"
+        "Provide the complete code solution, fix, or explanation directly:"
+    )
+
+    response_text = LLMRouter.generate(
+        prompt=prompt,
+        system_prompt=system_prompt,
+        provider_name=provider_name,
+        purpose='chat',
+        session=session,
+        user=user
+    )
+
+    if session.status != 'ready':
+        session.status = 'ready'
+        session.save(update_fields=['status'])
+
+    return None, response_text
+
+
 def _run_mode2_worker(job_id, provider_name, task, save_message=True):
     """Background worker for File-by-file mode. task is 'next_module' or 'complete'."""
     from django.db import connection
@@ -849,77 +905,86 @@ def send_message_api(request, session_id):
         
         response_text = ""
         is_direct_code_demand = False
-        has_summary = any(
-            re.search(r'#+\s*(?:Project\s+)?Requirements\s+Summary', m['content'], re.IGNORECASE)
-            for m in assist_msgs
-        ) or bool(session.summary_text) or session.status in ('srs_ready', 'plan_draft', 'plan_approved', 'generating', 'ready', 'needs_attention', 'completed')
-        
-        if has_summary:
-            is_approval = False
-            if action in ('generate', 'approve_module'):
-                is_approval = True
-            elif action == 'changes':
-                is_approval = False
-            else:
-                confirmation_msg = user_content.lower().strip()
-                has_negation = bool(re.search(r'\b(no|not|don\'?t|never|wait|stop|hold|cancel|refuse)\b', confirmation_msg))
-                if action is None and not has_negation:
-                    # Strict affirmative match: user's input is a dedicated approval command or affirmative phrase
-                    strict_approval_patterns = [
-                        r'^(yes|y|proceed|approve|confirm|ok|okay|sure|go ahead|looks good|looks great|lgtm|perfect|fine|accepted|approved)[.!]?$',
-                        r'^(proceed|start|begin|go ahead)\s+(with\s+)?(generation|code|building|all files|project)[.!]?$',
-                        r'^(generate|build)\s+(the\s+)?(code|files|codebase|project|all files)[.!]?$',
-                        r'^(yes|sure|okay|yep|yup)[,\s]+(please\s+)?(proceed|generate|build|start|go ahead)(\s+(and|&)\s+(generate|build|proceed))?(\s+(with\s+)?(it|code|generation|the files|files|all files|the codebase|project))?[.!]?$',
-                        r'^proceed with code generation and build all project files[.!]?$'
-                    ]
-                    if any(re.match(pat, confirmation_msg) for pat in strict_approval_patterns):
-                        is_approval = True
-                    # "yes, proceed with the first module" / "ok continue": affirmative opener and no
-                    # change request inside ("yes, but add an admin panel" stays a change request)
-                    elif re.match(r'^(yes|yep|yup|yeah|sure|ok|okay|approved?|proceed|go ahead|continue|next|looks good|lgtm)\b', confirmation_msg) \
-                            and not re.search(_CHANGE_VERBS, confirmation_msg):
-                        is_approval = True
 
-            if session.mode == 'mode1':
-                active_job, response_text = _handle_mode1_message(session, user_content, action, is_approval, provider_name, run_async, history, request.user)
-            else:
-                active_job, response_text = _handle_mode2_message(session, user_content, action, is_approval, provider_name, history, request.user, run_async=run_async)
+        if session.mode == 'mode3':
+            active_job, response_text = _handle_mode3_message(session, user_content, action, provider_name, history, request.user)
+            extracted = extract_code_files_from_markdown(response_text)
+            for fn, code_c in extracted:
+                pf, _ = ProjectFile.objects.get_or_create(session=session, path=fn, defaults={'content': code_c, 'status': 'verified'})
+                if pf.content != code_c:
+                    pf.create_new_version(code_c, source='generator')
         else:
-            # Check if user explicitly demanded code/files or agreed to generation prompt
-            code_demand_triggers = [
-                "provide me all files", "provide all files", "give me all files", "give me the files",
-                "don't ask more questions", "no more questions", "all files at once", "give me the code",
-                "give code", "generate files", "just code", "stop asking questions"
-            ]
-            is_direct_code_demand = any(trig in user_content.lower() for trig in code_demand_triggers)
-
-            if not is_direct_code_demand and assist_msgs:
-                last_assist_text = assist_msgs[-1]['content'].lower()
-                asked_to_proceed = any(p in last_assist_text for p in [
-                    "proceed", "generate the files", "generate the complete", "ready to proceed", 
-                    "generate your", "shall i generate", "should i proceed", "bring this architecture"
-                ])
-                user_words = set(re.findall(r'\b\w+\b', user_content.lower()))
-                if asked_to_proceed and any(w in user_words for w in ['sure', 'yes', 'yup', 'yeah', 'ok', 'okay', 'proceed', 'build', 'generate', 'go ahead']):
-                    is_direct_code_demand = True
-
-            if is_direct_code_demand:
-                if session.mode == 'mode2':
-                    # Build summary + plan now (fast enough), generate Module 1 in the background
-                    if not session.summary_text:
-                        session.summary_text = SRSSynthesizer.synthesize_summary(history, is_mode2=True, provider_name=provider_name, session=session, user=request.user)
-                        session.save(update_fields=['summary_text'])
-                        SessionStateMachine.transition_to(session, 'srs_ready')
-                    active_job, response_text = _start_mode2_task(session, request.user, provider_name, 'next_module', run_async=run_async)
+            has_summary = any(
+                re.search(r'#+\s*(?:Project\s+)?Requirements\s+Summary', m['content'], re.IGNORECASE)
+                for m in assist_msgs
+            ) or bool(session.summary_text) or session.status in ('srs_ready', 'plan_draft', 'plan_approved', 'generating', 'ready', 'needs_attention', 'completed')
+            
+            if has_summary:
+                is_approval = False
+                if action in ('generate', 'approve_module'):
+                    is_approval = True
+                elif action == 'changes':
+                    is_approval = False
                 else:
-                    active_job, response_text = _trigger_generation_job(session, request.user, provider_name, run_async=run_async)
-            elif CompletenessEngine.should_synthesize_summary(history, user_content, provider_name=provider_name):
-                response_text = SRSSynthesizer.synthesize_summary(history, is_mode2=(session.mode == 'mode2'), provider_name=provider_name, session=session, user=request.user)
-                session.summary_text = response_text
-                session.save(update_fields=['summary_text'])
-                SessionStateMachine.transition_to(session, 'srs_ready')
+                    confirmation_msg = user_content.lower().strip()
+                    has_negation = bool(re.search(r'\b(no|not|don\'?t|never|wait|stop|hold|cancel|refuse)\b', confirmation_msg))
+                    if action is None and not has_negation:
+                        # Strict affirmative match: user's input is a dedicated approval command or affirmative phrase
+                        strict_approval_patterns = [
+                            r'^(yes|y|proceed|approve|confirm|ok|okay|sure|go ahead|looks good|looks great|lgtm|perfect|fine|accepted|approved)[.!]?$',
+                            r'^(proceed|start|begin|go ahead)\s+(with\s+)?(generation|code|building|all files|project)[.!]?$',
+                            r'^(generate|build)\s+(the\s+)?(code|files|codebase|project|all files)[.!]?$',
+                            r'^(yes|sure|okay|yep|yup)[,\s]+(please\s+)?(proceed|generate|build|start|go ahead)(\s+(and|&)\s+(generate|build|proceed))?(\s+(with\s+)?(it|code|generation|the files|files|all files|the codebase|project))?[.!]?$',
+                            r'^proceed with code generation and build all project files[.!]?$'
+                        ]
+                        if any(re.match(pat, confirmation_msg) for pat in strict_approval_patterns):
+                            is_approval = True
+                        # "yes, proceed with the first module" / "ok continue": affirmative opener and no
+                        # change request inside ("yes, but add an admin panel" stays a change request)
+                        elif re.match(r'^(yes|yep|yup|yeah|sure|ok|okay|approved?|proceed|go ahead|continue|next|looks good|lgtm)\b', confirmation_msg) \
+                                and not re.search(_CHANGE_VERBS, confirmation_msg):
+                            is_approval = True
+
+                if session.mode == 'mode1':
+                    active_job, response_text = _handle_mode1_message(session, user_content, action, is_approval, provider_name, run_async, history, request.user)
+                else:
+                    active_job, response_text = _handle_mode2_message(session, user_content, action, is_approval, provider_name, history, request.user, run_async=run_async)
             else:
-                response_text = InterviewerService.generate_next_question(history, provider_name=provider_name, session=session, user=request.user)
+                # Check if user explicitly demanded code/files or agreed to generation prompt
+                code_demand_triggers = [
+                    "provide me all files", "provide all files", "give me all files", "give me the files",
+                    "don't ask more questions", "no more questions", "all files at once", "give me the code",
+                    "give code", "generate files", "just code", "stop asking questions"
+                ]
+                is_direct_code_demand = any(trig in user_content.lower() for trig in code_demand_triggers)
+
+                if not is_direct_code_demand and assist_msgs:
+                    last_assist_text = assist_msgs[-1]['content'].lower()
+                    asked_to_proceed = any(p in last_assist_text for p in [
+                        "proceed", "generate the files", "generate the complete", "ready to proceed", 
+                        "generate your", "shall i generate", "should i proceed", "bring this architecture"
+                    ])
+                    user_words = set(re.findall(r'\b\w+\b', user_content.lower()))
+                    if asked_to_proceed and any(w in user_words for w in ['sure', 'yes', 'yup', 'yeah', 'ok', 'okay', 'proceed', 'build', 'generate', 'go ahead']):
+                        is_direct_code_demand = True
+
+                if is_direct_code_demand:
+                    if session.mode == 'mode2':
+                        # Build summary + plan now (fast enough), generate Module 1 in the background
+                        if not session.summary_text:
+                            session.summary_text = SRSSynthesizer.synthesize_summary(history, is_mode2=True, provider_name=provider_name, session=session, user=request.user)
+                            session.save(update_fields=['summary_text'])
+                            SessionStateMachine.transition_to(session, 'srs_ready')
+                        active_job, response_text = _start_mode2_task(session, request.user, provider_name, 'next_module', run_async=run_async)
+                    else:
+                        active_job, response_text = _trigger_generation_job(session, request.user, provider_name, run_async=run_async)
+                elif CompletenessEngine.should_synthesize_summary(history, user_content, provider_name=provider_name):
+                    response_text = SRSSynthesizer.synthesize_summary(history, is_mode2=(session.mode == 'mode2'), provider_name=provider_name, session=session, user=request.user)
+                    session.summary_text = response_text
+                    session.save(update_fields=['summary_text'])
+                    SessionStateMachine.transition_to(session, 'srs_ready')
+                else:
+                    response_text = InterviewerService.generate_next_question(history, provider_name=provider_name, session=session, user=request.user)
     except JobConcurrencyError:
         return JsonResponse({
             'error': 'A generation job is already active for this session. Please wait for it to complete.',
@@ -1263,17 +1328,18 @@ def update_session_mode_api(request, session_id):
     session = _get_session(session_id, request.user)
     if request.method == 'POST':
         # Lock mode switching if generation has started or files exist
-        if session.status not in ('active', 'interviewing') or session.project_files.exists() or session.jobs.filter(status__in=['running', 'queued', 'succeeded']).exists():
+        if session.status not in ('active', 'interviewing', 'ready') or session.project_files.exists() or session.jobs.filter(status__in=['running', 'queued', 'succeeded']).exists():
             return JsonResponse({'error': 'Mode cannot be changed once generation has started or files exist.'}, status=400)
         try:
             data = json.loads(request.body)
             new_mode = data.get('mode')
         except Exception:
             new_mode = request.POST.get('mode')
-        if new_mode in ('mode1', 'mode2'):
+        if new_mode in ('mode1', 'mode2', 'mode3'):
             session.mode = new_mode
         else:
-            session.mode = 'mode2' if session.mode == 'mode1' else 'mode1'
+            cycle = {'mode1': 'mode2', 'mode2': 'mode3', 'mode3': 'mode1'}
+            session.mode = cycle.get(session.mode, 'mode1')
         session.save(update_fields=['mode'])
         return JsonResponse({'status': 'success', 'mode': session.mode})
     return JsonResponse({'error': 'POST required'}, status=400)

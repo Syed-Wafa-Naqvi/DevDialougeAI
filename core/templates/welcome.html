@@ -23,7 +23,7 @@
             <!-- Step 2: Build Style Choice (§4.1) -->
             <div class="welcome-step" id="step-2" style="margin-top: var(--space-5);">
                 <h3 style="font-size: var(--text-lead); margin-bottom: var(--space-3); color: var(--ink);">2. How do you like to build?</h3>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3);">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-3);">
                     <label class="radio-card" style="border: 2px solid var(--accent); padding: var(--space-4); border-radius: var(--radius-md); background-color: var(--surface-hover); cursor: pointer; display: block;">
                         <input type="radio" name="default_build_style" value="mode1" checked style="margin-bottom: var(--space-2);" />
                         <div style="font-weight: 600; color: var(--ink);">All at once</div>
@@ -33,6 +33,11 @@
                         <input type="radio" name="default_build_style" value="mode2" style="margin-bottom: var(--space-2);" />
                         <div style="font-weight: 600; color: var(--ink);">File by file</div>
                         <div style="font-size: var(--text-meta); color: var(--ink-3); margin-top: 4px;">Writes one module at a time and waits for your approval. Most control.</div>
+                    </label>
+                    <label class="radio-card" style="border: 1px solid var(--border); padding: var(--space-4); border-radius: var(--radius-md); background-color: var(--surface-sunken); cursor: pointer; display: block;">
+                        <input type="radio" name="default_build_style" value="mode3" style="margin-bottom: var(--space-2);" />
+                        <div style="font-weight: 600; color: var(--ink);">Quick Code</div>
+                        <div style="font-size: var(--text-meta); color: var(--ink-3); margin-top: 4px;">Direct code snippets, single-file scripts, or code fixer. Instant.</div>
                     </label>
                 </div>
             </div>

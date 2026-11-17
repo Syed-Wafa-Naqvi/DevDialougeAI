@@ -506,25 +506,19 @@
                 </h3>
                 
                 <!-- Build Style Pill / Mode Toggle -->
-                {% if session.status == 'active' or session.status == 'interviewing' %}
-                    {% if not project_files %}
-                    <button type="button" class="badge badge-brand" id="mode-toggle-btn" onclick="toggleSessionMode()" style="font-size: 11px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--surface-hover); color: var(--ink); padding: 4px 8px; border-radius: 4px;" title="Click to toggle build style (All at once vs File by file)">
-                        <span id="mode-label">{% if session.mode == 'mode1' %}All at once{% else %}File by file{% endif %}</span>
-                    </button>
-                    {% else %}
-                    <span class="badge badge-brand" id="mode-label" style="font-size: 11px; font-weight: 500;" title="Build style locked for this workspace">
-                        {% if session.mode == 'mode1' %}All at once{% else %}File by file{% endif %}
-                    </span>
-                    {% endif %}
+                {% if not project_files and not active_job %}
+                <button type="button" class="badge badge-brand" id="mode-toggle-btn" onclick="toggleSessionMode()" style="font-size: 11px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--surface-hover); color: var(--ink); padding: 4px 8px; border-radius: 4px;" title="Click to cycle mode (All at once / File by file / Quick Code)">
+                    <span id="mode-label">{% if session.mode == 'mode1' %}All at once{% elif session.mode == 'mode2' %}File by file{% else %}Quick Code{% endif %}</span>
+                </button>
                 {% else %}
-                    <span class="badge badge-brand" id="mode-label" style="font-size: 11px; font-weight: 500;" title="Build style locked for this workspace">
-                        {% if session.mode == 'mode1' %}All at once{% else %}File by file{% endif %}
-                    </span>
+                <span class="badge badge-brand" id="mode-label" style="font-size: 11px; font-weight: 500;" title="Build style locked for this workspace">
+                    {% if session.mode == 'mode1' %}All at once{% elif session.mode == 'mode2' %}File by file{% else %}Quick Code{% endif %}
+                </span>
                 {% endif %}
             </div>
 
             <!-- 5-Stage Stepper Bar (§4) -->
-            <div class="stage-stepper-container" id="stage-stepper-row">
+            <div class="stage-stepper-container" id="stage-stepper-row" style="{% if session.mode == 'mode3' %}display: none;{% endif %}">
                 <button type="button" class="stage-step-btn {% if session.status == 'active' or session.status == 'interviewing' %}active{% endif %}" data-stage="discover" onclick="switchWorkspaceStage('discover')" title="1. Requirement Discovery">
                     <span class="stage-step-num">1</span> <span class="stage-step-label">Discover</span>
                 </button>
@@ -544,6 +538,11 @@
                 <button type="button" class="stage-step-btn {% if session.status == 'completed' %}active{% endif %}" data-stage="export" onclick="switchWorkspaceStage('export')" title="5. Turnkey Export">
                     <span class="stage-step-num">5</span> <span class="stage-step-label">Export</span>
                 </button>
+            </div>
+            
+            <div class="quick-code-indicator" id="quick-code-header-badge" style="{% if session.mode != 'mode3' %}display: none;{% else %}display: flex;{% endif %} align-items: center; gap: 6px; font-size: 12px; color: var(--accent); background: var(--surface-sunken); border: 1px solid var(--border); padding: 4px 10px; border-radius: var(--radius-full); font-weight: 500;">
+                <i data-lucide="zap" style="width: 13px; height: 13px;"></i>
+                <span>Quick Code Mode</span>
             </div>
             
             <div class="topbar-right" style="display: flex; align-items: center; gap: 14px;">
@@ -569,7 +568,7 @@
                     <i data-lucide="terminal" class="icon-sm"></i> Runtime: <strong>Not run (Off)</strong>
                 </span>
             </div>
-            <div class="interview-completeness-box">
+            <div class="interview-completeness-box" id="completeness-box-wrapper" style="{% if session.mode == 'mode3' %}display: none;{% endif %}">
                 <div class="completeness-header">
                     <span>Elicitation Completeness</span>
                     <strong id="completeness-score-val">{{ completeness_score|default:0 }}%</strong>
@@ -819,7 +818,7 @@
                         <input type="file" id="chat-file-input" name="file" style="display: none;" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.tiff,.svg,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.txt,.md,.json,.yaml,.yml,.py,.js,.ts,.jsx,.tsx,.html,.css,.sql,.sh">
                         <div class="input-container-card" id="input-card">
                             <div id="attachment-preview-area" class="attachment-preview-area hidden"></div>
-                            <textarea id="chat-input-field" placeholder="Message DevDialogue or drop PDF, images, Word, PPT, Excel..."></textarea>
+                            <textarea id="chat-input-field" placeholder="{% if session.mode == 'mode3' %}Ask for any code, snippet, script, or paste code to fix...{% else %}Message DevDialogue or drop PDF, images, Word, PPT, Excel...{% endif %}"></textarea>
                             
                             <div class="input-icon-row">
                                 <div class="input-icon-left">
@@ -1295,7 +1294,7 @@
     };
 
     let pendingAction = null;
-    const SESSION_MODE = '{{ session.mode }}';
+    let SESSION_MODE = '{{ session.mode }}';
     function updateModuleReviewBar(status, jobRunning) {
         const bar = document.getElementById('module-review-bar');
         if (!bar) return;
@@ -1711,7 +1710,10 @@
                                     
                                     // Render complete markdown
                                     const contentBox = document.getElementById(`content-${feedId}`);
-                                    if (contentBox) contentBox.innerHTML = renderMarkdownToHtml(accumulatedText);
+                                    if (contentBox) {
+                                        contentBox.innerHTML = renderMarkdownToHtml(accumulatedText);
+                                        attachCodeCopyButtons(contentBox);
+                                    }
 
                                     const finalSec = (ev.total_duration_ms ? (ev.total_duration_ms / 1000).toFixed(1) : ((Date.now() - streamStartTs) / 1000).toFixed(1)) + 's';
                                     if (timerFeedBadge) timerFeedBadge.textContent = finalSec;
@@ -1887,6 +1889,35 @@
         return rawMarkdown;
     }
 
+    function attachCodeCopyButtons(root = document) {
+        if (!root) return;
+        const pres = root.tagName === 'PRE' ? [root] : root.querySelectorAll('pre');
+        pres.forEach(pre => {
+            if (pre.querySelector('.code-copy-overlay-btn')) return;
+            const code = pre.querySelector('code');
+            if (!code) return;
+            pre.style.position = 'relative';
+            const copyBtn = document.createElement('button');
+            copyBtn.type = 'button';
+            copyBtn.className = 'code-copy-overlay-btn';
+            copyBtn.title = 'Copy code snippet';
+            copyBtn.innerHTML = '<span class="copy-text">Copy</span>';
+            copyBtn.style.cssText = 'position: absolute; top: 6px; right: 6px; padding: 3px 8px; font-size: 11px; font-family: var(--font-sans); background: var(--surface-hover); color: var(--ink-2); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; opacity: 0.75; transition: opacity 0.15s, background 0.15s; z-index: 10;';
+            copyBtn.addEventListener('mouseenter', () => { copyBtn.style.opacity = '1'; });
+            copyBtn.addEventListener('mouseleave', () => { copyBtn.style.opacity = '0.75'; });
+            copyBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(code.innerText || code.textContent).then(() => {
+                    copyBtn.innerHTML = '<span class="copy-text" style="color: var(--brand); font-weight: 600;">Copied!</span>';
+                    setTimeout(() => {
+                        copyBtn.innerHTML = '<span class="copy-text">Copy</span>';
+                    }, 1500);
+                }).catch(err => console.error('Failed to copy code snippet:', err));
+            });
+            pre.appendChild(copyBtn);
+        });
+    }
+
     // Hydrate historical assistant chat messages on page load
     function hydrateHistoricalMessages() {
         document.querySelectorAll('.msg-markdown-body[data-script-id]').forEach(target => {
@@ -1896,6 +1927,7 @@
                 try {
                     const raw = JSON.parse(scriptEl.textContent);
                     target.innerHTML = renderMarkdownToHtml(raw);
+                    attachCodeCopyButtons(target);
                 } catch (e) {
                     console.error('Failed to parse history markdown:', e);
                 }
@@ -1956,6 +1988,7 @@
 
         if (role === 'assistant') {
             contentDiv.innerHTML = renderMarkdownToHtml(content);
+            attachCodeCopyButtons(contentDiv);
         } else {
             const textDiv = document.createElement('div');
             textDiv.className = 'msg-text-body';
@@ -3540,10 +3573,33 @@ chmod +x run.sh && ./run.sh
             });
             const data = await resp.json();
             if (data.status === 'success') {
+                SESSION_MODE = data.mode;
                 const label = document.getElementById('mode-label');
                 if (label) {
-                    label.textContent = data.mode === 'mode1' ? 'All at once' : 'File by file';
+                    if (data.mode === 'mode1') {
+                        label.textContent = 'All at once';
+                    } else if (data.mode === 'mode2') {
+                        label.textContent = 'File by file';
+                    } else {
+                        label.textContent = 'Quick Code';
+                    }
                 }
+                const stepper = document.getElementById('stage-stepper-row');
+                const quickBadge = document.getElementById('quick-code-header-badge');
+                const compBox = document.getElementById('completeness-box-wrapper');
+                const inputF = document.getElementById('chat-input-field');
+                if (data.mode === 'mode3') {
+                    if (stepper) stepper.style.display = 'none';
+                    if (quickBadge) quickBadge.style.display = 'flex';
+                    if (compBox) compBox.style.display = 'none';
+                    if (inputF && !inputF.value) inputF.placeholder = 'Ask for any code, snippet, script, or paste code to fix...';
+                } else {
+                    if (stepper) stepper.style.display = 'flex';
+                    if (quickBadge) quickBadge.style.display = 'none';
+                    if (compBox) compBox.style.display = 'flex';
+                    if (inputF && !inputF.value) inputF.placeholder = 'Message DevDialogue or drop PDF, images, Word, PPT, Excel...';
+                }
+                if (typeof lucide !== 'undefined') lucide.createIcons();
             }
         } catch (e) {
             console.error("Failed to toggle mode:", e);
