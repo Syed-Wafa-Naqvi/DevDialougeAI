@@ -2039,6 +2039,8 @@
         if (activeJobPollInterval) clearInterval(activeJobPollInterval);
         
         let afterSeq = 0;
+        let stallPollCount = 0;
+        let lastProgress = -1;
         activeJobPollInterval = setInterval(async () => {
             try {
                 const resp = await fetch(`/api/jobs/${jobId}/events/?after=${afterSeq}`);
@@ -2048,6 +2050,7 @@
                     const pct = Math.min(100, Math.max(0, Math.round((data.progress_current / total) * 100)));
                     document.getElementById('job-bar-fill').style.width = `${pct}%`;
                     if (data.events && data.events.length > 0) {
+                        stallPollCount = 0;
                         const logBox = document.getElementById('job-log-events');
                         data.events.forEach(ev => {
                             afterSeq = Math.max(afterSeq, ev.sequence_number);
@@ -2057,7 +2060,19 @@
                             logBox.appendChild(item);
                             logBox.scrollTop = logBox.scrollHeight;
                         });
+                    } else if (data.status === 'running') {
+                        if (data.progress_current === lastProgress) {
+                            stallPollCount++;
+                            if (stallPollCount >= 40) {
+                                clearInterval(activeJobPollInterval);
+                                console.warn(`Stopped polling job #${jobId}: no updates or events received for 60s.`);
+                                return;
+                            }
+                        } else {
+                            stallPollCount = 0;
+                        }
                     }
+                    lastProgress = data.progress_current;
                     if (data.status === 'succeeded' || data.status === 'failed' || data.status === 'cancelled') {
                         clearInterval(activeJobPollInterval);
                         setTimeout(() => {

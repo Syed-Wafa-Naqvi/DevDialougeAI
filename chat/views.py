@@ -193,6 +193,14 @@ def chat_view(request, session_id):
         completeness_score = CompletenessEngine._calculate_keyword_fallback_score(history) if history else 0
     rubric_cats = {}
     
+    # Auto-cleanup stale background jobs whose worker thread was killed during server restart
+    stale_cutoff = timezone.now() - timedelta(minutes=5)
+    stale_jobs = session.jobs.filter(status__in=['queued', 'running'], updated_at__lt=stale_cutoff)
+    for sj in stale_jobs:
+        sj.status = 'failed'
+        sj.error_message = 'Job timed out or worker process was terminated.'
+        sj.save(update_fields=['status', 'error_message', 'updated_at'])
+
     active_job = session.jobs.filter(status__in=['queued', 'running']).order_by('-created_at').first()
 
     # Determine available AI providers for dropdown
@@ -1013,8 +1021,21 @@ def get_code_file_api(request, code_id):
 
 @verification_required
 def get_job_events_api(request, job_id):
-    from chat.models import Job
+    from chat.models import Job, JobEvent
     job = get_object_or_404(Job, id=job_id, user=request.user)
+
+    # Auto-fail stalled / orphaned background jobs whose worker thread was killed
+    if job.status in ['queued', 'running'] and (timezone.now() - job.updated_at) > timedelta(minutes=5):
+        job.status = 'failed'
+        job.error_message = 'Job timed out or worker process was terminated.'
+        job.save(update_fields=['status', 'error_message', 'updated_at'])
+        last_seq = job.events.count()
+        JobEvent.objects.create(
+            job=job,
+            sequence_number=last_seq + 1,
+            kind='error',
+            message='Job timed out or worker process was terminated.'
+        )
     
     try:
         after_seq = int(request.GET.get('after', 0))
