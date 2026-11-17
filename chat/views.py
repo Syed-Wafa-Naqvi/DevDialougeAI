@@ -266,11 +266,16 @@ def chat_view(request, session_id):
     if has_deepseek:
         available_providers.append('deepseek')
 
+    latest_static_run = session.verification_runs.filter(level='static').order_by('-created_at').first()
+    latest_runtime_run = session.verification_runs.filter(level='runtime').order_by('-created_at').first()
+
     return render(request, 'chat.html', {
         'session': session,
         'chat_messages': messages_list,
         'project_files': project_files,
         'generated_codes': project_files,
+        'latest_static_run': latest_static_run,
+        'latest_runtime_run': latest_runtime_run,
         'today_sessions': today_sessions,
         'yesterday_sessions': yesterday_sessions,
         'last_7_days_sessions': last_7_days_sessions,
@@ -1379,7 +1384,110 @@ def get_plan_api(request, session_id):
     })
 
 @verification_required
+def run_verification_api(request, session_id):
+    """
+    On-demand execution of project verification (Static AST/Syntax + Runtime compiler checks).
+    Invoked when user clicks the Verification buttons in the workspace header.
+    """
+    from generator.verifier import StaticVerifier
+    from generator.runtime_verifier import RuntimeVerifier
+    from generator.harmonizer import UniversalProjectHarmonizer
+    from chat.models import VerificationRun
+
+    session = _get_session(session_id, request.user)
+    files_dict = {f.path: f.content for f in session.project_files.all()}
+    if not files_dict:
+        return JsonResponse({
+            'status': 'no_files',
+            'has_files': False,
+            'message': 'No project files generated yet in this workspace.'
+        })
+
+    plan_obj = session.plans.first()
+    plan_data = plan_obj.plan_data if plan_obj and isinstance(plan_obj.plan_data, dict) else None
+
+    # Harmonize dependencies and manifests across files
+    UniversalProjectHarmonizer.harmonize(files_dict)
+    for h_path in ('pubspec.yaml', 'requirements.txt', 'package.json'):
+        if h_path in files_dict:
+            h_pf = session.project_files.filter(path=h_path).first()
+            if h_pf and h_pf.content != files_dict[h_path]:
+                h_pf.create_new_version(files_dict[h_path], source='harmonizer')
+
+    static_res = StaticVerifier.verify_project(files_dict, plan_data=plan_data)
+    runtime_res = RuntimeVerifier.run_verification(files_dict, user=request.user, plan_data=plan_data)
+
+    static_errors = static_res.get('error_count', 0)
+    static_run = VerificationRun.objects.create(
+        session=session,
+        level='static',
+        passed=static_errors == 0,
+        error_count=static_errors,
+        warning_count=static_res.get('warning_count', 0),
+        issues=static_res.get('issues', [])
+    )
+
+    runtime_run = None
+    if runtime_res.get('executed'):
+        r_errors = runtime_res.get('error_count', 0)
+        runtime_run = VerificationRun.objects.create(
+            session=session,
+            level='runtime',
+            passed=r_errors == 0,
+            error_count=r_errors,
+            warning_count=runtime_res.get('warning_count', 0),
+            issues=runtime_res.get('issues', [])
+        )
+
+    # Update individual file statuses
+    issue_files = set(i.get('file') for i in static_res.get('issues', []) if i.get('severity') == 'error')
+    if runtime_res.get('executed'):
+        issue_files.update(i.get('file') for i in runtime_res.get('issues', []) if i.get('severity') == 'error')
+
+    for pf in session.project_files.all():
+        st = 'has_issues' if pf.path in issue_files else 'verified'
+        if pf.status != st:
+            pf.status = st
+            pf.save(update_fields=['status'])
+
+    total_errors = static_errors + (runtime_run.error_count if runtime_run else 0)
+    if total_errors == 0:
+        if session.status == 'needs_attention':
+            session.status = 'ready'
+            session.save(update_fields=['status'])
+    else:
+        if session.status == 'ready':
+            session.status = 'needs_attention'
+            session.save(update_fields=['status'])
+
+    logger.info("[VERIFICATION RUN] Session #%s (%s) verified: static errors=%d, runtime errors=%d (passed=%s)",
+                session.id, session.uuid, static_errors, runtime_run.error_count if runtime_run else 0, total_errors == 0)
+
+    return JsonResponse({
+        'status': 'ok',
+        'has_files': True,
+        'static': {
+            'passed': static_run.passed,
+            'error_count': static_run.error_count,
+            'warning_count': static_run.warning_count,
+            'issues': static_run.issues,
+            'total_files': len(files_dict)
+        },
+        'runtime': {
+            'executed': runtime_res.get('executed', False),
+            'passed': runtime_run.passed if runtime_run else True,
+            'error_count': runtime_run.error_count if runtime_run else 0,
+            'warning_count': runtime_run.warning_count if runtime_run else 0,
+            'issues': runtime_run.issues if runtime_run else [],
+        },
+        'total_errors': total_errors
+    })
+
+
+@verification_required
 def get_verification_api(request, session_id):
+    if request.method == 'POST':
+        return run_verification_api(request, session_id)
     from chat.models import VerificationRun
     session = _get_session(session_id, request.user)
     verif = session.verification_runs.order_by('-created_at').first()

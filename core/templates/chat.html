@@ -561,12 +561,33 @@
         <!-- Honest Status Banner & Live Completeness Ticks (§4.5, §4.8, §8) -->
         <div class="honest-status-bar">
             <div class="status-indicators">
-                <span class="status-pill {% if generated_codes %}status-static-pass{% else %}status-runtime-off{% endif %}" id="pill-static-checks">
-                    <i data-lucide="shield-check" class="icon-sm"></i> Static: <strong>{% if generated_codes %}Passed ({{ generated_codes.count }} files){% else %}Pre-build (Ready){% endif %}</strong>
-                </span>
-                <span class="status-pill status-runtime-off" id="pill-runtime-checks">
-                    <i data-lucide="terminal" class="icon-sm"></i> Runtime: <strong>Not run (Off)</strong>
-                </span>
+                <button type="button" class="status-pill {% if latest_static_run %}{% if latest_static_run.passed %}status-static-pass{% else %}status-static-fail{% endif %}{% elif project_files %}status-static-pass{% else %}status-runtime-off{% endif %}" id="pill-static-checks" onclick="handleStaticPillClick()" style="cursor: pointer; transition: all 0.15s ease; border: 1px solid var(--border);" title="Click to view Static AST & Import Verification checks">
+                    <i data-lucide="{% if latest_static_run and not latest_static_run.passed %}shield-alert{% else %}shield-check{% endif %}" class="icon-sm" id="static-pill-icon"></i>
+                    <span>Static:</span>
+                    <strong id="static-pill-status">
+                        {% if latest_static_run %}
+                            {% if latest_static_run.passed %}Passed ({{ project_files.count }} files){% else %}{{ latest_static_run.error_count }} issue(s){% endif %}
+                        {% elif project_files %}
+                            Passed ({{ project_files.count }} files)
+                        {% else %}
+                            Pre-build (Ready)
+                        {% endif %}
+                    </strong>
+                </button>
+
+                <button type="button" class="status-pill {% if latest_runtime_run %}{% if latest_runtime_run.passed %}status-runtime-pass{% else %}status-static-fail{% endif %}{% elif project_files %}status-runtime-pass{% else %}status-runtime-off{% endif %}" id="pill-runtime-checks" onclick="handleRuntimePillClick()" style="cursor: pointer; transition: all 0.15s ease; border: 1px solid var(--border);" title="Click to execute native compiler and runtime checks">
+                    <i data-lucide="terminal" class="icon-sm" id="runtime-pill-icon"></i>
+                    <span>Runtime:</span>
+                    <strong id="runtime-pill-status">
+                        {% if latest_runtime_run %}
+                            {% if latest_runtime_run.passed %}Passed{% else %}{{ latest_runtime_run.error_count }} issue(s){% endif %}
+                        {% elif project_files %}
+                            Run Checks
+                        {% else %}
+                            Not run (Off)
+                        {% endif %}
+                    </strong>
+                </button>
             </div>
             <div class="interview-completeness-box" id="completeness-box-wrapper" style="{% if session.mode == 'mode3' %}display: none;{% endif %}">
                 <div class="completeness-header">
@@ -1276,7 +1297,7 @@
                 span.style.fontSize = '11px';
                 span.style.fontWeight = '500';
                 span.title = 'Build style locked for this workspace';
-                span.textContent = labelText.replace('🔄', '').trim();
+                span.textContent = labelText.trim();
                 modeBtn.replaceWith(span);
             }
         }
@@ -1730,6 +1751,7 @@
 
                                     if (ev.codes && ev.codes.length > 0) {
                                         updateCodeFilesPanel(ev.codes);
+                                        updateVerificationPills(true, ev.codes.length, 0, false);
                                         if (workspaceWrapper && workspaceWrapper.classList.contains('collapsed-code')) {
                                             workspaceWrapper.classList.remove('collapsed-code');
                                         }
@@ -1810,6 +1832,7 @@
                         
                         if (data.codes && data.codes.length > 0) {
                             updateCodeFilesPanel(data.codes);
+                            updateVerificationPills(true, data.codes.length, 0, false);
                             if (workspaceWrapper.classList.contains('collapsed-code')) {
                                 workspaceWrapper.classList.remove('collapsed-code');
                             }
@@ -3561,6 +3584,110 @@ chmod +x run.sh && ./run.sh
             }
         });
     }
+
+    window.handleStaticPillClick = function() {
+        switchRightPanel('verif');
+        if (typeof switchVerifSubtab === 'function') {
+            switchVerifSubtab('checks');
+        }
+    };
+
+    window.handleRuntimePillClick = async function() {
+        const fileTabs = document.querySelectorAll('.file-tab');
+        if (!fileTabs || fileTabs.length === 0) {
+            switchRightPanel('verif');
+            if (typeof switchVerifSubtab === 'function') {
+                switchVerifSubtab('checks');
+            }
+            return;
+        }
+
+        const runtimeBtn = document.getElementById('pill-runtime-checks');
+        const runtimeStatus = document.getElementById('runtime-pill-status');
+        const staticStatus = document.getElementById('static-pill-status');
+        const staticBtn = document.getElementById('pill-static-checks');
+
+        if (runtimeStatus) runtimeStatus.textContent = 'Verifying...';
+        if (runtimeBtn) runtimeBtn.classList.add('is-running');
+
+        try {
+            const resp = await fetch("{% url 'run_verification_api' session_id=session.uuid %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            });
+            const data = await resp.json();
+            if (data.status === 'ok') {
+                if (staticStatus) {
+                    if (data.static.passed) {
+                        staticStatus.textContent = `Passed (${data.static.total_files} files)`;
+                        if (staticBtn) staticBtn.className = 'status-pill status-static-pass';
+                    } else {
+                        staticStatus.textContent = `${data.static.error_count} issue(s)`;
+                        if (staticBtn) staticBtn.className = 'status-pill status-static-fail';
+                    }
+                }
+
+                if (runtimeStatus) {
+                    if (data.runtime.executed) {
+                        if (data.runtime.passed) {
+                            runtimeStatus.textContent = 'Passed';
+                            if (runtimeBtn) runtimeBtn.className = 'status-pill status-runtime-pass';
+                        } else {
+                            runtimeStatus.textContent = `${data.runtime.error_count} issue(s)`;
+                            if (runtimeBtn) runtimeBtn.className = 'status-pill status-static-fail';
+                        }
+                    } else {
+                        runtimeStatus.textContent = data.static.passed ? 'Clean (AST)' : `${data.total_errors} issue(s)`;
+                        if (runtimeBtn) runtimeBtn.className = 'status-pill ' + (data.static.passed ? 'status-runtime-pass' : 'status-static-fail');
+                    }
+                }
+
+                switchRightPanel('verif');
+                if (typeof renderVerificationPanel === 'function') {
+                    renderVerificationPanel();
+                }
+            } else if (data.status === 'no_files') {
+                switchRightPanel('verif');
+            }
+        } catch (e) {
+            console.error("Verification execution error:", e);
+            if (runtimeStatus) runtimeStatus.textContent = 'Error';
+        } finally {
+            if (runtimeBtn) runtimeBtn.classList.remove('is-running');
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+    };
+
+    window.updateVerificationPills = function(staticPassed, filesCount, errorCount, runtimePassed) {
+        const sStatus = document.getElementById('static-pill-status');
+        const sBtn = document.getElementById('pill-static-checks');
+        const rStatus = document.getElementById('runtime-pill-status');
+        const rBtn = document.getElementById('pill-runtime-checks');
+
+        if (sStatus && filesCount > 0) {
+            if (staticPassed) {
+                sStatus.textContent = `Passed (${filesCount} files)`;
+                if (sBtn) sBtn.className = 'status-pill status-static-pass';
+            } else {
+                sStatus.textContent = `${errorCount} issue(s)`;
+                if (sBtn) sBtn.className = 'status-pill status-static-fail';
+            }
+        }
+
+        if (rStatus && filesCount > 0) {
+            if (runtimePassed) {
+                rStatus.textContent = 'Passed';
+                if (rBtn) rBtn.className = 'status-pill status-runtime-pass';
+            } else {
+                rStatus.textContent = 'Run Checks';
+                if (rBtn) rBtn.className = 'status-pill status-runtime-pass';
+            }
+        }
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    };
 
     window.toggleSessionMode = async function() {
         try {

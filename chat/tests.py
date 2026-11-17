@@ -1085,6 +1085,34 @@ class ChatTestCase(TestCase):
         self.assertIn('"type": "done"', content)
         self.assertEqual(session.messages.count(), 2)
 
+    def test_get_and_run_verification_api(self):
+        """Tests on-demand verification execution and retrieval for workspace."""
+        session = Session.objects.create(user=self.user, mode='mode1', status='active')
+
+        # 1. Before verification runs exist
+        res_get = self.client.get(f'/api/session/{session.uuid}/verification/')
+        self.assertEqual(res_get.status_code, 200)
+        self.assertFalse(res_get.json()['has_verification'])
+
+        # 2. Run verification without files
+        res_run_empty = self.client.post(f'/api/session/{session.uuid}/verify/')
+        self.assertEqual(res_run_empty.status_code, 200)
+        self.assertFalse(res_run_empty.json()['has_files'])
+
+        # 3. Add clean project files and run verification
+        ProjectFile.objects.create(session=session, path='calc.py', content='def add(a, b):\n    return a + b\n')
+        res_run = self.client.post(f'/api/session/{session.uuid}/verify/')
+        self.assertEqual(res_run.status_code, 200)
+        data = res_run.json()
+        self.assertEqual(data['status'], 'ok')
+        self.assertTrue(data['static']['passed'])
+
+        # 4. GET verification now returns the latest run
+        res_get2 = self.client.get(f'/api/session/{session.uuid}/verification/')
+        self.assertEqual(res_get2.status_code, 200)
+        self.assertTrue(res_get2.json()['has_verification'])
+        self.assertTrue(res_get2.json()['passed'])
+
 
 class SelfHealingEngineTestCase(TestCase):
     """Unit and integration test suite for DevDialogue AI Autonomous Self-Healing Engine."""

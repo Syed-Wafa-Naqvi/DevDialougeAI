@@ -3929,6 +3929,7 @@ body.chat-page-body .main-content-wrapper {
     flex-wrap: wrap;
 }
 
+button.status-pill,
 .status-pill {
     font-size: var(--text-meta);
     padding: var(--space-1) var(--space-3);
@@ -3939,6 +3940,19 @@ body.chat-page-body .main-content-wrapper {
     background-color: var(--paper);
     border: 1px solid var(--rule);
     color: var(--pencil);
+    cursor: pointer;
+    font-family: inherit;
+    transition: opacity var(--t-micro) ease, background-color var(--t-micro) ease, border-color var(--t-micro) ease;
+}
+
+button.status-pill:hover {
+    opacity: 0.9;
+    filter: brightness(1.05);
+}
+
+button.status-pill.is-running {
+    opacity: 0.7;
+    pointer-events: none;
 }
 
 .status-pill.status-static-pass {
