@@ -651,3 +651,178 @@ class ChatTestCase(TestCase):
         
         last_event = json.loads(lines[-1][len('data: '):])
         self.assertEqual(last_event.get('status'), 'cancelled')
+
+    def test_document_processor_excel(self):
+        import io, openpyxl
+        from chat.document_processor import DocumentProcessor
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'Database_Schema'
+        ws.append(['table', 'column', 'type', 'nullable'])
+        ws.append(['users', 'id', 'SERIAL', 'NO'])
+        ws.append(['users', 'email', 'VARCHAR', 'NO'])
+        ws.append(['orders', 'total', 'NUMERIC', 'YES'])
+        buf = io.BytesIO()
+        wb.save(buf)
+
+        text, ftype, meta = DocumentProcessor.extract_content(buf.getvalue(), 'schema.xlsx')
+        self.assertEqual(ftype, 'excel')
+        self.assertIn('Database_Schema', meta['sheets'])
+        self.assertIn('| table | column | type | nullable |', text)
+        self.assertIn('| users | id | SERIAL | NO |', text)
+
+    def test_document_processor_word(self):
+        import io, docx
+        from chat.document_processor import DocumentProcessor
+
+        doc = docx.Document()
+        doc.add_heading('System Specification', level=1)
+        doc.add_paragraph('The application must implement JWT token authentication.')
+        tbl = doc.add_table(rows=2, cols=2)
+        tbl.rows[0].cells[0].text = 'Role'
+        tbl.rows[0].cells[1].text = 'Permissions'
+        tbl.rows[1].cells[0].text = 'Admin'
+        tbl.rows[1].cells[1].text = 'Full Access'
+        buf = io.BytesIO()
+        doc.save(buf)
+
+        text, ftype, meta = DocumentProcessor.extract_content(buf.getvalue(), 'specs.docx')
+        self.assertEqual(ftype, 'word')
+        self.assertEqual(meta['headings'], 1)
+        self.assertEqual(meta['tables'], 1)
+        self.assertIn('System Specification', text)
+        self.assertIn('| Admin | Full Access |', text)
+
+    def test_document_processor_powerpoint(self):
+        import io, pptx
+        from chat.document_processor import DocumentProcessor
+
+        prs = pptx.Presentation()
+        slide = prs.slides.add_slide(prs.slide_layouts[0])
+        slide.shapes.title.text = 'Architecture Pitch'
+        slide.placeholders[1].text = 'Microservices on Kubernetes'
+        if slide.has_notes_slide and slide.notes_slide.notes_text_frame:
+            slide.notes_slide.notes_text_frame.text = 'Must scale to 10k QPS'
+        buf = io.BytesIO()
+        prs.save(buf)
+
+        text, ftype, meta = DocumentProcessor.extract_content(buf.getvalue(), 'pitch.pptx')
+        self.assertEqual(ftype, 'powerpoint')
+        self.assertEqual(meta['slides'], 1)
+        self.assertIn('Architecture Pitch', text)
+        self.assertIn('Microservices on Kubernetes', text)
+
+    def test_document_processor_pdf(self):
+        import io, pypdf
+        from chat.document_processor import DocumentProcessor
+
+        writer = pypdf.PdfWriter()
+        writer.add_blank_page(width=100, height=100)
+        buf = io.BytesIO()
+        writer.write(buf)
+
+        text, ftype, meta = DocumentProcessor.extract_content(buf.getvalue(), 'document.pdf')
+        self.assertEqual(ftype, 'pdf')
+        self.assertEqual(meta['pages'], 1)
+        self.assertIn('PDF Document: document.pdf', text)
+
+    def test_document_processor_image(self):
+        import io
+        from PIL import Image
+        from chat.document_processor import DocumentProcessor
+
+        img = Image.new('RGB', (160, 120), color='purple')
+        buf = io.BytesIO()
+        img.save(buf, format='PNG')
+
+        text, ftype, meta = DocumentProcessor.extract_content(buf.getvalue(), 'wireframe.png')
+        self.assertEqual(ftype, 'image')
+        self.assertEqual(meta['dimensions'], '160x120')
+        self.assertEqual(meta['format'], 'PNG')
+        self.assertIn('Image Document: wireframe.png', text)
+
+    def test_send_message_with_pdf_attachment(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        import io, pypdf
+        from chat.models import MessageAttachment
+
+        session = Session.objects.create(user=self.user, mode='mode1', status='active')
+
+        writer = pypdf.PdfWriter()
+        writer.add_blank_page(width=100, height=100)
+        buf = io.BytesIO()
+        writer.write(buf)
+        pdf_file = SimpleUploadedFile("requirements.pdf", buf.getvalue(), content_type="application/pdf")
+
+        response = self.client.post(
+            f'/api/chat/{session.id}/send/',
+            data={'message': 'Here are the requirements', 'file': pdf_file, 'provider': 'mock'},
+            format='multipart'
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn('attachment', data)
+        self.assertIsNotNone(data['attachment'])
+        self.assertEqual(data['attachment']['file_name'], 'requirements.pdf')
+        self.assertEqual(data['attachment']['file_type'], 'pdf')
+
+        # Check DB attachment
+        att = MessageAttachment.objects.filter(session=session).first()
+        self.assertIsNotNone(att)
+        self.assertEqual(att.file_name, 'requirements.pdf')
+        self.assertIn('PDF Document: requirements.pdf', att.extracted_text)
+
+    def test_stream_chat_with_excel_attachment(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        import io, openpyxl, json
+        from chat.models import MessageAttachment
+
+        session = Session.objects.create(user=self.user, mode='mode1', status='active')
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'Schema'
+        ws.append(['col1', 'col2'])
+        ws.append(['val1', 'val2'])
+        buf = io.BytesIO()
+        wb.save(buf)
+        excel_file = SimpleUploadedFile("data_model.xlsx", buf.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+        response = self.client.post(
+            f'/api/chat/{session.id}/stream/',
+            data={'message': 'Analyze database schema', 'file': excel_file, 'provider': 'mock'},
+            format='multipart'
+        )
+        self.assertEqual(response.status_code, 200)
+        content = b"".join(response.streaming_content).decode('utf-8')
+        lines = [line.strip() for line in content.split('\n') if line.startswith('data: ')]
+        
+        event_types = [json.loads(line[len('data: '):]).get('type') for line in lines]
+        self.assertIn('tool_call', event_types)
+        self.assertIn('file_action', event_types)
+
+        att = MessageAttachment.objects.filter(session=session).first()
+        self.assertIsNotNone(att)
+        self.assertEqual(att.file_type, 'excel')
+        self.assertIn('data_model.xlsx', att.file_name)
+
+    def test_context_builder_includes_attached_documents(self):
+        from chat.models import MessageAttachment
+        from llm_engine.context import ContextBuilder
+
+        session = Session.objects.create(user=self.user, mode='mode1', status='active')
+        MessageAttachment.objects.create(
+            session=session,
+            file_name="spec.pdf",
+            file_type="pdf",
+            file_size=2048,
+            extracted_text="PostgreSQL 16, Django 5.1, Stripe Webhooks, Redis Cache",
+            metadata={'pages': 3}
+        )
+
+        ctx = ContextBuilder.build_context(session=session, purpose='chat')
+        prompt = ctx['assembled_prompt']
+        self.assertIn('ATTACHED SPECIFICATIONS & DOCUMENTS', prompt)
+        self.assertIn('PostgreSQL 16, Django 5.1, Stripe Webhooks', prompt)
+

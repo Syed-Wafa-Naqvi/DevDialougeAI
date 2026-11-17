@@ -96,6 +96,18 @@ class ContextBuilder:
             plan_str = f"APPROVED PLAN CONTRACT (v{plan_obj.version}):\nFiles: {plan_obj.generation_order}"
             context_parts.append(plan_str)
 
+        # 3b. Attached Specifications & Documents (PDF, Word, PPT, Excel, Images/OCR)
+        if hasattr(session, 'attachments'):
+            recent_attachments = session.attachments.order_by('-created_at')[:4]
+            if recent_attachments.exists():
+                doc_lines = []
+                for att in reversed(list(recent_attachments)):
+                    if att.extracted_text:
+                        clipped = att.extracted_text[:4000]
+                        doc_lines.append(f"ATTACHED {att.file_type.upper()} ({att.file_name}):\n{clipped}")
+                if doc_lines:
+                    context_parts.append("ATTACHED SPECIFICATIONS & DOCUMENTS:\n" + "\n\n".join(doc_lines))
+
         # 4. Current Task Prompt
         if task_prompt:
             context_parts.append(f"CURRENT TASK:\n{task_prompt}")

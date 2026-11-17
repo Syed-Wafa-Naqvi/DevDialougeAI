@@ -98,7 +98,8 @@ class AgentEvent:
         completeness_score: Optional[int] = None,
         rubric_cats: Optional[Dict[str, Any]] = None,
         codes: Optional[list] = None,
-        title: Optional[str] = None
+        title: Optional[str] = None,
+        attachment: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         return {
             "type": "done",
@@ -110,6 +111,7 @@ class AgentEvent:
             "rubric_cats": rubric_cats or {},
             "codes": codes or [],
             "title": title,
+            "attachment": attachment,
             "timestamp": time.time(),
         }
 
@@ -126,7 +128,8 @@ def stream_agent_response(
     provider_name: Optional[str] = None,
     action: Optional[str] = None,
     user = None,
-    request_id: Optional[str] = None
+    request_id: Optional[str] = None,
+    attachment: Optional[Any] = None
 ) -> Generator[str, None, None]:
     """
     Generator yielding Server-Sent Events (SSE) strings formatted as `data: {...}\\n\\n`.
@@ -158,7 +161,11 @@ def stream_agent_response(
         cache.delete(f"cancel_req_{request_id}")
 
     # Record user message in DB
-    Message.objects.create(session=session, role='user', content=user_content)
+    user_msg = Message.objects.create(session=session, role='user', content=user_content)
+    if attachment:
+        attachment.message = user_msg
+        attachment.save(update_fields=['message'])
+
     history = list(session.messages.values('role', 'content'))
     existing_files = list(session.project_files.order_by('path'))
 
@@ -169,6 +176,42 @@ def stream_agent_response(
         content="Detecting intent, technical constraints, and conversation progress...",
         status="running"
     ))
+
+    # If attachment is provided, emit real-time extraction & parsing events
+    if attachment:
+        yield format_sse(AgentEvent.thinking(
+            step_id=f"step_doc_{attachment.id}",
+            title=f"Extracting content from attached {attachment.file_type.upper()} ({attachment.file_name})",
+            content=f"Extracted {len(attachment.extracted_text)} characters of specifications.",
+            status="completed"
+        ))
+        yield format_sse(AgentEvent.tool_call(
+            call_id=f"tool_doc_{attachment.id}",
+            tool="document_extractor",
+            args={
+                "filename": attachment.file_name,
+                "file_type": attachment.file_type,
+                "size_bytes": attachment.file_size,
+                "metadata": attachment.metadata
+            },
+            summary=f"Parsed {attachment.file_type.upper()} specifications from {attachment.file_name}"
+        ))
+        yield format_sse(AgentEvent.file_action(
+            action="read",
+            path=attachment.file_name,
+            summary=f"Parsed {attachment.file_name} ({attachment.file_type.upper()}, {max(1, attachment.file_size // 1024)} KB)"
+        ))
+        yield format_sse(AgentEvent.source(
+            title=f"Attached: {attachment.file_name}",
+            url_or_path=attachment.file.url if attachment.file else attachment.file_name,
+            kind=attachment.file_type
+        ))
+        yield format_sse(AgentEvent.tool_result(
+            call_id=f"tool_doc_{attachment.id}",
+            tool="document_extractor",
+            result={"status": "success", "length": len(attachment.extracted_text), "type": attachment.file_type},
+            duration_ms=40
+        ))
 
     if is_cancelled():
         yield format_sse(AgentEvent.thinking("step_intent", "Cancelled by user", status="cancelled"))
@@ -425,6 +468,14 @@ def stream_agent_response(
     total_duration = int((time.time() - start_time) * 1000)
     tokens_estimated = (len(user_content) + len(response_text)) // 4
 
+    att_dict = {
+        'id': attachment.id,
+        'file_name': attachment.file_name,
+        'file_type': attachment.file_type,
+        'file_size': attachment.file_size,
+        'file_url': attachment.file.url if attachment.file else None
+    } if attachment else None
+
     # Step 6: Emit Done Event
     yield format_sse(AgentEvent.done(
         status="succeeded",
@@ -434,5 +485,6 @@ def stream_agent_response(
         completeness_score=comp_score,
         rubric_cats=rubric_cats,
         codes=codes_list,
-        title=new_title or session.title
+        title=new_title or session.title,
+        attachment=att_dict
     ))

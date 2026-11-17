@@ -4,6 +4,10 @@ class SRSSynthesizer:
     @classmethod
     def synthesize_summary(cls, conversation_history: list, is_mode2: bool = False, provider_name: str = None, session = None, user = None) -> str:
         messages_text = "\n".join([f"{m.get('role').capitalize()}: {m.get('content')}" for m in conversation_history])
+        if session and hasattr(session, 'attachments'):
+            doc_texts = [att.extracted_text for att in session.attachments.all() if att.extracted_text]
+            if doc_texts:
+                messages_text += "\n\nATTACHED SPECIFICATIONS & DOCUMENTS:\n" + "\n\n".join(doc_texts)
         
         prompt = (
             f"Analyze this software design conversation:\n\n{messages_text}\n\n"

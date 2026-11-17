@@ -72,6 +72,34 @@ class Message(models.Model):
         return f"{self.role.upper()} in Session {self.session.id} at {self.timestamp}"
 
 
+class MessageAttachment(models.Model):
+    FILE_TYPE_CHOICES = [
+        ('pdf', 'PDF Document'),
+        ('image', 'Image File'),
+        ('word', 'Word Document'),
+        ('powerpoint', 'PowerPoint Presentation'),
+        ('excel', 'Excel Spreadsheet'),
+        ('text', 'Plain Text / Code'),
+        ('other', 'Other Document'),
+    ]
+
+    session = models.ForeignKey(Session, on_delete=models.CASCADE, related_name='attachments')
+    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name='attachments', null=True, blank=True)
+    file = models.FileField(upload_to='attachments/%Y/%m/%d/')
+    file_name = models.CharField(max_length=255)
+    file_type = models.CharField(max_length=30, choices=FILE_TYPE_CHOICES, default='other')
+    file_size = models.PositiveIntegerField(default=0, help_text="File size in bytes")
+    extracted_text = models.TextField(blank=True, help_text="Text extracted from document/image/OCR")
+    metadata = models.JSONField(default=dict, blank=True, help_text="Metadata (e.g. pages, sheets, dimensions, slides)")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"{self.file_name} ({self.file_type}) - Session {self.session_id}"
+
+
 class GeneratedCode(models.Model):
     session = models.ForeignKey(Session, on_delete=models.CASCADE, related_name='generated_codes')
     module_name = models.CharField(max_length=255)

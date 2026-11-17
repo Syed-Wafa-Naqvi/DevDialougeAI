@@ -162,7 +162,7 @@ def create_session_view(request):
 @verification_required
 def chat_view(request, session_id):
     session = get_object_or_404(Session.objects.select_related('user'), id=session_id, user=request.user)
-    messages_list = session.messages.all().order_by('timestamp')
+    messages_list = session.messages.all().order_by('timestamp').prefetch_related('attachments')
     
     # ProjectFile is single source of truth; backfill if legacy GeneratedCode exists (#27)
     from chat.models import ProjectFile
@@ -622,26 +622,80 @@ def send_message_api(request, session_id):
     else:
         run_async = not getattr(settings, 'IS_TESTING', False)
         
+    file_bytes = None
+    file_name = None
+    content_type = ''
+
+    # Handle multipart file upload if present
+    uploaded_file = request.FILES.get('file') or request.FILES.get('attachment')
+    if uploaded_file:
+        file_bytes = uploaded_file.read()
+        file_name = uploaded_file.name
+        content_type = getattr(uploaded_file, 'content_type', '')
+
+    user_content = ''
+    provider_name = None
+    action = None
+    req_id = None
+
     try:
         data = json.loads(request.body)
         user_content = data.get('message', '').strip()
         provider_name = data.get('provider', None)
         action = data.get('action', None)
         req_id = data.get('request_id', None)
+        if not file_bytes and data.get('file_base64'):
+            import base64
+            try:
+                file_bytes = base64.b64decode(data['file_base64'])
+                file_name = data.get('file_name', 'attachment.bin')
+                content_type = data.get('content_type', '')
+            except Exception:
+                pass
     except Exception:
         user_content = request.POST.get('message', '').strip()
-        provider_name = None
+        provider_name = request.POST.get('provider', None)
         action = request.POST.get('action', None)
         req_id = request.POST.get('request_id', None)
+
+    if not user_content and file_name:
+        user_content = f"Please analyze the attached {file_name} and incorporate its requirements and architecture specifications."
         
-    if not user_content:
-        return JsonResponse({'error': 'Message content cannot be empty'}, status=400)
+    if not user_content and not file_bytes:
+        return JsonResponse({'error': 'Message content or attachment is required'}, status=400)
         
     from django.core.cache import cache
     # Clear any old session cancellation flag so future messages are never swallowed (#2)
     cache.delete(f"cancel_session_{session.id}")
 
-    Message.objects.create(session=session, role='user', content=user_content)
+    attachment_obj = None
+    if file_bytes and file_name:
+        from chat.models import MessageAttachment
+        from chat.document_processor import DocumentProcessor
+        from django.core.files.base import ContentFile
+
+        extracted_text, f_type, meta = DocumentProcessor.extract_content(
+            file_bytes=file_bytes,
+            filename=file_name,
+            content_type=content_type,
+            user=request.user
+        )
+
+        attachment_obj = MessageAttachment.objects.create(
+            session=session,
+            file_name=file_name,
+            file_type=f_type,
+            file_size=len(file_bytes),
+            extracted_text=extracted_text,
+            metadata=meta
+        )
+        attachment_obj.file.save(file_name, ContentFile(file_bytes), save=True)
+
+    user_msg = Message.objects.create(session=session, role='user', content=user_content)
+    if attachment_obj:
+        attachment_obj.message = user_msg
+        attachment_obj.save(update_fields=['message'])
+
     history = list(session.messages.values('role', 'content'))
     
     # Legacy migration: ensure ProjectFile rows exist if only GeneratedCode exists
@@ -812,7 +866,14 @@ def send_message_api(request, session_id):
         'title': session.title,
         'completeness_score': comp_score,
         'rubric_cats': rubric_cats,
-        'job_id': active_job.id if active_job else None
+        'job_id': active_job.id if active_job else None,
+        'attachment': {
+            'id': attachment_obj.id,
+            'file_name': attachment_obj.file_name,
+            'file_type': attachment_obj.file_type,
+            'file_size': attachment_obj.file_size,
+            'file_url': attachment_obj.file.url if attachment_obj.file else None
+        } if attachment_obj else None
     })
 
 @verification_required
@@ -827,20 +888,71 @@ def stream_chat_api(request, session_id):
 
     session = get_object_or_404(Session.objects.select_related('user'), id=session_id, user=request.user)
 
+    file_bytes = None
+    file_name = None
+    content_type = ''
+
+    # Handle multipart file upload if present
+    uploaded_file = request.FILES.get('file') or request.FILES.get('attachment')
+    if uploaded_file:
+        file_bytes = uploaded_file.read()
+        file_name = uploaded_file.name
+        content_type = getattr(uploaded_file, 'content_type', '')
+
+    user_content = ''
+    provider_name = None
+    action = None
+    req_id = None
+
     try:
         data = json.loads(request.body)
         user_content = data.get('message', '').strip()
         provider_name = data.get('provider', None)
         action = data.get('action', None)
         req_id = data.get('request_id', None)
+        if not file_bytes and data.get('file_base64'):
+            import base64
+            try:
+                file_bytes = base64.b64decode(data['file_base64'])
+                file_name = data.get('file_name', 'attachment.bin')
+                content_type = data.get('content_type', '')
+            except Exception:
+                pass
     except Exception:
         user_content = request.POST.get('message', '').strip()
-        provider_name = None
+        provider_name = request.POST.get('provider', None)
         action = request.POST.get('action', None)
         req_id = request.POST.get('request_id', None)
 
-    if not user_content:
-        return JsonResponse({'error': 'Message content cannot be empty'}, status=400)
+    if not user_content and file_name:
+        user_content = f"Please analyze the attached {file_name} and incorporate its requirements and architecture specifications."
+
+    if not user_content and not file_bytes:
+        return JsonResponse({'error': 'Message content or attachment is required'}, status=400)
+
+    # Process attachment if uploaded
+    attachment_obj = None
+    if file_bytes and file_name:
+        from chat.models import MessageAttachment
+        from chat.document_processor import DocumentProcessor
+        from django.core.files.base import ContentFile
+
+        extracted_text, f_type, meta = DocumentProcessor.extract_content(
+            file_bytes=file_bytes,
+            filename=file_name,
+            content_type=content_type,
+            user=request.user
+        )
+
+        attachment_obj = MessageAttachment.objects.create(
+            session=session,
+            file_name=file_name,
+            file_type=f_type,
+            file_size=len(file_bytes),
+            extracted_text=extracted_text,
+            metadata=meta
+        )
+        attachment_obj.file.save(file_name, ContentFile(file_bytes), save=True)
 
     from chat.events import stream_agent_response
 
@@ -851,7 +963,8 @@ def stream_chat_api(request, session_id):
             provider_name=provider_name,
             action=action,
             user=request.user,
-            request_id=req_id
+            request_id=req_id,
+            attachment=attachment_obj
         ),
         content_type='text/event-stream'
     )

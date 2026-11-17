@@ -32,6 +32,10 @@ class CompletenessEngine:
         Returns a dict: {'score': int, 'categories': dict, 'next_questions': list, 'contradictions': list, 'is_estimated': bool}
         """
         messages_text = "\n".join([f"{m.get('role').capitalize()}: {m.get('content')}" for m in conversation_history])
+        if session and hasattr(session, 'attachments'):
+            doc_texts = [att.extracted_text for att in session.attachments.all() if att.extracted_text]
+            if doc_texts:
+                messages_text += "\n\nATTACHED SPECIFICATIONS:\n" + "\n\n".join(doc_texts)
         prompt = f"Analyze this software design conversation transcript:\n\n{messages_text}\n\nEvaluate requirement coverage across all 8 rubric categories."
         system_prompt = PromptTemplates.get_completeness_system_prompt()
 

@@ -327,6 +327,44 @@
                                         {% endwith %}
                                     {% else %}
                                         {{ msg.content|linebreaksbr }}
+                                        {% if msg.attachments.all %}
+                                            <div class="message-attachments-container" style="margin-top: 8px; display: flex; flex-direction: column; gap: 6px;">
+                                                {% for att in msg.attachments.all %}
+                                                    <div class="chat-attachment-pill" data-type="{{ att.file_type }}" style="display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; font-size: 12px; width: fit-content; max-width: 100%;">
+                                                        <span class="attachment-pill-icon" style="display: flex; align-items: center;">
+                                                            {% if att.file_type == 'image' %}
+                                                                <i data-lucide="image" style="width: 14px; height: 14px; color: #a855f7;"></i>
+                                                            {% elif att.file_type == 'pdf' %}
+                                                                <i data-lucide="file-text" style="width: 14px; height: 14px; color: #ef4444;"></i>
+                                                            {% elif att.file_type == 'excel' %}
+                                                                <i data-lucide="table" style="width: 14px; height: 14px; color: #10b981;"></i>
+                                                            {% elif att.file_type == 'word' %}
+                                                                <i data-lucide="file-text" style="width: 14px; height: 14px; color: #3b82f6;"></i>
+                                                            {% elif att.file_type == 'powerpoint' %}
+                                                                <i data-lucide="presentation" style="width: 14px; height: 14px; color: #f59e0b;"></i>
+                                                            {% else %}
+                                                                <i data-lucide="file-code" style="width: 14px; height: 14px; color: var(--brand);"></i>
+                                                            {% endif %}
+                                                        </span>
+                                                        <span class="attachment-pill-name" style="font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px;">
+                                                            {% if att.file %}
+                                                                <a href="{{ att.file.url }}" target="_blank" download="{{ att.file_name }}" style="color: inherit; text-decoration: underline dotted;">{{ att.file_name }}</a>
+                                                            {% else %}
+                                                                {{ att.file_name }}
+                                                            {% endif %}
+                                                        </span>
+                                                        <span class="attachment-pill-size" style="color: var(--ink-disabled, #94a3b8); font-size: 11px;">({{ att.file_size|filesizeformat }})</span>
+                                                    </div>
+                                                    {% if att.file_type == 'image' and att.file %}
+                                                        <div class="chat-image-preview-bubble" style="margin-top: 4px;">
+                                                            <a href="{{ att.file.url }}" target="_blank">
+                                                                <img src="{{ att.file.url }}" alt="{{ att.file_name }}" style="max-width: 260px; max-height: 200px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); object-fit: cover;">
+                                                            </a>
+                                                        </div>
+                                                    {% endif %}
+                                                {% endfor %}
+                                            </div>
+                                        {% endif %}
                                     {% endif %}
                                 </div>
                             </div>
@@ -396,13 +434,18 @@
                         </button>
                     </div>
 
-                    <form id="chat-input-form" class="input-form">
+                    <form id="chat-input-form" class="input-form" enctype="multipart/form-data">
                         {% csrf_token %}
+                        <input type="file" id="chat-file-input" name="file" style="display: none;" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.tiff,.svg,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.txt,.md,.json,.yaml,.yml,.py,.js,.ts,.jsx,.tsx,.html,.css,.sql,.sh">
                         <div class="input-container-card" id="input-card">
-                            <textarea id="chat-input-field" placeholder="Message DevDialogue..." required></textarea>
+                            <div id="attachment-preview-area" class="attachment-preview-area hidden"></div>
+                            <textarea id="chat-input-field" placeholder="Message DevDialogue or drop PDF, images, Word, PPT, Excel..."></textarea>
                             
                             <div class="input-icon-row">
                                 <div class="input-icon-left">
+                                    <button type="button" class="input-attach-btn" id="btn-attach-file" title="Attach PDF, Images, Word, PPT, Excel, or Code files" onclick="document.getElementById('chat-file-input').click()">
+                                        <i data-lucide="paperclip"></i>
+                                    </button>
                                     <div class="toggle-chips-container">
                                         <select id="provider-selector" class="toggle-chip" onchange="handleProviderChange(this)" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); color: #e2e8f0; padding: 4px 8px; border-radius: 6px; font-size: 0.8rem; cursor: pointer;">
                                             {% if not available_providers or 'auto' in available_providers %}<option value="auto" selected style="background: #1e1e1e; color: #fff;">Auto (Recommended)</option>{% endif %}
@@ -594,13 +637,36 @@
     }
 
     // Auto-expanding textarea & Send button state logic
+    let currentAttachedFile = null;
+    let currentAttachedThumbUrl = null;
+
+    function getFileTypeCategory(filename) {
+        if (!filename) return 'text';
+        const ext = filename.split('.').pop().toLowerCase();
+        if (ext === 'pdf') return 'pdf';
+        if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'tiff', 'svg'].includes(ext)) return 'image';
+        if (['docx', 'doc'].includes(ext)) return 'word';
+        if (['pptx', 'ppt'].includes(ext)) return 'powerpoint';
+        if (['xlsx', 'xls', 'csv'].includes(ext)) return 'excel';
+        return 'text';
+    }
+
+    function formatBytes(bytes) {
+        if (!bytes) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    // Auto-expanding textarea & Send button state logic
     if (inputField) {
         inputField.addEventListener('input', function() {
             this.style.height = 'auto';
             this.style.height = (this.scrollHeight) + 'px';
             
             const sendBtn = document.getElementById('btn-send-message');
-            if (this.value.trim().length > 0) {
+            if (this.value.trim().length > 0 || currentAttachedFile) {
                 sendBtn.removeAttribute('disabled');
                 sendBtn.classList.add('active');
             } else {
@@ -613,7 +679,7 @@
         inputField.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if (inputField.value.trim().length > 0 && chatForm) {
+                if ((inputField.value.trim().length > 0 || currentAttachedFile) && chatForm) {
                     if (typeof chatForm.requestSubmit === 'function') {
                         chatForm.requestSubmit();
                     } else {
@@ -631,39 +697,119 @@
     if (fileInput) {
         fileInput.addEventListener('change', function() {
             if (this.files && this.files[0]) {
-                const file = this.files[0];
-                renderAttachmentPreview(file.name);
+                renderAttachmentPreview(this.files[0]);
             }
         });
     }
     
-    function renderAttachmentPreview(filename) {
-        if (!previewArea) return;
+    function renderAttachmentPreview(file) {
+        if (!previewArea || !file) return;
+        currentAttachedFile = file;
+
+        const ftype = getFileTypeCategory(file.name);
+        let iconHtml = '<i data-lucide="file-code" style="width:18px; height:18px; color:var(--brand);"></i>';
+        if (ftype === 'image') iconHtml = '<i data-lucide="image" style="width:18px; height:18px; color:#a855f7;"></i>';
+        else if (ftype === 'pdf') iconHtml = '<i data-lucide="file-text" style="width:18px; height:18px; color:#ef4444;"></i>';
+        else if (ftype === 'excel') iconHtml = '<i data-lucide="table" style="width:18px; height:18px; color:#10b981;"></i>';
+        else if (ftype === 'word') iconHtml = '<i data-lucide="file-text" style="width:18px; height:18px; color:#3b82f6;"></i>';
+        else if (ftype === 'powerpoint') iconHtml = '<i data-lucide="presentation" style="width:18px; height:18px; color:#f59e0b;"></i>';
+
+        let thumbMarkup = iconHtml;
+        if (ftype === 'image') {
+            if (currentAttachedThumbUrl) URL.revokeObjectURL(currentAttachedThumbUrl);
+            currentAttachedThumbUrl = URL.createObjectURL(file);
+            thumbMarkup = `<img src="${currentAttachedThumbUrl}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;">`;
+        }
+
         previewArea.innerHTML = `
-            <div class="attachment-preview-chip">
-                <div class="attachment-info">
-                    <div class="attachment-thumbnail">
-                        <i data-lucide="file-text"></i>
+            <div class="attachment-preview-chip" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; width: fit-content; max-width: 280px; margin-bottom: 8px;">
+                <div class="attachment-info" style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+                    <div class="attachment-thumbnail" style="width: 32px; height: 32px; border-radius: 6px; background: rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden;">
+                        ${thumbMarkup}
                     </div>
-                    <span class="attachment-name">${filename}</span>
+                    <div style="display: flex; flex-direction: column; min-width: 0;">
+                        <span class="attachment-name" title="${escapeHtml(file.name)}" style="font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px;">${escapeHtml(file.name)}</span>
+                        <span style="font-size: 10px; color: var(--ink-disabled, #94a3b8);">${formatBytes(file.size)} • ${ftype.toUpperCase()}</span>
+                    </div>
                 </div>
-                <button type="button" class="btn-remove-attachment" onclick="removeAttachment()">
-                    <i data-lucide="x"></i>
+                <button type="button" class="btn-remove-attachment" onclick="removeAttachment()" title="Remove attachment" style="background: none; border: none; color: var(--ink-disabled, #94a3b8); cursor: pointer; padding: 4px; border-radius: 4px; display: flex; align-items: center; justify-content: center; margin-left: 8px;">
+                    <i data-lucide="x" style="width: 14px; height: 14px;"></i>
                 </button>
             </div>
         `;
         previewArea.classList.remove('hidden');
-        lucide.createIcons();
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+
+        const sendBtn = document.getElementById('btn-send-message');
+        if (sendBtn) {
+            sendBtn.removeAttribute('disabled');
+            sendBtn.classList.add('active');
+        }
     }
     
     window.removeAttachment = function() {
         if (fileInput) {
             fileInput.value = '';
         }
+        if (currentAttachedThumbUrl) {
+            URL.revokeObjectURL(currentAttachedThumbUrl);
+            currentAttachedThumbUrl = null;
+        }
+        currentAttachedFile = null;
         if (previewArea) {
             previewArea.innerHTML = '';
             previewArea.classList.add('hidden');
         }
+        const sendBtn = document.getElementById('btn-send-message');
+        if (sendBtn && (!inputField || inputField.value.trim().length === 0)) {
+            sendBtn.setAttribute('disabled', 'true');
+            sendBtn.classList.remove('active');
+        }
+    };
+
+    // Drag and drop attachment support on input card
+    const inputCardElem = document.getElementById('input-card');
+    if (inputCardElem) {
+        ['dragenter', 'dragover'].forEach(eventName => {
+            inputCardElem.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                inputCardElem.style.borderColor = 'var(--brand, #3b82f6)';
+            });
+        });
+        ['dragleave', 'drop'].forEach(eventName => {
+            inputCardElem.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                inputCardElem.style.borderColor = '';
+            });
+        });
+        inputCardElem.addEventListener('drop', (e) => {
+            if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                const droppedFile = e.dataTransfer.files[0];
+                if (fileInput && typeof DataTransfer !== 'undefined') {
+                    const dt = new DataTransfer();
+                    dt.items.add(droppedFile);
+                    fileInput.files = dt.files;
+                }
+                renderAttachmentPreview(droppedFile);
+            }
+        });
+    }
+
+    // Clipboard paste support for images and documents
+    if (inputField) {
+        inputField.addEventListener('paste', (e) => {
+            if (e.clipboardData && e.clipboardData.files && e.clipboardData.files.length > 0) {
+                const pastedFile = e.clipboardData.files[0];
+                if (fileInput && typeof DataTransfer !== 'undefined') {
+                    const dt = new DataTransfer();
+                    dt.items.add(pastedFile);
+                    fileInput.files = dt.files;
+                }
+                renderAttachmentPreview(pastedFile);
+            }
+        });
     }
     
     // Code panel refs
@@ -846,8 +992,24 @@
                 return;
             }
 
-            const messageText = inputField.value.trim();
-            if (!messageText) return;
+            let messageText = inputField.value.trim();
+            const attachedFileToSend = currentAttachedFile || (fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0] : null);
+
+            if (!messageText && !attachedFileToSend) return;
+            
+            if (!messageText && attachedFileToSend) {
+                messageText = `Please review and analyze the attached ${attachedFileToSend.name}.`;
+            }
+
+            let attachedMeta = null;
+            if (attachedFileToSend) {
+                attachedMeta = {
+                    name: attachedFileToSend.name,
+                    sizeStr: formatBytes(attachedFileToSend.size),
+                    type: getFileTypeCategory(attachedFileToSend.name),
+                    thumbUrl: currentAttachedThumbUrl
+                };
+            }
             
             // Check and animate first-load transition
             const consolePanel = document.querySelector('.chat-console-panel');
@@ -865,7 +1027,7 @@
             }
             
             // Append user message bubble locally
-            appendMessageBubble('user', messageText);
+            appendMessageBubble('user', messageText, attachedMeta);
             
             // Clear inputs & previews
             inputField.value = '';
@@ -920,15 +1082,30 @@
                 const streamUrl = "{% url 'stream_chat_api' session_id=session.id %}";
                 let streamSuccess = false;
 
+                let requestHeaders = {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                };
+                let requestBody;
+
+                if (attachedFileToSend) {
+                    const fd = new FormData();
+                    fd.append('message', messageText);
+                    if (providerVal) fd.append('provider', providerVal);
+                    if (actionToSend) fd.append('action', actionToSend);
+                    if (thisRequestId) fd.append('request_id', thisRequestId);
+                    fd.append('file', attachedFileToSend);
+                    requestBody = fd;
+                } else {
+                    requestHeaders['Content-Type'] = 'application/json';
+                    requestBody = JSON.stringify({ message: messageText, provider: providerVal, action: actionToSend, request_id: thisRequestId });
+                }
+
                 try {
                     const response = await fetch(streamUrl, {
                         method: 'POST',
                         signal: currentAbortController.signal,
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRFToken': '{{ csrf_token }}'
-                        },
-                        body: JSON.stringify({ message: messageText, provider: providerVal, action: actionToSend, request_id: thisRequestId })
+                        headers: requestHeaders,
+                        body: requestBody
                     });
 
                     if (response.ok && response.headers.get('content-type')?.includes('text/event-stream')) {
@@ -1175,11 +1352,8 @@
                     const response = await fetch("{% url 'send_message_api' session_id=session.id %}", {
                         method: 'POST',
                         signal: currentAbortController.signal,
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRFToken': '{{ csrf_token }}'
-                        },
-                        body: JSON.stringify({ message: messageText, provider: providerVal, action: actionToSend, request_id: thisRequestId })
+                        headers: requestHeaders,
+                        body: requestBody
                     });
                     
                     let data;
@@ -1293,7 +1467,7 @@
     }
 
     // Append chat bubbles safely (§4.3, §7.3)
-    function appendMessageBubble(role, content) {
+    function appendMessageBubble(role, content, attachmentMeta = null) {
         const rowDiv = document.createElement('div');
         rowDiv.className = `message-row ${role === 'user' ? 'user-row' : 'assistant-row'}`;
         
@@ -1317,6 +1491,38 @@
             contentDiv.innerHTML = renderMarkdownToHtml(content);
         } else {
             contentDiv.textContent = content;
+        }
+
+        if (attachmentMeta) {
+            const attBox = document.createElement('div');
+            attBox.className = 'message-attachments-container';
+            attBox.style = 'margin-top: 8px; display: flex; flex-direction: column; gap: 6px;';
+            
+            let iconMarkup = '<i data-lucide="file-code" style="width:14px; height:14px; color:var(--brand);"></i>';
+            const ftype = attachmentMeta.type || 'text';
+            if (ftype === 'image') iconMarkup = '<i data-lucide="image" style="width:14px; height:14px; color:#a855f7;"></i>';
+            else if (ftype === 'pdf') iconMarkup = '<i data-lucide="file-text" style="width:14px; height:14px; color:#ef4444;"></i>';
+            else if (ftype === 'excel') iconMarkup = '<i data-lucide="table" style="width:14px; height:14px; color:#10b981;"></i>';
+            else if (ftype === 'word') iconMarkup = '<i data-lucide="file-text" style="width:14px; height:14px; color:#3b82f6;"></i>';
+            else if (ftype === 'powerpoint') iconMarkup = '<i data-lucide="presentation" style="width:14px; height:14px; color:#f59e0b;"></i>';
+
+            attBox.innerHTML = `
+                <div class="chat-attachment-pill" style="display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; font-size: 12px; width: fit-content; max-width: 100%;">
+                    <span class="attachment-pill-icon" style="display: flex; align-items: center;">${iconMarkup}</span>
+                    <span class="attachment-pill-name" style="font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px;">
+                        ${attachmentMeta.url ? `<a href="${attachmentMeta.url}" target="_blank" download="${escapeHtml(attachmentMeta.name)}" style="color: inherit; text-decoration: underline dotted;">${escapeHtml(attachmentMeta.name)}</a>` : escapeHtml(attachmentMeta.name)}
+                    </span>
+                    <span class="attachment-pill-size" style="color: var(--ink-disabled, #94a3b8); font-size: 11px;">(${attachmentMeta.sizeStr || ''})</span>
+                </div>
+                ${attachmentMeta.thumbUrl ? `
+                    <div class="chat-image-preview-bubble" style="margin-top: 4px;">
+                        <a href="${attachmentMeta.thumbUrl}" target="_blank">
+                            <img src="${attachmentMeta.thumbUrl}" alt="${escapeHtml(attachmentMeta.name)}" style="max-width: 260px; max-height: 200px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); object-fit: cover;">
+                        </a>
+                    </div>
+                ` : ''}
+            `;
+            contentDiv.appendChild(attBox);
         }
 
         bubbleDiv.appendChild(authorDiv);
