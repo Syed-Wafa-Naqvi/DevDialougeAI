@@ -107,61 +107,98 @@ class AIHarnessPackager:
         if has_dart_files:
             if "requirements.txt" in new_files:
                 del new_files["requirements.txt"]
-            # If runner contains python commands for a dart project, replace with flutter runner
-            if "run.sh" in new_files and ("python" in new_files["run.sh"] or "pip" in new_files["run.sh"]):
-                new_files["run.sh"] = (
-                    "#!/usr/bin/env bash\n"
-                    "set -e\n"
-                    f"echo '🚀 Starting Flutter Project: {display_title}...'\n"
-                    "if ! command -v flutter >/dev/null 2>&1; then\n"
-                    "    for cand in \"$HOME/flutter/bin\" \"$HOME/development/flutter/bin\" \"$HOME/.flutter/bin\" \"/snap/bin\" \"/opt/flutter/bin\"; do\n"
-                    "        if [ -x \"$cand/flutter\" ]; then\n"
-                    "            export PATH=\"$cand:$PATH\"\n"
-                    "            break\n"
-                    "        fi\n"
-                    "    done\n"
-                    "fi\n"
-                    "if ! command -v flutter >/dev/null 2>&1; then\n"
-                    "    echo '❌ Flutter SDK not found in PATH.'\n"
-                    "    echo '💡 If installed, add it to your PATH: export PATH=\"$HOME/flutter/bin:$PATH\"'\n"
-                    "    echo '   Or install from https://flutter.dev/docs/get-started/install'\n"
-                    "    exit 1\n"
-                    "fi\n"
-                    "echo '📦 Fetching Flutter dependencies...'\n"
-                    "if [ ! -d \"web\" ] && [ ! -d \"linux\" ] && [ ! -d \"android\" ] && [ ! -d \"windows\" ] && [ ! -d \"macos\" ]; then\n"
-                    "    echo '📱 Generating native platform targets (web, desktop, mobile)...'\n"
-                    "    flutter create . --suppress-analytics\n"
-                    "fi\n"
-                    "flutter pub get\n"
-                    "echo '⚡ Launching Flutter App...'\n"
-                    "flutter run -d chrome || flutter run\n"
-                )
-            if "run.bat" in new_files and ("python" in new_files["run.bat"] or "pip" in new_files["run.bat"]):
-                new_files["run.bat"] = (
-                    "@echo off\n"
-                    f"echo Starting Flutter Project: {display_title}...\n"
-                    "where flutter >nul 2>nul\n"
-                    "if %errorlevel% neq 0 (\n"
-                    "    if exist \"%USERPROFILE%\\flutter\\bin\\flutter.bat\" set \"PATH=%USERPROFILE%\\flutter\\bin;%PATH%\"\n"
-                    "    if exist \"C:\\src\\flutter\\bin\\flutter.bat\" set \"PATH=C:\\src\\flutter\\bin;%PATH%\"\n"
-                    "    if exist \"C:\\flutter\\bin\\flutter.bat\" set \"PATH=C:\\flutter\\bin;%PATH%\"\n"
-                    ")\n"
-                    "where flutter >nul 2>nul\n"
-                    "if %errorlevel% neq 0 (\n"
-                    "    echo [ERROR] Flutter SDK not found in PATH. Install from https://flutter.dev\n"
-                    "    pause\n"
-                    "    exit /b 1\n"
-                    ")\n"
-                    "echo Fetching Flutter dependencies...\n"
-                    "if not exist \"web\" if not exist \"windows\" if not exist \"android\" (\n"
-                    "    echo Generating native platform targets...\n"
-                    "    call flutter create . --suppress-analytics\n"
-                    ")\n"
-                    "call flutter pub get\n"
-                    "echo Launching Flutter App...\n"
-                    "call flutter run -d chrome || call flutter run\n"
-                    "pause\n"
-                )
+
+            asset_sh_snippet = (
+                "# Ensure all declared asset directories exist so Flutter does not halt\n"
+                "if [ -f \"pubspec.yaml\" ]; then\n"
+                "    grep -E '^\\s*-\\s*assets/' pubspec.yaml 2>/dev/null | sed -e 's/^[ \\t]*-[ \\t]*//' | while read -r asset_dir; do\n"
+                "        if [ -n \"$asset_dir\" ]; then\n"
+                "            clean_dir=\"${asset_dir%/}\"\n"
+                "            mkdir -p \"$clean_dir\" 2>/dev/null || true\n"
+                "            touch \"$clean_dir/.gitkeep\" 2>/dev/null || true\n"
+                "        fi\n"
+                "    done\n"
+                "fi\n"
+            )
+
+            # If runner contains python commands for a dart project or missing asset guard, patch with flutter runner
+            if "run.sh" in new_files:
+                run_content = new_files["run.sh"]
+                if "python" in run_content or "pip" in run_content or "grep -E '^\s*-\s*assets/' pubspec.yaml" not in run_content:
+                    new_files["run.sh"] = (
+                        "#!/usr/bin/env bash\n"
+                        "set -e\n"
+                        f"echo '🚀 Starting Flutter Project: {display_title}...'\n"
+                        "if ! command -v flutter >/dev/null 2>&1; then\n"
+                        "    for cand in \"$HOME/flutter/bin\" \"$HOME/development/flutter/bin\" \"$HOME/.flutter/bin\" \"/snap/bin\" \"/opt/flutter/bin\"; do\n"
+                        "        if [ -x \"$cand/flutter\" ]; then\n"
+                        "            export PATH=\"$cand:$PATH\"\n"
+                        "            break\n"
+                        "        fi\n"
+                        "    done\n"
+                        "fi\n"
+                        "if ! command -v flutter >/dev/null 2>&1; then\n"
+                        "    echo '❌ Flutter SDK not found in PATH.'\n"
+                        "    echo '💡 If installed, add it to your PATH: export PATH=\"$HOME/flutter/bin:$PATH\"'\n"
+                        "    echo '   Or install from https://flutter.dev/docs/get-started/install'\n"
+                        "    exit 1\n"
+                        "fi\n"
+                        "echo '📦 Fetching Flutter dependencies...'\n"
+                        f"{asset_sh_snippet}"
+                        "if [ ! -d \"web\" ] && [ ! -d \"linux\" ] && [ ! -d \"android\" ] && [ ! -d \"windows\" ] && [ ! -d \"macos\" ]; then\n"
+                        "    echo '📱 Generating native platform targets (web, desktop, mobile)...'\n"
+                        "    flutter create . --suppress-analytics\n"
+                        f"{asset_sh_snippet}"
+                        "fi\n"
+                        "flutter pub get\n"
+                        "echo '⚡ Launching Flutter App...'\n"
+                        "flutter run -d chrome || flutter run\n"
+                    )
+
+            if "run.bat" in new_files:
+                run_bat_content = new_files["run.bat"]
+                if "python" in run_bat_content or "pip" in run_bat_content or "mkdir assets" not in run_bat_content:
+                    new_files["run.bat"] = (
+                        "@echo off\n"
+                        f"echo Starting Flutter Project: {display_title}...\n"
+                        "where flutter >nul 2>nul\n"
+                        "if %errorlevel% neq 0 (\n"
+                        "    if exist \"%USERPROFILE%\\flutter\\bin\\flutter.bat\" set \"PATH=%USERPROFILE%\\flutter\\bin;%PATH%\"\n"
+                        "    if exist \"C:\\src\\flutter\\bin\\flutter.bat\" set \"PATH=C:\\src\\flutter\\bin;%PATH%\"\n"
+                        "    if exist \"C:\\flutter\\bin\\flutter.bat\" set \"PATH=C:\\flutter\\bin;%PATH%\"\n"
+                        ")\n"
+                        "where flutter >nul 2>nul\n"
+                        "if %errorlevel% neq 0 (\n"
+                        "    echo [ERROR] Flutter SDK not found in PATH. Install from https://flutter.dev\n"
+                        "    pause\n"
+                        "    exit /b 1\n"
+                        ")\n"
+                        "if exist pubspec.yaml (\n"
+                        "    if not exist assets\\images mkdir assets\\images 2>nul\n"
+                        "    if not exist assets\\sounds mkdir assets\\sounds 2>nul\n"
+                        "    if not exist assets mkdir assets 2>nul\n"
+                        ")\n"
+                        "echo Fetching Flutter dependencies...\n"
+                        "if not exist \"web\" if not exist \"windows\" if not exist \"android\" (\n"
+                        "    echo Generating native platform targets...\n"
+                        "    call flutter create . --suppress-analytics\n"
+                        ")\n"
+                        "call flutter pub get\n"
+                        "echo Launching Flutter App...\n"
+                        "call flutter run -d chrome || call flutter run\n"
+                        "pause\n"
+                    )
+
+            # Guarantee placeholder files for any declared assets in pubspec.yaml
+            pubspec_content = existing_files.get("pubspec.yaml", "") or new_files.get("pubspec.yaml", "")
+            if pubspec_content:
+                for line in pubspec_content.splitlines():
+                    m = re.match(r'^\s*-\s*(assets/[a-zA-Z0-9_\-\./]+)', line)
+                    if m:
+                        asset_path = m.group(1).rstrip('/')
+                        gitkeep_path = f"{asset_path}/.gitkeep"
+                        if not any(f.startswith(asset_path + "/") for f in existing_files.keys()):
+                            new_files[gitkeep_path] = ""
 
         return new_files
 
@@ -244,9 +281,28 @@ class AIHarnessPackager:
                     "    exit 1\n"
                     "fi\n"
                     "echo '📦 Fetching Flutter dependencies...'\n"
+                    "# Ensure all declared asset directories exist so Flutter does not halt\n"
+                    "if [ -f \"pubspec.yaml\" ]; then\n"
+                    "    grep -E '^\\s*-\\s*assets/' pubspec.yaml 2>/dev/null | sed -e 's/^[ \\t]*-[ \\t]*//' | while read -r asset_dir; do\n"
+                    "        if [ -n \"$asset_dir\" ]; then\n"
+                    "            clean_dir=\"${asset_dir%/}\"\n"
+                    "            mkdir -p \"$clean_dir\" 2>/dev/null || true\n"
+                    "            touch \"$clean_dir/.gitkeep\" 2>/dev/null || true\n"
+                    "        fi\n"
+                    "    done\n"
+                    "fi\n"
                     "if [ ! -d \"web\" ] && [ ! -d \"linux\" ] && [ ! -d \"android\" ] && [ ! -d \"windows\" ] && [ ! -d \"macos\" ]; then\n"
                     "    echo '📱 Generating native platform targets (web, desktop, mobile)...'\n"
                     "    flutter create . --suppress-analytics\n"
+                    "    if [ -f \"pubspec.yaml\" ]; then\n"
+                    "        grep -E '^\\s*-\\s*assets/' pubspec.yaml 2>/dev/null | sed -e 's/^[ \\t]*-[ \\t]*//' | while read -r asset_dir; do\n"
+                    "            if [ -n \"$asset_dir\" ]; then\n"
+                    "                clean_dir=\"${asset_dir%/}\"\n"
+                    "                mkdir -p \"$clean_dir\" 2>/dev/null || true\n"
+                    "                touch \"$clean_dir/.gitkeep\" 2>/dev/null || true\n"
+                    "            fi\n"
+                    "        done\n"
+                    "    fi\n"
                     "fi\n"
                     "flutter pub get\n"
                     "echo '⚡ Launching Flutter App...'\n"
@@ -268,6 +324,11 @@ class AIHarnessPackager:
                     "    pause\n"
                     "    exit /b 1\n"
                     ")\n"
+                    "if exist pubspec.yaml (\n"
+                    "    if not exist assets\\images mkdir assets\\images 2>nul\n"
+                    "    if not exist assets\\sounds mkdir assets\\sounds 2>nul\n"
+                    "    if not exist assets mkdir assets 2>nul\n"
+                    ")\n"
                     "echo Fetching Flutter dependencies...\n"
                     "if not exist \"web\" if not exist \"windows\" if not exist \"android\" (\n"
                     "    echo Generating native platform targets...\n"
@@ -276,8 +337,17 @@ class AIHarnessPackager:
                     "call flutter pub get\n"
                     "echo Launching Flutter App...\n"
                     "call flutter run -d chrome || call flutter run\n"
-                    "pause\n"
                 )
+            # Guarantee placeholder files for any declared assets in pubspec.yaml
+            pubspec_content = all_files.get("pubspec.yaml", "") or new_files.get("pubspec.yaml", "")
+            if pubspec_content:
+                for line in pubspec_content.splitlines():
+                    m = re.match(r'^\s*-\s*(assets/[a-zA-Z0-9_\-\./]+)', line)
+                    if m:
+                        asset_path = m.group(1).rstrip('/')
+                        gitkeep_path = f"{asset_path}/.gitkeep"
+                        if not any(f.startswith(asset_path + "/") for f in all_files.keys()):
+                            new_files[gitkeep_path] = ""
             if ".gitignore" not in all_files:
                 new_files[".gitignore"] = (
                     ".dart_tool/\n"

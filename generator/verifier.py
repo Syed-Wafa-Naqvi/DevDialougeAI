@@ -71,7 +71,15 @@ class StaticVerifier:
         django_issues = cls._verify_django_architecture(files, ast_cache)
         issues.extend(django_issues)
 
-        # 4. Non-Python File Validation
+        # 4. Django / Python N+1 Queries Checks (MANDATORY)
+        n_plus_one_issues = cls._verify_n_plus_one_queries(files, ast_cache)
+        issues.extend(n_plus_one_issues)
+
+        # 5. Dart / Flutter Static & Semantic Checks
+        dart_issues = cls._verify_dart_project(files)
+        issues.extend(dart_issues)
+
+        # 6. Non-Python File Validation
         other_issues = cls._verify_non_python_files(files)
         issues.extend(other_issues)
 
@@ -283,6 +291,263 @@ class StaticVerifier:
                             severity='error',
                             check='unresolved_url_view',
                             message=f"URL pattern references view '{raw_ref}', which is not imported or defined in urls.py."
+                        ))
+
+        return issues
+
+    @classmethod
+    def _verify_n_plus_one_queries(cls, files: dict, ast_cache: dict) -> list:
+        issues = []
+        # 1. Collect all model definitions and their ForeignKey / OneToOneField fields
+        model_fks = {}
+        for path, tree in ast_cache.items():
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ClassDef):
+                    fks = set()
+                    for item in node.body:
+                        if isinstance(item, ast.Assign):
+                            if isinstance(item.value, ast.Call):
+                                func = item.value.func
+                                attr_name = func.attr if isinstance(func, ast.Attribute) else ''
+                                if attr_name in ('ForeignKey', 'OneToOneField'):
+                                    for target in item.targets:
+                                        if isinstance(target, ast.Name):
+                                            fks.add(target.id)
+                    if fks:
+                        model_fks[node.name] = fks
+
+        # 2. Inspect for loops across all Python files
+        for path, tree in ast_cache.items():
+            var_select_related = {}
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+                    var_name = node.targets[0].id
+                    curr = node.value
+                    while isinstance(curr, ast.Call):
+                        if isinstance(curr.func, ast.Attribute) and curr.func.attr == 'select_related':
+                            args = [a.value for a in curr.args if isinstance(a, ast.Constant) and isinstance(a.value, str)]
+                            var_select_related[var_name] = set(args)
+                        curr = curr.func.value if isinstance(curr.func, ast.Attribute) else None
+
+            for node in ast.walk(tree):
+                if isinstance(node, ast.For):
+                    target_name = node.target.id if isinstance(node.target, ast.Name) else None
+                    iter_name = node.iter.id if isinstance(node.iter, ast.Name) else None
+                    known_selected = set(var_select_related.get(iter_name, set()))
+
+                    if isinstance(node.iter, ast.Call):
+                        curr = node.iter
+                        while isinstance(curr, ast.Call):
+                            if isinstance(curr.func, ast.Attribute) and curr.func.attr == 'select_related':
+                                args = [a.value for a in curr.args if isinstance(a, ast.Constant) and isinstance(a.value, str)]
+                                known_selected.update(args)
+                            curr = curr.func.value if isinstance(curr.func, ast.Attribute) else None
+
+                    for child in ast.walk(node):
+                        # Detect queries executed inside a loop (classic N+1)
+                        if isinstance(child, ast.Call):
+                            func = child.func
+                            if isinstance(func, ast.Attribute) and func.attr in ('get', 'filter', 'all', 'exclude'):
+                                val = func.value
+                                if isinstance(val, ast.Attribute) and val.attr == 'objects':
+                                    mname = val.value.id if isinstance(val.value, ast.Name) else 'Model'
+                                    issues.append(cls._create_issue(
+                                        file_path=path,
+                                        line=child.lineno,
+                                        severity='error',
+                                        check='n_plus_one_query',
+                                        message=f"N+1 Query Hazard: Database query '{mname}.objects.{func.attr}()' executed inside a loop body. Use batch querying outside the loop with id__in or prefetch_related."
+                                    ))
+
+                        # Detect accessing foreign key relations in a loop without select_related
+                        if target_name and isinstance(child, ast.Attribute):
+                            sub_val = child.value
+                            if isinstance(sub_val, ast.Attribute) and isinstance(sub_val.value, ast.Name) and sub_val.value.id == target_name:
+                                rel_field = sub_val.attr
+                                if rel_field not in known_selected and not rel_field.startswith('_') and rel_field not in ('objects', 'pk', 'id'):
+                                    issues.append(cls._create_issue(
+                                        file_path=path,
+                                        line=child.lineno,
+                                        severity='error',
+                                        check='n_plus_one_query',
+                                        message=f"N+1 Query Hazard: Accessing foreign relation '{rel_field}' on '{target_name}' in loop without select_related('{rel_field}'). Chain .select_related('{rel_field}') on the queryset."
+                                    ))
+        return issues
+
+    @classmethod
+    def _verify_dart_project(cls, files: dict) -> list:
+        issues = []
+        dart_files = {p: c for p, c in files.items() if p.endswith('.dart')}
+        if not dart_files:
+            return issues
+
+        declared_enums = {}
+        declared_classes = {}
+        file_imports = {}
+
+        for path, content in dart_files.items():
+            imports = []
+            for imp in re.finditer(r"import\s+['\"]([^'\"]+)['\"](?:\s+as\s+[a-zA-Z0-9_]+)?(?:\s+(?:hide|show)\s+([^;]+))?;", content):
+                imp_path = imp.group(1)
+                hidden = imp.group(2) or ''
+                imports.append({'path': imp_path, 'hidden': [h.strip() for h in hidden.split(',') if h.strip()]})
+            file_imports[path] = imports
+
+            for m in re.finditer(r'enum\s+([A-Za-z0-9_]+)\s*\{([^}]+)\}', content):
+                ename = m.group(1)
+                vals = [v.strip().split('(')[0].strip() for v in m.group(2).split(',') if v.strip()]
+                if ename not in declared_enums:
+                    declared_enums[ename] = {}
+                declared_enums[ename][path] = vals
+
+            class_matches = list(re.finditer(r'class\s+([A-Za-z0-9_]+)(?:\s+extends\s+[A-Za-z0-9_]+)?(?:\s+implements\s+[A-Za-z0-9_,\s]+)?(?:\s+with\s+[A-Za-z0-9_,\s]+)?\s*\{', content))
+            for i, cm in enumerate(class_matches):
+                cname = cm.group(1)
+                start = cm.end()
+                end = class_matches[i+1].start() if i+1 < len(class_matches) else len(content)
+                body = content[start:end]
+
+                if cname not in declared_classes:
+                    declared_classes[cname] = {}
+
+                ctors = []
+                for ctor_m in re.finditer(r'(?:const\s+)?(?:factory\s+)?\b' + cname + r'(?:\.[A-Za-z0-9_]+)?\s*\(([^)]*)\)', body):
+                    params_str = ctor_m.group(1).strip()
+                    required_params = []
+                    all_params = []
+                    named_m = re.search(r'\{([^}]+)\}', params_str)
+                    if named_m:
+                        for p in named_m.group(1).split(','):
+                            p_clean = p.strip()
+                            if p_clean:
+                                is_req = p_clean.startswith('required ')
+                                parts = p_clean.replace('required ', '').split('=')[0].strip().split()
+                                p_name = parts[-1].replace('this.', '')
+                                all_params.append(p_name)
+                                if is_req and '=' not in p_clean:
+                                    required_params.append(p_name)
+                    ctors.append({'raw': params_str, 'required': required_params, 'all_named': all_params})
+
+                methods = set()
+                void_methods = set()
+                for meth_m in re.finditer(r'^\s*([A-Za-z0-9_<>?,\s]+)\s+([a-zA-Z0-9_]+)\s*\(([^)]*)\)\s*(?:async\s*)?(?:\{|=>)', body, re.MULTILINE):
+                    ret_type, mname = meth_m.group(1).strip(), meth_m.group(2).strip()
+                    if mname != cname:
+                        methods.add(mname)
+                        if ret_type == 'void':
+                            void_methods.add(mname)
+
+                getters = set()
+                for get_m in re.finditer(r'^\s*([A-Za-z0-9_<>?,\s]+)\s+get\s+([a-zA-Z0-9_]+)', body, re.MULTILINE):
+                    getters.add(get_m.group(2).strip())
+
+                declared_classes[cname][path] = {
+                    'constructors': ctors,
+                    'methods': methods,
+                    'void_methods': void_methods,
+                    'getters': getters
+                }
+
+        # Check 1: Colliding imports (e.g. PlayerColor defined in both board.dart and chess_engine.dart)
+        for ename, file_map in declared_enums.items():
+            if len(file_map) > 1:
+                decl_paths = list(file_map.keys())
+                for path, imps in file_imports.items():
+                    imported_matches = []
+                    for imp in imps:
+                        for dp in decl_paths:
+                            dp_base = dp.split('/')[-1]
+                            if dp in imp['path'] or imp['path'].endswith(dp_base):
+                                if ename not in imp['hidden']:
+                                    imported_matches.append(dp)
+                    if len(set(imported_matches)) > 1:
+                        issues.append(cls._create_issue(
+                            file_path=path,
+                            line=1,
+                            severity='error',
+                            check='colliding_import',
+                            message=f"'{ename}' is imported from both '{imported_matches[0]}' and '{imported_matches[1]}'. Consolidate the enum in a single shared file or use 'hide {ename}'."
+                        ))
+
+        # Check 2: Cross-file private calls (e.g. _board._initializeBoard() or _chessEngine._isInCheck())
+        for path, content in dart_files.items():
+            for m in re.finditer(r'\b([a-zA-Z0-9_]+)\s*\.\s*(_[a-zA-Z0-9_]+)\s*\(', content):
+                target_var = m.group(1)
+                private_member = m.group(2)
+                if target_var not in ('this', 'super') and not private_member.startswith('__'):
+                    line_no = content[:m.start()].count('\n') + 1
+                    issues.append(cls._create_issue(
+                        file_path=path,
+                        line=line_no,
+                        severity='error',
+                        check='private_member_access',
+                        message=f"Cannot call library-private method '{private_member}' on '{target_var}'. In Dart, leading underscore makes identifiers library-private. Remove leading '_' to make it public."
+                    ))
+
+        # Check 3: Constructor calls with missing required named arguments
+        for path, content in dart_files.items():
+            for cname, decl_map in declared_classes.items():
+                for decl_file, cinfo in decl_map.items():
+                    for ctor in cinfo['constructors']:
+                        reqs = ctor.get('required', [])
+                        if reqs:
+                            for call_m in re.finditer(r'\b' + cname + r'\s*\(([^)]*)\)', content):
+                                call_args = call_m.group(1)
+                                line_no = content[:call_m.start()].count('\n') + 1
+                                for req in reqs:
+                                    if not re.search(r'\b' + req + r'\s*:', call_args):
+                                        issues.append(cls._create_issue(
+                                            file_path=path,
+                                            line=line_no,
+                                            severity='error',
+                                            check='missing_constructor_param',
+                                            message=f"Required named parameter '{req}' must be provided when instantiating '{cname}'."
+                                        ))
+
+        # Check 4: Void expression in condition or assignment (e.g. if (e.makeMove(1, 2)) where makeMove is void)
+        for path, content in dart_files.items():
+            for m in re.finditer(r'(?:if\s*\(|[=]\s*)[^;{}]*?\.([a-zA-Z0-9_]+)\s*\(', content):
+                mname = m.group(1)
+                for cname, decl_map in declared_classes.items():
+                    for decl_file, cinfo in decl_map.items():
+                        if mname in cinfo.get('void_methods', set()):
+                            line_no = content[:m.start()].count('\n') + 1
+                            issues.append(cls._create_issue(
+                                file_path=path,
+                                line=line_no,
+                                severity='error',
+                                check='void_in_condition',
+                                message=f"Method '{mname}' on '{cname}' returns 'void' and cannot be evaluated in an 'if' condition or assigned to a variable. Update the method to return 'bool'."
+                            ))
+
+        # Check 5: Null safety on map lookup (e.g. _hasRookMoved[player].kingSide)
+        for path, content in dart_files.items():
+            for m in re.finditer(r'\[[^\]]+\]\.([a-zA-Z0-9_]+)', content):
+                prop_name = m.group(1)
+                line_no = content[:m.start()].count('\n') + 1
+                issues.append(cls._create_issue(
+                    file_path=path,
+                    line=line_no,
+                    severity='error',
+                    check='null_safety_map_access',
+                    message=f"Property '{prop_name}' cannot be accessed directly on a nullable map/record lookup. Use '?.' and '??' instead."
+                ))
+
+        # Check 6: Asset directory existence in pubspec.yaml
+        if 'pubspec.yaml' in files:
+            pub_content = files['pubspec.yaml']
+            for line_idx, line in enumerate(pub_content.splitlines()):
+                m = re.match(r'^\s*-\s*(assets/[a-zA-Z0-9_\-\./]+)', line)
+                if m:
+                    dir_path = m.group(1).rstrip('/')
+                    has_asset = any(p.startswith(dir_path + '/') for p in files.keys())
+                    if not has_asset:
+                        issues.append(cls._create_issue(
+                            file_path='pubspec.yaml',
+                            line=line_idx + 1,
+                            severity='warning',
+                            check='missing_asset_dir',
+                            message=f"Asset directory '{dir_path}/' is listed in pubspec.yaml but contains no files. Placeholder .gitkeep will be added."
                         ))
 
         return issues

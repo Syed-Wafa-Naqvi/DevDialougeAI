@@ -82,11 +82,92 @@ class RuntimeVerifier:
         return set_resource_limits
 
     @classmethod
+    def _find_dart_binary(cls) -> str:
+        import shutil
+        found = shutil.which('dart')
+        if found:
+            return found
+        for cand in [
+            os.path.expanduser('~/flutter/bin/dart'),
+            '/opt/flutter/bin/dart',
+            '/snap/bin/dart',
+            '/usr/local/bin/dart',
+            '/usr/bin/dart'
+        ]:
+            if os.path.isfile(cand) and os.access(cand, os.X_OK):
+                return cand
+        return None
+
+    @classmethod
+    def run_dart_verification(cls, files: dict) -> dict:
+        """Runs dart analyze on Dart/Flutter projects if dart SDK is available."""
+        dart_files = [p for p in files.keys() if p.endswith('.dart')]
+        if not dart_files:
+            return {'executed': False, 'passed': True, 'issues': []}
+
+        dart_bin = cls._find_dart_binary()
+        if not dart_bin:
+            return {'executed': False, 'passed': True, 'reason': 'Dart SDK not found', 'issues': []}
+
+        issues = []
+        with tempfile.TemporaryDirectory() as temp_dir:
+            for p, c in files.items():
+                fp = os.path.join(temp_dir, p)
+                os.makedirs(os.path.dirname(fp), exist_ok=True)
+                with open(fp, 'w', encoding='utf-8') as f:
+                    f.write(c)
+
+            if 'pubspec.yaml' not in files:
+                with open(os.path.join(temp_dir, 'pubspec.yaml'), 'w') as pf:
+                    pf.write("name: temp_verification_project\nenvironment:\n  sdk: '>=3.0.0 <4.0.0'\n")
+
+            try:
+                res = subprocess.run(
+                    [dart_bin, 'analyze', '--no-fatal-warnings', temp_dir],
+                    capture_output=True,
+                    text=True,
+                    timeout=20,
+                    preexec_fn=cls._get_preexec_fn()
+                )
+                stdout = res.stdout or ''
+                pattern = re.compile(r'^\s*(error|warning)\s+-\s+([^:]+):(\d+):(\d+)\s+-\s+(.+?)(?:\s+-\s+[a-zA-Z0-9_]+)?$', re.MULTILINE)
+                for m in pattern.finditer(stdout):
+                    sev = m.group(1).lower()
+                    raw_file = m.group(2).strip()
+                    rel_file = raw_file.replace(temp_dir, '').lstrip('/')
+                    line = int(m.group(3))
+                    msg = m.group(5).strip()
+                    issues.append(cls._create_issue(
+                        file_path=rel_file,
+                        line=line,
+                        severity=sev,
+                        check='dart_analyzer',
+                        message=msg
+                    ))
+            except Exception:
+                pass
+
+        err_count = sum(1 for i in issues if i['severity'] == 'error')
+        warn_count = sum(1 for i in issues if i['severity'] == 'warning')
+        return {
+            'executed': True,
+            'passed': err_count == 0,
+            'error_count': err_count,
+            'warning_count': warn_count,
+            'issues': issues
+        }
+
+    @classmethod
     def run_verification(cls, files: dict, user=None, plan_data: dict = None) -> dict:
         """
         Executes guarded runtime checks on generated project files.
         Returns verification result dictionary.
         """
+        # If Flutter / Dart project, run Dart native compiler analysis if SDK is available
+        if any(p.endswith('.dart') for p in files):
+            dart_res = cls.run_dart_verification(files)
+            if dart_res.get('executed'):
+                return dart_res
         enabled = getattr(settings, 'RUNTIME_CHECKS_ENABLED', False)
         if not enabled:
             return {

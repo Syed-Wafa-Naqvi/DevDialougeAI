@@ -1272,7 +1272,7 @@
         // Modular Chat Message Dispatcher (Supports Standard & Edited Resend)
         window.dispatchChatMessage = async function(messageText, attachedFileToSend = null, editMessageId = null) {
             const card = document.getElementById('input-card');
-            const sendBtn = document.getElementById('chat-submit-btn');
+            const sendBtn = document.getElementById('btn-send-message');
 
             // Show typing indicator & set generating state
             typingIndicator.classList.remove('hidden');

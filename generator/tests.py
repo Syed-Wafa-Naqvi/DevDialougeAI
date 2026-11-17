@@ -614,6 +614,185 @@ class Phase9EvaluationBenchmarkTestCase(TestCase):
         call_command('run_benchmark', specs='01_todo_app', provider='mock', compare=baseline_file)
 
 
+class CodeGenerationRobustnessTestCase(TestCase):
+    def test_dart_verification_colliding_imports(self):
+        from generator.verifier import StaticVerifier
+        files = {
+            'lib/board.dart': 'enum PlayerColor { white, black }\nclass Board {}\n',
+            'lib/engine.dart': 'enum PlayerColor { white, black }\nclass Engine {}\n',
+            'lib/game.dart': 'import "board.dart";\nimport "engine.dart";\nvoid run() { PlayerColor c = PlayerColor.white; }\n'
+        }
+        res = StaticVerifier.verify_project(files)
+        self.assertFalse(res['passed'])
+        checks = [i['check'] for i in res['issues']]
+        self.assertIn('colliding_import', checks)
+
+    def test_dart_verification_private_member_access(self):
+        from generator.verifier import StaticVerifier
+        files = {
+            'lib/board.dart': 'class Board {\n  void _initializeBoard() {}\n}\n',
+            'lib/engine.dart': 'import "board.dart";\nvoid start(Board b) {\n  b._initializeBoard();\n}\n'
+        }
+        res = StaticVerifier.verify_project(files)
+        self.assertFalse(res['passed'])
+        checks = [i['check'] for i in res['issues']]
+        self.assertIn('private_member_access', checks)
+
+    def test_dart_verification_missing_constructor_param(self):
+        from generator.verifier import StaticVerifier
+        files = {
+            'lib/service.dart': 'class OnlineGameService {\n  OnlineGameService({required String backendUrl, required String websocketUrl});\n}\n',
+            'lib/main.dart': 'import "service.dart";\nvoid main() {\n  final s = OnlineGameService();\n}\n'
+        }
+        res = StaticVerifier.verify_project(files)
+        self.assertFalse(res['passed'])
+        checks = [i['check'] for i in res['issues']]
+        self.assertIn('missing_constructor_param', checks)
+
+    def test_dart_verification_void_in_condition(self):
+        from generator.verifier import StaticVerifier
+        files = {
+            'lib/engine.dart': 'class ChessEngine {\n  void makeMove(int r, int c) {}\n}\n',
+            'lib/ui.dart': 'import "engine.dart";\nvoid play(ChessEngine e) {\n  if (e.makeMove(1, 2)) {}\n}\n'
+        }
+        res = StaticVerifier.verify_project(files)
+        self.assertFalse(res['passed'])
+        checks = [i['check'] for i in res['issues']]
+        self.assertIn('void_in_condition', checks)
+
+    def test_dart_verification_null_safety_map_access(self):
+        from generator.verifier import StaticVerifier
+        files = {
+            'lib/game.dart': 'void check(Map<String, dynamic> data) {\n  final res = data["key"].property;\n}\n'
+        }
+        res = StaticVerifier.verify_project(files)
+        self.assertFalse(res['passed'])
+        checks = [i['check'] for i in res['issues']]
+        self.assertIn('null_safety_map_access', checks)
+
+    def test_dart_clean_project(self):
+        from generator.verifier import StaticVerifier
+        files = {
+            'pubspec.yaml': 'name: chess_app\nenvironment:\n  sdk: ">=3.0.0 <4.0.0"\n',
+            'lib/enums.dart': 'enum PlayerColor { white, black }\n',
+            'lib/board.dart': 'import "enums.dart";\nclass Board {\n  PlayerColor color;\n  Board({this.color = PlayerColor.white});\n  bool isValid() => true;\n}\n',
+            'lib/main.dart': 'import "board.dart";\nvoid main() {\n  final b = Board();\n  if (b.isValid()) {}\n}\n'
+        }
+        res = StaticVerifier.verify_project(files)
+        self.assertTrue(res['passed'])
+        self.assertEqual(res['error_count'], 0)
+
+    def test_n_plus_one_query_detected(self):
+        from generator.verifier import StaticVerifier
+        files = {
+            'app/models.py': (
+                'from django.db import models\n'
+                'class Customer(models.Model):\n    name = models.CharField(max_length=100)\n'
+                'class Order(models.Model):\n    customer = models.ForeignKey(Customer, on_delete=models.CASCADE)\n'
+            ),
+            'app/views.py': (
+                'from app.models import Order\n'
+                'def list_orders(request):\n'
+                '    orders = Order.objects.all()\n'
+                '    for o in orders:\n'
+                '        print(o.customer.name)\n'
+            )
+        }
+        res = StaticVerifier.verify_project(files)
+        self.assertFalse(res['passed'])
+        checks = [i['check'] for i in res['issues']]
+        self.assertIn('n_plus_one_query', checks)
+
+    def test_n_plus_one_query_with_select_related_passes(self):
+        from generator.verifier import StaticVerifier
+        files = {
+            'app/models.py': (
+                'from django.db import models\n'
+                'class Customer(models.Model):\n    name = models.CharField(max_length=100)\n'
+                'class Order(models.Model):\n    customer = models.ForeignKey(Customer, on_delete=models.CASCADE)\n'
+            ),
+            'app/views.py': (
+                'from app.models import Order\n'
+                'def list_orders(request):\n'
+                '    orders = Order.objects.select_related("customer").all()\n'
+                '    for o in orders:\n'
+                '        print(o.customer.name)\n'
+            )
+        }
+        res = StaticVerifier.verify_project(files)
+        n1_issues = [i for i in res['issues'] if i['check'] == 'n_plus_one_query']
+        self.assertEqual(len(n1_issues), 0)
+
+    def test_n_plus_one_query_inside_loop_body(self):
+        from generator.verifier import StaticVerifier
+        files = {
+            'app/views.py': (
+                'from app.models import Order\n'
+                'def fetch_by_ids(ids):\n'
+                '    for i in ids:\n'
+                '        o = Order.objects.get(id=i)\n'
+            )
+        }
+        res = StaticVerifier.verify_project(files)
+        self.assertFalse(res['passed'])
+        checks = [i['check'] for i in res['issues']]
+        self.assertIn('n_plus_one_query', checks)
+
+    def test_code_builder_dart_and_python_signatures(self):
+        from generator.code_builder import CodeBuilder
+        files = {
+            'lib/models.dart': (
+                'enum GameMode { singlePlayer, twoPlayer }\n'
+                'class Game {\n'
+                '  Game({required this.title});\n'
+                '  bool start() => true;\n'
+                '  void _hidden() {}\n'
+                '}\n'
+            ),
+            'app/models.py': (
+                'from django.db import models\n'
+                'class Task(models.Model):\n'
+                '    title = models.CharField(max_length=100)\n'
+                '    user = models.ForeignKey("User", on_delete=models.CASCADE)\n'
+                '    def is_done(self): return True\n'
+            )
+        }
+        sigs = CodeBuilder.extract_signatures(files)
+        dart_sig = sigs['lib/models.dart']
+        self.assertIn('enum GameMode', dart_sig)
+        self.assertIn('Constructor: Game({required this.title})', dart_sig)
+        self.assertIn('Method: bool start()', dart_sig)
+        self.assertNotIn('_hidden', dart_sig)
+
+        py_sig = sigs['app/models.py']
+        self.assertIn('class Task(Model):', py_sig)
+        self.assertIn('title = models.CharField', py_sig)
+        self.assertIn('user = models.ForeignKey', py_sig)
+
+    def test_flutter_harness_auto_creates_asset_gitkeep(self):
+        from exporter.harness_agent import AIHarnessPackager
+        from chat.models import Session
+        from django.contrib.auth.models import User
+        user = User.objects.create_user(username='flutuser', email='flut@test.com')
+        session = Session.objects.create(user=user, mode='mode1', status='ready')
+        existing_files = {
+            'pubspec.yaml': (
+                "name: my_game\n"
+                "flutter:\n"
+                "  assets:\n"
+                "    - assets/images/\n"
+                "    - assets/sounds/\n"
+            ),
+            'lib/main.dart': 'void main() {}\n'
+        }
+        packaged = AIHarnessPackager.generate_harness(session, existing_files, 'my_game')
+        self.assertIn('assets/images/.gitkeep', packaged)
+        self.assertIn('assets/sounds/.gitkeep', packaged)
+        self.assertIn('run.sh', packaged)
+        self.assertIn('grep -E', packaged['run.sh'])
+
+
+
 
 
 

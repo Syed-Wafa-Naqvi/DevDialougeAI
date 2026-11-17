@@ -114,6 +114,41 @@ class PromptTemplates:
             if sig_lines:
                 context_info.append("ALREADY GENERATED SIGNATURES & STRUCTURE:\n" + "\n\n".join(sig_lines))
 
+        extra_rules = []
+        if "Dart" in tech_stack or "Flutter" in tech_stack or module_name.endswith('.dart'):
+            extra_rules.append(
+                "CRITICAL FLUTTER / DART ENGINEERING RULES (MANDATORY):\n"
+                "1. NO CROSS-FILE PRIVATE ACCESS: In Dart, leading underscore '_' makes members library-private. "
+                "NEVER call or access '_privateMember' on an instance from another file (e.g. no _board._initializeBoard(), "
+                "no _chessEngine._isInCheck()). Any method, getter, or field intended to be called across files MUST be public (NO leading underscore).\n"
+                "2. CONSTRUCTOR COMPATIBILITY & DEFAULTS: Every class, service, and screen constructor MUST provide sensible default values "
+                "or optional parameters (e.g. `OnlineGameService({this.backendUrl = 'http://localhost:8000', this.websocketUrl = 'ws://localhost:8000/ws'})`). "
+                "Never leave a required parameter that callers might instantiate without.\n"
+                "3. SINGLE SOURCE FOR ENUMS: Define shared enums (e.g. `PlayerColor`, `GameMode`) in ONE dedicated file (e.g. `lib/models/enums.dart`). "
+                "Never duplicate enum declarations in multiple files, preventing colliding import errors.\n"
+                "4. RETURN TYPES IN LOGIC: Methods like `makeMove()` that are evaluated in conditions (`if (makeMove(...))`) MUST return `bool`, never `void`.\n"
+                "5. NULL-SAFETY ON MAPS/RECORDS: Map lookups return nullable `T?`. Always use null-coalescing `??` or null check (e.g. `_hasMoved[player]?.kingSide ?? false`).\n"
+                "6. ASSET SAFETY: Use Flutter built-in Material/Cupertino Icons (e.g. `Icons.sports_esports`, `Icons.casino`) or custom painter shapes rather than assuming non-existent PNG asset files."
+            )
+        elif "Python" in tech_stack or "Django" in tech_stack or module_name.endswith('.py'):
+            extra_rules.append(
+                "CRITICAL PYTHON / DJANGO PERFORMANCE & N+1 QUERY RULES (MANDATORY):\n"
+                "1. ZERO N+1 QUERIES: When querying models that have ForeignKey or OneToOne relationships, ALWAYS chain `.select_related('<foreign_key>')`.\n"
+                "2. PREFETCH FOR MANYTOMANY & REVERSE RELATIONS: Always chain `.prefetch_related('<relation>')` when accessing reverse relations or ManyToMany.\n"
+                "3. NO QUERIES IN LOOPS: NEVER execute Model.objects.get() or Model.objects.filter() inside a for loop. Use batch queries with `id__in=...` or pre-construct lookup dictionaries.\n"
+                "4. DATABASE AGGREGATION: Use `.annotate(count=Count('<related>'))` instead of iterating and calling `.count()` or `len()`.\n"
+                "5. INDEXING: Add `db_index=True` on fields frequently used in `.filter()` or `order_by`."
+            )
+        elif "JavaScript" in tech_stack or "TypeScript" in tech_stack or module_name.endswith(('.js', '.jsx', '.ts', '.tsx')):
+            extra_rules.append(
+                "CRITICAL JAVASCRIPT / TYPESCRIPT RULES (MANDATORY):\n"
+                "1. EXPORTS & IMPORTS: Export every component, interface, and utility referenced across files. Ensure imported relative paths match existing files.\n"
+                "2. PROPS INTEGRITY: Component props must match invocations. Provide default values for optional props."
+            )
+
+        if extra_rules:
+            context_info.append("\n".join(extra_rules))
+
         extra_context = ("\n\n" + "\n\n".join(context_info)) if context_info else ""
 
         return (

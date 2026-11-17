@@ -2800,8 +2800,11 @@ body.chat-page-body .main-content-wrapper {
 }
 
 .user-row .msg-author {
-    display: none;
-    /* Hide author details for user messages to make it compact */
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    margin-bottom: 8px;
 }
 
 .msg-avatar-initials {
