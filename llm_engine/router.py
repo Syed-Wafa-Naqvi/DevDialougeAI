@@ -97,10 +97,10 @@ class LLMRouter:
         if user is None and session is not None:
             user = getattr(session, 'user', None)
 
-        if user and getattr(user, 'is_authenticated', False):
+        if user and getattr(user, 'is_authenticated', False) and not getattr(user, 'is_superuser', False) and not getattr(user, 'is_staff', False):
             from django.utils import timezone
             from django.db.models import Sum
-            daily_limit = getattr(settings, 'DAILY_USER_TOKEN_LIMIT', 500000)
+            daily_limit = getattr(settings, 'DAILY_USER_TOKEN_LIMIT', 5000000)
             today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
             logs = LLMCallLog.objects.filter(user=user, created_at__gte=today_start)
             agg = logs.aggregate(in_tot=Sum('input_tokens'), out_tot=Sum('output_tokens'))

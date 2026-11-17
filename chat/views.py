@@ -1074,6 +1074,8 @@ def stream_chat_api(request, session_id):
 
     from chat.events import stream_agent_response
 
+    run_sync = request.headers.get('X-Run-Sync') == 'true'
+
     response = StreamingHttpResponse(
         stream_agent_response(
             session=session,
@@ -1083,7 +1085,8 @@ def stream_chat_api(request, session_id):
             user=request.user,
             request_id=req_id,
             attachment=attachment_obj,
-            edit_message_id=edit_message_id
+            edit_message_id=edit_message_id,
+            run_sync=run_sync
         ),
         content_type='text/event-stream'
     )

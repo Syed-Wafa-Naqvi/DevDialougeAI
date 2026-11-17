@@ -109,7 +109,8 @@ class AgentEvent:
         title: Optional[str] = None,
         attachment: Optional[Dict[str, Any]] = None,
         user_message_id: Optional[int] = None,
-        assistant_message_id: Optional[int] = None
+        assistant_message_id: Optional[int] = None,
+        active_job_id: Optional[int] = None
     ) -> Dict[str, Any]:
         logger.info(
             "[AGENT DONE] Status: %s | Duration: %dms | Tokens: %d | Completeness: %s%% | SessionStatus: %s",
@@ -128,6 +129,7 @@ class AgentEvent:
             "attachment": attachment,
             "user_message_id": user_message_id,
             "assistant_message_id": assistant_message_id,
+            "active_job_id": active_job_id,
             "timestamp": time.time(),
         }
 
@@ -146,7 +148,8 @@ def stream_agent_response(
     user = None,
     request_id: Optional[str] = None,
     attachment: Optional[Any] = None,
-    edit_message_id: Optional[Any] = None
+    edit_message_id: Optional[Any] = None,
+    run_sync: bool = False
 ) -> Generator[str, None, None]:
     """
     Generator yielding Server-Sent Events (SSE) strings formatted as `data: {...}\\n\\n`.
@@ -336,43 +339,30 @@ def stream_agent_response(
         
         # Trigger generation job
         from chat.views import _trigger_generation_job
-        active_job, response_text = _trigger_generation_job(session, user, provider_name, run_async=False)
-        
-        # Emit file actions for generated files
-        refreshed_files = list(session.project_files.order_by('path'))
-        for f in refreshed_files:
-            yield format_sse(AgentEvent.file_action(
-                action="create",
-                path=f.path,
-                summary=f"Synthesized {len(f.content.splitlines())} lines (v{f.current_version})",
-                version=f.current_version
+        if run_sync:
+            active_job, response_text = _trigger_generation_job(session, user, provider_name, run_async=False)
+            refreshed_files = list(session.project_files.order_by('path'))
+            for f in refreshed_files:
+                yield format_sse(AgentEvent.file_action(
+                    action="create",
+                    path=f.path,
+                    summary=f"Synthesized {len(f.content.splitlines())} lines (v{f.current_version})",
+                    version=f.current_version
+                ))
+            yield format_sse(AgentEvent.thinking(
+                step_id="step_code_gen",
+                title="Codebase Generation & Verification Completed",
+                content=f"Generated {len(refreshed_files)} project files with clean static verification.",
+                status="completed"
             ))
-            yield format_sse(AgentEvent.tool_call(
-                call_id=f"verify_{f.id}",
-                tool="ast_verification",
-                args={"path": f.path},
-                summary=f"Running AST syntax & symbol verification on {f.path}"
+        else:
+            active_job, response_text = _trigger_generation_job(session, user, provider_name, run_async=True)
+            yield format_sse(AgentEvent.thinking(
+                step_id="step_code_gen",
+                title="Codebase Generation Started",
+                content="Background pipeline is generating architecture modules and verifying code.",
+                status="completed"
             ))
-            yield format_sse(AgentEvent.tool_result(
-                call_id=f"verify_{f.id}",
-                tool="ast_verification",
-                result={"status": "passed", "errors": 0},
-                duration_ms=45,
-                status="success"
-            ))
-            yield format_sse(AgentEvent.file_action(
-                action="verify",
-                path=f.path,
-                summary="Static analysis passed without syntax errors",
-                version=f.current_version
-            ))
-
-        yield format_sse(AgentEvent.thinking(
-            step_id="step_code_gen",
-            title="Codebase Generation & Verification Completed",
-            content=f"Generated {len(refreshed_files)} project files with clean static verification.",
-            status="completed"
-        ))
 
     elif existing_files and (
         any(phrase in user_content.lower() for phrase in [
@@ -674,7 +664,10 @@ def stream_agent_response(
             content="Specification blueprint ready for approval and code synthesis.",
             status="completed"
         ))
-        active_job, response_text = _trigger_generation_job(session, user, provider_name, run_async=False)
+        if run_sync:
+            active_job, response_text = _trigger_generation_job(session, user, provider_name, run_async=False)
+        else:
+            active_job, response_text = _trigger_generation_job(session, user, provider_name, run_async=True)
         
     elif CompletenessEngine.should_synthesize_summary(history, user_content, provider_name=provider_name):
         yield format_sse(AgentEvent.thinking(
@@ -719,7 +712,10 @@ def stream_agent_response(
         yield format_sse(AgentEvent.done(status="cancelled", total_duration_ms=int((time.time() - start_time) * 1000)))
         return
 
-    # Step 4: Stream the final answer token-by-token (or word-by-word)
+    # Step 4: Persist assistant message immediately in DB so it is never lost on navigation or disconnect
+    assistant_msg = Message.objects.create(session=session, role='assistant', content=response_text)
+
+    # Step 5: Stream the final answer token-by-token (or word-by-word)
     # To provide smooth, high-fidelity real-time streaming:
     words_and_spaces = re.findall(r'\S+|\s+', response_text)
     chunk_buffer = []
@@ -736,9 +732,6 @@ def stream_agent_response(
             
     if chunk_buffer:
         yield format_sse(AgentEvent.answer_chunk(delta="".join(chunk_buffer)))
-
-    # Step 5: Save assistant message in DB
-    assistant_msg = Message.objects.create(session=session, role='assistant', content=response_text)
 
     # Auto-generate custom title if not yet set
     new_title = None
@@ -797,5 +790,6 @@ def stream_agent_response(
         title=new_title or session.title,
         attachment=att_dict,
         user_message_id=user_msg.id,
-        assistant_message_id=assistant_msg.id
+        assistant_message_id=assistant_msg.id,
+        active_job_id=active_job.id if active_job else None
     ))

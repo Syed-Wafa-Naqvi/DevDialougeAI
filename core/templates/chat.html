@@ -509,7 +509,7 @@
                 {% if session.status == 'active' or session.status == 'interviewing' %}
                     {% if not project_files %}
                     <button type="button" class="badge badge-brand" id="mode-toggle-btn" onclick="toggleSessionMode()" style="font-size: 11px; font-weight: 500; cursor: pointer; border: none; background: rgba(255, 255, 255, 0.1); color: var(--ink); padding: 4px 8px; border-radius: 4px;" title="Click to toggle build style (All at once vs File by file)">
-                        <span id="mode-label">{% if session.mode == 'mode1' %}All at once{% else %}File by file{% endif %}</span> 🔄
+                        <span id="mode-label">{% if session.mode == 'mode1' %}All at once{% else %}File by file{% endif %}</span>
                     </button>
                     {% else %}
                     <span class="badge badge-brand" id="mode-label" style="font-size: 11px; font-weight: 500;" title="Build style locked for this workspace">
@@ -703,13 +703,46 @@
                         </div>
                         {% endif %}
                     {% endfor %}
+
+                    {% if active_job %}
+                    <div class="message-row assistant-row" id="active-job-chat-row">
+                        <div class="message-bubble" style="max-width: 90%;">
+                            <div class="msg-author">
+                                <div class="msg-avatar-initials assistant-avatar">AI</div>
+                                <span class="msg-author-name">DevDialogue AI</span>
+                                <span class="live-response-timer" id="active-job-chat-timer">0.0s</span>
+                            </div>
+                            <div class="agent-activity-feed is-running" id="active-job-feed">
+                                <div class="activity-feed-header">
+                                    <div class="activity-header-left">
+                                        <span class="activity-status-icon spinner"></span>
+                                        <span class="activity-header-title">Codebase Generation in Progress</span>
+                                        <span class="activity-step-count" id="active-job-step-count">(running)</span>
+                                    </div>
+                                    <div class="activity-header-right">
+                                        <span class="activity-elapsed-badge" id="active-job-feed-elapsed">0.0s</span>
+                                    </div>
+                                </div>
+                                <div class="activity-timeline" id="active-job-timeline">
+                                    <div class="activity-step running">
+                                        <div class="step-icon running"><div class="step-spinner"></div></div>
+                                        <div class="step-content">
+                                            <div class="step-title" id="active-job-current-status">Synthesizing project files & running verifications...</div>
+                                            <div class="step-detail" id="active-job-current-detail">Watch real-time pipeline events in the progress banner above.</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
                     
                     <div class="message-row assistant-row typing-indicator-row hidden" id="typing-indicator">
                         <div class="message-bubble" style="max-width: 90%;">
                             <div class="msg-author">
                                 <div class="msg-avatar-initials assistant-avatar">AI</div>
                                 <span class="msg-author-name">DevDialogue AI</span>
-                                <span class="live-response-timer" id="live-response-timer">⏱️ 0.0s</span>
+                                <span class="live-response-timer" id="live-response-timer">0.0s</span>
                             </div>
                             <div class="typing-status-wrap">
                                 <div class="typing-loader">
@@ -746,13 +779,13 @@
                     <!-- Explicit Action Buttons Bar for SRS / Plan Review States -->
                     <div class="chat-action-bar {% if session.status != 'srs_ready' and session.status != 'plan_draft' and session.status != 'plan_approved' %}hidden{% endif %}" id="chat-action-bar" style="margin-bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
                         <button type="button" class="btn btn-primary btn-sm" id="btn-action-generate" onclick="triggerAction('generate')" style="background: linear-gradient(135deg, var(--brand), #8b5cf6); border: none; font-weight: 600;">
-                            <i data-lucide="zap" class="icon-inline"></i> 🚀 Generate Project Codebase
+                            <i data-lucide="zap" class="icon-inline"></i> Generate Project Codebase
                         </button>
                         <button type="button" class="btn btn-secondary btn-sm" id="btn-action-review-plan" onclick="switchRightPanel('plan')">
-                            <i data-lucide="map" class="icon-inline"></i> 📋 Review Plan
+                            <i data-lucide="map" class="icon-inline"></i> Review Plan
                         </button>
                         <button type="button" class="btn btn-ghost btn-sm" id="btn-action-changes" onclick="triggerAction('changes')">
-                            <i data-lucide="edit-3" class="icon-inline"></i> ✏️ Request Changes
+                            <i data-lucide="edit-3" class="icon-inline"></i> Request Changes
                         </button>
                     </div>
 
@@ -1402,12 +1435,18 @@
             const liveTimer = document.getElementById('live-response-timer');
             const typingStatus = document.getElementById('typing-status-text');
             const streamStartTs = Date.now();
-            if (liveTimer) liveTimer.textContent = '⏱️ 0.0s';
+            if (liveTimer) liveTimer.textContent = '0.0s';
             if (typingStatus) typingStatus.textContent = 'Understanding your request…';
+
+            let activeLiveTimerBadge = null;
+            let activeElapsedBadge = null;
 
             let timerInterval = setInterval(() => {
                 const elapsedSec = ((Date.now() - streamStartTs) / 1000).toFixed(1);
-                if (liveTimer) liveTimer.textContent = `⏱️ ${elapsedSec}s`;
+                const timeText = `${elapsedSec}s`;
+                if (liveTimer) liveTimer.textContent = timeText;
+                if (activeLiveTimerBadge) activeLiveTimerBadge.textContent = timeText;
+                if (activeElapsedBadge) activeElapsedBadge.textContent = timeText;
                 if (typingStatus) {
                     const s = parseFloat(elapsedSec);
                     if (s < 0.8) typingStatus.textContent = 'Understanding your request…';
@@ -1474,7 +1513,7 @@
                                 <div class="msg-author">
                                     <div class="msg-avatar-initials assistant-avatar">AI</div>
                                     <span class="msg-author-name">DevDialogue AI</span>
-                                    <span class="live-response-timer" id="timer-${feedId}">⏱️ 0.0s</span>
+                                    <span class="live-response-timer" id="timer-${feedId}">0.0s</span>
                                 </div>
                                 <div class="agent-activity-feed is-running" id="feed-${feedId}">
                                     <div class="activity-feed-header" onclick="toggleActivityFeed('${feedId}')">
@@ -1484,7 +1523,7 @@
                                             <span class="activity-step-count" id="step-count-${feedId}">(0 steps)</span>
                                         </div>
                                         <div class="activity-header-right">
-                                            <span class="activity-elapsed-badge" id="elapsed-${feedId}">⏱️ 0.0s</span>
+                                            <span class="activity-elapsed-badge" id="elapsed-${feedId}">0.0s</span>
                                             <svg class="activity-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
                                         </div>
                                     </div>
@@ -1507,6 +1546,9 @@
                         const stepCountElem = document.getElementById(`step-count-${feedId}`);
                         const timerFeedBadge = document.getElementById(`timer-${feedId}`);
                         const elapsedBadge = document.getElementById(`elapsed-${feedId}`);
+
+                        activeLiveTimerBadge = timerFeedBadge;
+                        activeElapsedBadge = elapsedBadge;
 
                         let totalSteps = 0;
                         let accumulatedText = '';
@@ -1532,8 +1574,8 @@
                                 try { ev = JSON.parse(raw); } catch (e) { continue; }
 
                                 const curElapsed = ((Date.now() - streamStartTs) / 1000).toFixed(1) + 's';
-                                if (timerFeedBadge) timerFeedBadge.textContent = '⏱️ ' + curElapsed;
-                                if (elapsedBadge) elapsedBadge.textContent = '⏱️ ' + curElapsed;
+                                if (timerFeedBadge) timerFeedBadge.textContent = curElapsed;
+                                if (elapsedBadge) elapsedBadge.textContent = curElapsed;
 
                                 if (ev.type === 'thinking') {
                                     let stepDiv = document.getElementById(`step-${ev.id}`);
@@ -1628,7 +1670,7 @@
                                     const stepDiv = document.createElement('div');
                                     stepDiv.className = 'activity-step completed';
                                     stepDiv.innerHTML = `
-                                        <div class="step-icon source">🔗</div>
+                                        <div class="step-icon source">SRC</div>
                                         <div class="step-content">
                                             <div class="step-title">Source: <span class="source-badge">${escapeHtml(ev.kind)}</span> <strong>${escapeHtml(ev.title)}</strong></div>
                                             <div class="step-detail"><a href="${escapeHtml(ev.url_or_path)}" target="_blank" class="source-url">${escapeHtml(ev.url_or_path)}</a></div>
@@ -1657,8 +1699,12 @@
                                     if (contentBox) contentBox.innerHTML = renderMarkdownToHtml(accumulatedText);
 
                                     const finalSec = (ev.total_duration_ms ? (ev.total_duration_ms / 1000).toFixed(1) : ((Date.now() - streamStartTs) / 1000).toFixed(1)) + 's';
-                                    if (timerFeedBadge) timerFeedBadge.textContent = '⏱️ ' + finalSec;
-                                    if (elapsedBadge) elapsedBadge.textContent = '⏱️ ' + finalSec;
+                                    if (timerFeedBadge) timerFeedBadge.textContent = finalSec;
+                                    if (elapsedBadge) elapsedBadge.textContent = finalSec;
+
+                                    if (ev.active_job_id) {
+                                        pollActiveJobEvents(ev.active_job_id);
+                                    }
 
                                     if (ev.session_status) {
                                         updateStatusBadge(ev.session_status);
@@ -2652,6 +2698,16 @@
         if (banner) banner.classList.remove('hidden');
 
         if (activeJobPollInterval) clearInterval(activeJobPollInterval);
+        if (window.activeJobTimerInterval) clearInterval(window.activeJobTimerInterval);
+
+        const jobStartTs = Date.now();
+        const activeChatTimer = document.getElementById('active-job-chat-timer');
+        const activeFeedElapsed = document.getElementById('active-job-feed-elapsed');
+        window.activeJobTimerInterval = setInterval(() => {
+            const sec = ((Date.now() - jobStartTs) / 1000).toFixed(1) + 's';
+            if (activeChatTimer) activeChatTimer.textContent = sec;
+            if (activeFeedElapsed) activeFeedElapsed.textContent = sec;
+        }, 100);
         
         let afterSeq = 0;
         let stallPollCount = 0;
@@ -2675,11 +2731,17 @@
                             logBox.appendChild(item);
                             logBox.scrollTop = logBox.scrollHeight;
                         });
+                        const lastEv = data.events[data.events.length - 1];
+                        const statusTitle = document.getElementById('active-job-current-status');
+                        if (statusTitle && lastEv) {
+                            statusTitle.textContent = lastEv.message;
+                        }
                     } else if (data.status === 'running') {
                         if (data.progress_current === lastProgress) {
                             stallPollCount++;
                             if (stallPollCount >= 40) {
                                 clearInterval(activeJobPollInterval);
+                                if (window.activeJobTimerInterval) clearInterval(window.activeJobTimerInterval);
                                 console.warn(`Stopped polling job #${jobId}: no updates or events received for 60s.`);
                                 return;
                             }
@@ -2690,6 +2752,10 @@
                     lastProgress = data.progress_current;
                     if (data.status === 'succeeded' || data.status === 'failed' || data.status === 'cancelled') {
                         clearInterval(activeJobPollInterval);
+                        if (window.activeJobTimerInterval) clearInterval(window.activeJobTimerInterval);
+                        const chatRow = document.getElementById('active-job-chat-row');
+                        if (chatRow) chatRow.remove();
+
                         setTimeout(() => {
                             if (banner) banner.classList.add('hidden');
                         }, 3000);
@@ -2716,14 +2782,14 @@
                                 inputField.placeholder = "Codebase generated! Ask to edit files, add features, or how to run the project...";
                             }
                             if (data.result_summary) {
-                                appendMessageBubble('assistant', `### 🎉 Complete Project Codebase Ready!\n\n${data.result_summary}\n\nYou can inspect each file in the workspace file tree on the right, view the architecture plan and verification checks, and download your turnkey project ZIP.`);
+                                appendMessageBubble('assistant', `### Complete Project Codebase Ready\n\n${data.result_summary}\n\nYou can inspect each file in the workspace file tree on the right, view the architecture plan and verification checks, and download your turnkey project ZIP.`);
                             }
                             }
                         } else if (data.status === 'failed') {
                             updateModuleReviewBar(data.session_status, false);
                             updateStatusBadge(data.session_status || 'needs_attention');
                             updateStepperStage('needs_attention');
-                            appendMessageBubble('assistant', `### ⚠️ Generation Failed\n\n${data.error_message || 'An error occurred during build. Please try again or request modifications.'}`);
+                            appendMessageBubble('assistant', `### Generation Failed\n\n${data.error_message || 'An error occurred during build. Please try again or request modifications.'}`);
                         }
                     }
                 }
@@ -2892,7 +2958,7 @@
                 return `
                     <div class="plan-file-card" style="margin-bottom: 10px;">
                         <div class="plan-file-path" style="display: flex; align-items: center; justify-content: space-between;">
-                            <span>📄 ${cleanPath}</span>
+                            <span>${cleanPath}</span>
                             <button type="button" class="btn btn-secondary btn-xs" onclick="openFileByPath('${cleanPath}')">View Code</button>
                         </div>
                         <div class="plan-file-purpose">${cleanPurpose}</div>
@@ -2914,7 +2980,7 @@
             container.innerHTML = `
                 <div style="padding: 20px; display: flex; flex-direction: column; gap: 16px;">
                     <div class="export-hero-card" style="padding: 18px;">
-                        <h4 style="margin: 0 0 8px 0; color: var(--blueprint);">💡 How This Project Architecture Operates</h4>
+                        <h4 style="margin: 0 0 8px 0; color: var(--blueprint);">How This Project Architecture Operates</h4>
                         <p style="font-size: 13px; color: var(--ink); line-height: 1.6; margin: 0;">
                             DevDialogue AI structures this codebase following modern clean architectural patterns with strict separation of concerns, deterministic contract boundaries, and zero circular dependencies.
                         </p>
@@ -3040,7 +3106,7 @@
                 renderPlanViewPanel();
                 updateStatusBadge('plan_approved');
                 updateStepperStage('plan_approved');
-                appendMessageBubble('assistant', '### ✅ Architecture Plan Approved\n\nYou have approved the multi-file architecture plan. Click **🚀 Generate Project Codebase** to build all project files!');
+                appendMessageBubble('assistant', '### Architecture Plan Approved\n\nYou have approved the multi-file architecture plan. Click **Generate Project Codebase** to build all project files!');
                 const actionBar = document.getElementById('chat-action-bar');
                 if (actionBar) actionBar.classList.remove('hidden');
             } else {
@@ -3106,7 +3172,7 @@
                     return `
                         <div class="verif-issue-card ${attrSeverity}" data-file="${attrFile}" data-line="${lineNum}" style="cursor: pointer; margin-bottom: 8px;">
                             <div class="issue-file-line" style="display:flex; justify-content:space-between;">
-                                <span>📌 ${cleanFile} (Line ${lineNum})</span>
+                                <span>${cleanFile} (Line ${lineNum})</span>
                                 <span class="badge ${attrSeverity === 'error' ? 'badge-error' : 'badge-warning'}">[${cleanCheck}]</span>
                             </div>
                             <div class="issue-msg" style="margin-top: 4px;">${cleanMsg}</div>
@@ -3290,7 +3356,7 @@
                 const p = f.path || f.module_name || 'file';
                 return `
                     <tr>
-                        <td style="padding: 8px 12px; font-family: monospace; color: var(--blueprint);">📄 ${escapeHtml(p)}</td>
+                        <td style="padding: 8px 12px; font-family: monospace; color: var(--blueprint);">${escapeHtml(p)}</td>
                         <td style="padding: 8px 12px; text-align: right;"><span class="badge badge-verified">Ready ✓</span></td>
                     </tr>
                 `;
@@ -3301,7 +3367,7 @@
                     <div class="export-hero-card">
                         <div class="export-hero-header">
                             <div>
-                                <h3 style="margin: 0; font-size: 18px; color: var(--ink);">📦 Turnkey Project Package</h3>
+                                <h3 style="margin: 0; font-size: 18px; color: var(--ink);">Turnkey Project Package</h3>
                                 <div style="font-size: 12px; color: var(--pencil); margin-top: 4px;">Self-contained, production-verified standalone code repository ready for deployment.</div>
                             </div>
                             <a href="${downloadUrl}" class="btn btn-primary btn-md" style="display:inline-flex; align-items:center; gap:8px;">
@@ -3325,7 +3391,7 @@
                     </div>
 
                     <div class="plan-file-card" style="padding: 16px;">
-                        <h4 style="margin: 0 0 10px 0; font-size: 13px; color: var(--ink);">⚡ Quick Start Run Guide</h4>
+                        <h4 style="margin: 0 0 10px 0; font-size: 13px; color: var(--ink);">Quick Start Run Guide</h4>
                         <div class="export-code-snippet">
 <span style="color:#64748b;"># 1. Extract your project archive</span>
 unzip project.zip -d my_application && cd my_application
@@ -3336,7 +3402,7 @@ chmod +x run.sh && ./run.sh
                     </div>
 
                     <div class="plan-file-card" style="padding: 16px;">
-                        <h4 style="margin: 0 0 10px 0; font-size: 13px; color: var(--ink);">📋 Package File Manifest (${fileCount} Files)</h4>
+                        <h4 style="margin: 0 0 10px 0; font-size: 13px; color: var(--ink);">Package File Manifest (${fileCount} Files)</h4>
                         <div style="max-height: 220px; overflow-y: auto;">
                             <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
                                 <tbody>
