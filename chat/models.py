@@ -280,4 +280,35 @@ class JobEvent(models.Model):
         return f"Job #{self.job.id} Event #{self.sequence_number} [{self.kind}]: {self.message}"
 
 
+class SelfHealingIncident(models.Model):
+    STATUS_CHOICES = [
+        ('investigating', 'Investigating'),
+        ('repairing', 'Repairing'),
+        ('verified', 'Verified'),
+        ('resolved', 'Resolved'),
+        ('failed', 'Failed'),
+    ]
+
+    error_type = models.CharField(max_length=150)
+    error_message = models.TextField()
+    offending_file = models.CharField(max_length=255, blank=True, default='')
+    offending_line = models.IntegerField(default=0)
+    traceback_text = models.TextField(blank=True, default='')
+    request_path = models.CharField(max_length=255, blank=True, default='')
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='investigating')
+    repair_attempts = models.IntegerField(default=0)
+    git_committed = models.BooleanField(default=False)
+    git_pushed = models.BooleanField(default=False)
+    git_commit_hash = models.CharField(max_length=64, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Incident #{self.id} [{self.status}]: {self.error_type} in {self.offending_file}:{self.offending_line}"
+
+
+
 

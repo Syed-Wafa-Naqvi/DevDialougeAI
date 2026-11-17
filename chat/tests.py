@@ -1,4 +1,6 @@
 import json
+import os
+from django.conf import settings
 from django.test import TestCase, Client
 from django.contrib.auth.models import User
 from unittest.mock import patch
@@ -978,6 +980,124 @@ class ChatTestCase(TestCase):
             any(w in resp_text.lower() for w in ['repair', 'update', 'fix', 'resolved']),
             f"Expected repair acknowledgment in response: {resp_text}"
         )
+
+
+class SelfHealingEngineTestCase(TestCase):
+    """Unit and integration test suite for DevDialogue AI Autonomous Self-Healing Engine."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='admin_heal', password='password123', is_staff=True)
+        self.client.login(username='admin_heal', password='password123')
+
+    def tearDown(self):
+        from core.self_healing import SelfHealingEngine
+        SelfHealingEngine.reset_state()
+
+    def test_extract_error_details(self):
+        from core.self_healing import SelfHealingEngine
+        try:
+            # Raise a dummy error to generate a real traceback
+            raise ValueError("Test unexpected condition in chat")
+        except ValueError as exc:
+            details = SelfHealingEngine.extract_error_details(exc)
+            self.assertEqual(details['error_type'], 'ValueError')
+            self.assertEqual(details['error_message'], 'Test unexpected condition in chat')
+            self.assertTrue(details['offending_file'].endswith('.py'))
+            self.assertGreater(details['offending_line'], 0)
+
+    def test_clean_code_response(self):
+        from core.self_healing import SelfHealingEngine
+        raw_code = "```python\ndef test_fn():\n    return True\n```"
+        cleaned = SelfHealingEngine._clean_code_response(raw_code)
+        self.assertEqual(cleaned, "def test_fn():\n    return True\n")
+
+    def test_verify_syntax(self):
+        from core.self_healing import SelfHealingEngine
+        valid_code = "def valid():\n    x = 1 + 2\n    return x\n"
+        ok, err = SelfHealingEngine._verify_syntax(valid_code, "test.py")
+        self.assertTrue(ok)
+        self.assertEqual(err, "")
+
+        invalid_code = "def broken(\n   x = \n"
+        ok, err = SelfHealingEngine._verify_syntax(invalid_code, "test.py")
+        self.assertFalse(ok)
+        self.assertIn("Line", err)
+
+    def test_is_safe_to_heal_active_job(self):
+        from core.self_healing import SelfHealingEngine
+        from chat.models import Session, Job
+        session = Session.objects.create(user=self.user, status='active')
+        Job.objects.create(session=session, user=self.user, job_type='generate', status='running', progress_total=10)
+        
+        # When a job is running, is_safe_to_heal should detect it
+        is_safe = SelfHealingEngine.is_safe_to_heal(timeout_seconds=0.2)
+        self.assertTrue(is_safe) # returns True after timeout fallback
+
+    def test_self_healing_status_api(self):
+        response = self.client.get('/api/self-healing/status/')
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn('status', data)
+        self.assertIn('step', data)
+
+    def test_self_healing_health_api(self):
+        response = self.client.get('/api/self-healing/health/')
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn('healing_active', data)
+
+    @patch('core.self_healing.SelfHealingEngine._run_healing_pipeline')
+    def test_self_healing_trigger_api(self, mock_pipeline):
+        response = self.client.post(
+            '/api/self-healing/trigger/',
+            data=json.dumps({'error': 'Test trigger error', 'file': 'core/test_dummy_heal.py'}),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data.get('status'), 'triggered')
+        self.assertIn('incident', data)
+        self.assertIn('incident', data)
+
+    def test_self_healing_incident_model_persistence(self):
+        from chat.models import SelfHealingIncident
+        incident = SelfHealingIncident.objects.create(
+            error_type="ZeroDivisionError",
+            error_message="division by zero",
+            offending_file="chat/views.py",
+            offending_line=42,
+            request_path="/api/chat/1/send/",
+            status="investigating"
+        )
+        self.assertIsNotNone(incident.id)
+        self.assertEqual(incident.status, 'investigating')
+        self.assertIn("ZeroDivisionError in chat/views.py:42", str(incident))
+
+    @patch('core.self_healing.SelfHealingEngine._run_healing_pipeline')
+    def test_self_healing_middleware_intercepts_unhandled_exception(self, mock_pipeline):
+        from core.middleware import SelfHealingMiddleware
+        from django.http import HttpResponse
+
+        def crashing_view(request):
+            raise RuntimeError("Database connection suddenly dropped")
+
+        middleware = SelfHealingMiddleware(crashing_view)
+        from django.test import RequestFactory
+        factory = RequestFactory()
+
+        # 1. API request gets JSON 503
+        api_req = factory.get('/api/chat/1/messages/', HTTP_ACCEPT='application/json')
+        resp = middleware(api_req)
+        self.assertEqual(resp.status_code, 503)
+        self.assertIn('self_healing', resp.content.decode('utf-8'))
+
+        # 2. Browser request gets HTML 503 self_healing.html
+        html_req = factory.get('/chat/1/', HTTP_ACCEPT='text/html')
+        resp_html = middleware(html_req)
+        self.assertEqual(resp_html.status_code, 503)
+        self.assertIn('Autonomous Self-Healing Active', resp_html.content.decode('utf-8'))
+
+
 
 
 

@@ -69,6 +69,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'core.middleware.TimezoneMiddleware',
     'core.middleware.TerminalActivityMiddleware',
+    'core.middleware.SelfHealingMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'

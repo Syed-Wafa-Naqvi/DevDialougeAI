@@ -19,14 +19,20 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.views.generic.base import RedirectView
+import core.views as core_views
 
 urlpatterns = [
     path('favicon.ico', RedirectView.as_view(url='/static/img/favicon.ico', permanent=False)),
     path('admin/', admin.site.urls),
+    path('api/self-healing/status/', core_views.self_healing_status_api, name='self_healing_status_api'),
+    path('api/self-healing/health/', core_views.self_healing_health_api, name='self_healing_health_api'),
+    path('api/self-healing/trigger/', core_views.self_healing_trigger_api, name='self_healing_trigger_api'),
     path('', include('accounts.urls')),
     path('', include('chat.urls')),
     path('', include('exporter.urls')),
 ]
+
+handler500 = 'core.views.custom_500_view'
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

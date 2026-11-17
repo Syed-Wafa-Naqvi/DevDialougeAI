@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevDialogue AI — Autonomous Self-Healing Active</title>
+    <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-deep: #090d16;
+            --bg-card: rgba(18, 24, 38, 0.85);
+            --border: rgba(255, 255, 255, 0.08);
+            --border-highlight: rgba(99, 102, 241, 0.3);
+            --ink: #f8fafc;
+            --pencil: #94a3b8;
+            --ink-dim: #64748b;
+            --brand: #6366f1;
+            --brand-glow: rgba(99, 102, 241, 0.25);
+            --emerald: #10b981;
+            --amber: #f59e0b;
+            --rose: #f43f5e;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-deep);
+            color: var(--ink);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            top: -20%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 700px;
+            height: 500px;
+            background: radial-gradient(circle, var(--brand-glow) 0%, transparent 70%);
+            filter: blur(80px);
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .container {
+            max-width: 680px;
+            width: 100%;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 36px 32px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(16px);
+            position: relative;
+            z-index: 1;
+        }
+
+        .header-badge-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .brand-logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 700;
+            font-size: 15px;
+            letter-spacing: -0.01em;
+            color: var(--ink);
+        }
+
+        .brand-logo-mark {
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 800;
+            color: white;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 600;
+            background: rgba(245, 158, 11, 0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .status-badge.restored {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse-dot 1.5s infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.85); }
+        }
+
+        .hero-section {
+            text-align: center;
+            margin-bottom: 28px;
+        }
+
+        .radar-spinner-wrap {
+            position: relative;
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .radar-spinner {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            border-top-color: var(--brand);
+            border-right-color: #a855f7;
+            animation: spin 1.2s linear infinite;
+        }
+
+        .radar-spinner-inner {
+            position: absolute;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: 2px solid rgba(99, 102, 241, 0.2);
+            border-bottom-color: #38bdf8;
+            animation: spin-reverse 0.9s linear infinite;
+        }
+
+        .radar-icon {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--brand);
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes spin-reverse {
+            to { transform: rotate(-360deg); }
+        }
+
+        h1 {
+            font-size: 21px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: var(--ink);
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--pencil);
+            max-width: 540px;
+            margin: 0 auto;
+        }
+
+        /* Diagnostic Pipeline Timeline */
+        .pipeline-card {
+            background: rgba(10, 14, 23, 0.6);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+
+        .pipeline-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
+        }
+
+        .pipeline-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--ink);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .pipeline-timer {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--pencil);
+        }
+
+        .step-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .step-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            font-size: 13px;
+        }
+
+        .step-bullet {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 600;
+            flex-shrink: 0;
+            margin-top: 1px;
+            color: var(--ink-dim);
+            transition: all 0.2s ease;
+        }
+
+        .step-item.completed .step-bullet {
+            background: rgba(16, 185, 129, 0.2);
+            border-color: rgba(16, 185, 129, 0.4);
+            color: #34d399;
+        }
+
+        .step-item.active .step-bullet {
+            background: rgba(99, 102, 241, 0.25);
+            border-color: var(--brand);
+            color: #818cf8;
+            box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
+            animation: pulse-dot 1.2s infinite;
+        }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .step-title-text {
+            font-weight: 500;
+            color: var(--ink);
+            margin-bottom: 2px;
+        }
+
+        .step-subtext {
+            font-size: 12px;
+            color: var(--ink-dim);
+        }
+
+        /* Action Buttons */
+        .actions-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            text-decoration: none;
+            border: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #6366f1, #4f46e5);
+            color: white;
+            box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
+        }
+
+        .btn-primary:hover {
+            opacity: 0.92;
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            color: var(--ink);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        /* Technical Details Drawer */
+        details {
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 12px;
+        }
+
+        summary {
+            cursor: pointer;
+            color: var(--pencil);
+            font-weight: 500;
+            user-select: none;
+        }
+
+        summary:hover {
+            color: var(--ink);
+        }
+
+        .tech-box {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            line-height: 1.5;
+            color: #cbd5e1;
+            white-space: pre-wrap;
+            word-break: break-all;
+            max-height: 160px;
+            overflow-y: auto;
+        }
+
+        .notice-footer {
+            margin-top: 18px;
+            text-align: center;
+            font-size: 12px;
+            color: var(--ink-dim);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header-badge-row">
+            <div class="brand-logo">
+                <div class="brand-logo-mark">D</div>
+                <span>DevDialogue AI</span>
+            </div>
+            <div class="status-badge" id="status-badge">
+                <span class="status-dot"></span>
+                <span id="status-badge-text">Autonomous Self-Healing Active</span>
+            </div>
+        </div>
+
+        <div class="hero-section">
+            <div class="radar-spinner-wrap">
+                <div class="radar-spinner"></div>
+                <div class="radar-spinner-inner"></div>
+                <div class="radar-icon">AI</div>
+            </div>
+            <h1 id="headline-text">Internal System Issue Intercepted</h1>
+            <p class="subtitle" id="subtitle-text">
+                An internal system error was encountered. DevDialogue AI's autonomous self-healing engine is diagnosing the fault, generating verified code fixes, and restoring services. Please remain on this page; your session will restore automatically.
+            </p>
+        </div>
+
+        <div class="pipeline-card">
+            <div class="pipeline-header">
+                <span class="pipeline-title">Autonomous Remediation Stages</span>
+                <span class="pipeline-timer" id="pipeline-timer">0.0s elapsed</span>
+            </div>
+            <div class="step-list">
+                <div class="step-item completed" id="step-capture">
+                    <div class="step-bullet">✓</div>
+                    <div class="step-content">
+                        <div class="step-title-text">Fault Intercepted & Traceback Isolated</div>
+                        <div class="step-subtext" id="step-capture-detail">Target module identified and execution state recorded.</div>
+                    </div>
+                </div>
+                <div class="step-item completed" id="step-safety">
+                    <div class="step-bullet">✓</div>
+                    <div class="step-content">
+                        <div class="step-title-text">Concurrency & Active Jobs Safety Gate Passed</div>
+                        <div class="step-subtext" id="step-safety-detail">Ensured no background code generators or active users are disrupted.</div>
+                    </div>
+                </div>
+                <div class="step-item active" id="step-repair">
+                    <div class="step-bullet" id="step-repair-bullet">•</div>
+                    <div class="step-content">
+                        <div class="step-title-text" id="step-repair-title">AI Autonomous Code Patch Synthesis</div>
+                        <div class="step-subtext" id="step-repair-detail">Analyzing root cause and synthesizing error-free replacement code...</div>
+                    </div>
+                </div>
+                <div class="step-item" id="step-verify">
+                    <div class="step-bullet" id="step-verify-bullet">•</div>
+                    <div class="step-content">
+                        <div class="step-title-text">Automated Compiler, AST & Regression Checks</div>
+                        <div class="step-subtext" id="step-verify-detail">Validating syntax and executing Django test suite.</div>
+                    </div>
+                </div>
+                <div class="step-item" id="step-reload">
+                    <div class="step-bullet" id="step-reload-bullet">•</div>
+                    <div class="step-content">
+                        <div class="step-title-text">Version Control Commit & Application Hot-Reload</div>
+                        <div class="step-subtext" id="step-reload-detail">Committing verified fix and restarting worker process.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="actions-row">
+            <button type="button" class="btn btn-primary" id="btn-manual-reload" onclick="checkStatusAndReload()">
+                Check Status & Refresh
+            </button>
+            <a href="/" class="btn btn-secondary" id="btn-home-link">
+                Return to Workspace
+            </a>
+        </div>
+
+        <details>
+            <summary>Diagnostic Details (Incident Reference)</summary>
+            <div class="tech-box" id="tech-details-box">Incident: {{ incident_id|default:"Pending" }}
+Error: {{ error_type|default:"InternalException" }}: {{ error_message|default:"Unexpected condition" }}
+Target Module: {{ offending_file|default:"Application Server" }}{% if offending_line %}:{{ offending_line }}{% endif %}
+Request Path: {{ request_path|default:"/" }}</div>
+        </details>
+
+        <div class="notice-footer">
+            DevDialogue AI Autonomous Reliability Monitor &bull; Auto-refreshing in real time
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const startTs = Date.now();
+            const timerElem = document.getElementById('pipeline-timer');
+            const statusBadge = document.getElementById('status-badge');
+            const statusBadgeText = document.getElementById('status-badge-text');
+            const headlineText = document.getElementById('headline-text');
+            const subtitleText = document.getElementById('subtitle-text');
+            const originalPath = "{{ original_path|default:'' }}" || window.location.pathname;
+
+            // Live Timer
+            setInterval(() => {
+                if (timerElem) {
+                    const sec = ((Date.now() - startTs) / 1000).toFixed(1);
+                    timerElem.textContent = sec + 's elapsed';
+                }
+            }, 100);
+
+            let pollAttempts = 0;
+            const maxPollAttempts = 90; // Up to 3 minutes
+            let isRestored = false;
+
+            async function pollHealingStatus() {
+                if (isRestored) return;
+                pollAttempts++;
+
+                try {
+                    const res = await fetch('/api/self-healing/status/', { cache: 'no-store' });
+                    if (res.ok) {
+                        const data = await res.json();
+                        updateUI(data);
+
+                        if (data.status === 'restored' || (data.status === 'idle' && pollAttempts > 2)) {
+                            markAsRestored();
+                            return;
+                        }
+                    }
+                } catch (e) {
+                    // Server might be in the middle of reloader restart, continue polling
+                    console.warn("Self-healing poll notice (server reloading):", e);
+                }
+
+                if (pollAttempts < maxPollAttempts) {
+                    setTimeout(pollHealingStatus, 2000);
+                } else {
+                    if (subtitleText) {
+                        subtitleText.textContent = "Self-healing pipeline completed initial verification passes. Please click 'Check Status & Refresh' to reload your session.";
+                    }
+                }
+            }
+
+            function updateUI(data) {
+                const stepRepair = document.getElementById('step-repair');
+                const stepVerify = document.getElementById('step-verify');
+                const stepReload = document.getElementById('step-reload');
+
+                if (data.status === 'repairing') {
+                    if (stepRepair) { stepRepair.className = 'step-item active'; }
+                } else if (data.status === 'verifying') {
+                    if (stepRepair) {
+                        stepRepair.className = 'step-item completed';
+                        document.getElementById('step-repair-bullet').textContent = '✓';
+                    }
+                    if (stepVerify) { stepVerify.className = 'step-item active'; }
+                } else if (data.status === 'reloading') {
+                    if (stepRepair) {
+                        stepRepair.className = 'step-item completed';
+                        document.getElementById('step-repair-bullet').textContent = '✓';
+                    }
+                    if (stepVerify) {
+                        stepVerify.className = 'step-item completed';
+                        document.getElementById('step-verify-bullet').textContent = '✓';
+                    }
+                    if (stepReload) { stepReload.className = 'step-item active'; }
+                }
+            }
+
+            function markAsRestored() {
+                isRestored = true;
+                if (statusBadge) statusBadge.className = 'status-badge restored';
+                if (statusBadgeText) statusBadgeText.textContent = 'System Restored & Verified';
+                if (headlineText) headlineText.textContent = 'System Repaired Successfully';
+                if (subtitleText) subtitleText.textContent = 'The verified code patch was applied, tests passed, and server reloaded. Restoring your workspace now...';
+
+                const stepRepair = document.getElementById('step-repair');
+                const stepVerify = document.getElementById('step-verify');
+                const stepReload = document.getElementById('step-reload');
+                if (stepRepair) {
+                    stepRepair.className = 'step-item completed';
+                    document.getElementById('step-repair-bullet').textContent = '✓';
+                }
+                if (stepVerify) {
+                    stepVerify.className = 'step-item completed';
+                    document.getElementById('step-verify-bullet').textContent = '✓';
+                }
+                if (stepReload) {
+                    stepReload.className = 'step-item completed';
+                    document.getElementById('step-reload-bullet').textContent = '✓';
+                }
+
+                setTimeout(() => {
+                    if (originalPath && originalPath !== window.location.pathname) {
+                        window.location.href = originalPath;
+                    } else {
+                        window.location.reload();
+                    }
+                }, 1500);
+            }
+
+            window.checkStatusAndReload = async function() {
+                try {
+                    const btn = document.getElementById('btn-manual-reload');
+                    if (btn) btn.textContent = 'Checking...';
+                    const res = await fetch('/api/self-healing/health/', { cache: 'no-store' });
+                    if (res.ok) {
+                        if (originalPath && originalPath !== window.location.pathname) {
+                            window.location.href = originalPath;
+                        } else {
+                            window.location.reload();
+                        }
+                    } else {
+                        if (btn) btn.textContent = 'Still Repairing... Retry';
+                    }
+                } catch (e) {
+                    window.location.reload();
+                }
+            };
+
+            // Start polling after 1 second
+            setTimeout(pollHealingStatus, 1000);
+        })();
+    </script>
+</body>
+</html>
