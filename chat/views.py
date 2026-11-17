@@ -217,6 +217,20 @@ def chat_view(request, session_id):
         for gc in session.generated_codes.all():
             ProjectFile.objects.get_or_create(session=session, path=gc.module_name, defaults={'content': gc.code_content, 'status': 'verified'})
         project_files = session.project_files.order_by('path')
+
+    # Select smartest initial code file to display (avoid defaulting to .gitignore)
+    active_initial_file = None
+    if project_files.exists():
+        main_candidates = ['lib/main.dart', 'main.dart', 'main.py', 'app.py', 'src/App.tsx', 'src/index.tsx', 'index.js', 'src/main.js']
+        for cand in main_candidates:
+            matched = project_files.filter(path__iexact=cand).first()
+            if matched:
+                active_initial_file = matched
+                break
+        if not active_initial_file:
+            active_initial_file = project_files.exclude(path__startswith='.').exclude(path__iexact='README.md').first()
+        if not active_initial_file:
+            active_initial_file = project_files.first()
     
     now = timezone.localtime()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -274,6 +288,7 @@ def chat_view(request, session_id):
         'chat_messages': messages_list,
         'project_files': project_files,
         'generated_codes': project_files,
+        'active_initial_file': active_initial_file,
         'latest_static_run': latest_static_run,
         'latest_runtime_run': latest_runtime_run,
         'today_sessions': today_sessions,

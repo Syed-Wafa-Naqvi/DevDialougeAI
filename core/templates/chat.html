@@ -552,6 +552,12 @@
                     <span class="status-pill-label" id="session-status-badge">{{ session.get_status_display }}</span>
                 </div>
 
+                <!-- Workspace View Toggle Button -->
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-topbar-toggle-workspace" onclick="toggleCodeWorkspace()" title="Toggle Code Workspace (Collapse/Open)">
+                    <i data-lucide="columns-2" style="width: 14px; height: 14px;"></i>
+                    <span id="topbar-workspace-btn-text">{% if not generated_codes %}Open Workspace{% else %}Workspace{% endif %}</span>
+                </button>
+
                 <a href="{% url 'download_project_zip_api' session_id=session.uuid %}" class="btn btn-primary btn-sm" id="btn-topbar-export">
                     <i data-lucide="archive"></i> Export ZIP
                 </a>
@@ -872,6 +878,11 @@
                         DevDialogue can make mistakes. Check important info.
                     </div>
                 </div>
+
+                <!-- Workspace Collapse Toggle Button on dividing border -->
+                <button type="button" class="workspace-toggle-btn" id="workspace-toggle-button" onclick="toggleCodeWorkspace()" title="Toggle Code Workspace (Collapse/Open)">
+                    <i data-lucide="chevron-right" id="toggle-icon"></i>
+                </button>
             </div>
 
             <!-- Right Side: Code Workspace -->
@@ -890,6 +901,10 @@
                     <button type="button" class="panel-tab-btn" id="tab-btn-export" onclick="switchRightPanel('export')">
                         <i data-lucide="archive" class="icon-inline"></i> Export Package
                     </button>
+                    <button type="button" class="panel-collapse-btn" onclick="toggleCodeWorkspace()" title="Close code workspace (collapse into side)">
+                        <i data-lucide="chevrons-right" style="width: 14px; height: 14px;"></i>
+                        <span>Close</span>
+                    </button>
                 </div>
                 
                 <!-- File list tabs -->
@@ -900,7 +915,7 @@
                     <div id="file-tabs-inner" style="display: flex; gap: 4px; overflow-x: auto; flex: 1; align-items: center;">
                         {% if project_files %}
                             {% for file in project_files %}
-                                <button class="file-tab {% if forloop.first %}active{% endif %}" data-code-id="{{ file.id }}" data-path="{{ file.path }}" onclick="loadCodeFile(this)">
+                                <button class="file-tab {% if active_initial_file and file.id == active_initial_file.id %}active{% elif not active_initial_file and forloop.first %}active{% endif %}" data-code-id="{{ file.id }}" data-path="{{ file.path }}" onclick="loadCodeFile(this)">
                                     <i data-lucide="file-code" class="icon-inline"></i> {{ file.path }}
                                 </button>
                             {% endfor %}
@@ -923,11 +938,16 @@
                     <!-- Code Content Area -->
                     <div class="code-display-area" style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
                         <div class="code-actions-header {% if not project_files %}hidden{% endif %}" id="code-actions-bar">
-                            <span id="active-file-title" class="file-title">
-                                {% if project_files %}
-                                    {{ project_files.0.path }}
-                                {% endif %}
-                            </span>
+                            <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+                                <span id="active-file-title" class="file-title">
+                                    {% if active_initial_file %}
+                                        {{ active_initial_file.path }}
+                                    {% elif project_files %}
+                                        {{ project_files.0.path }}
+                                    {% endif %}
+                                </span>
+                                <span id="active-file-badge" class="badge-file-version hidden"></span>
+                            </div>
                             <div class="action-buttons">
                                 <button class="btn btn-secondary btn-sm" id="btn-copy-code" onclick="copyCodeContent()">
                                     <i data-lucide="copy" class="icon-inline"></i> Copy
@@ -943,7 +963,7 @@
                         
                         <div class="code-pre-wrapper" id="code-view-container" style="flex: 1; overflow: auto;">
                             {% if project_files %}
-                                <pre class="code-block"><code id="code-output-block">{{ project_files.0.content }}</code></pre>
+                                <pre class="code-block"><code id="code-output-block">{% if active_initial_file %}{{ active_initial_file.content }}{% elif project_files %}{{ project_files.0.content }}{% endif %}</code></pre>
                             {% else %}
                                 <div class="empty-code-view" id="empty-code-notice">
                                     <i data-lucide="code-2" class="empty-code-icon"></i>
@@ -956,6 +976,12 @@
                 </div>
             </div>
         </div>
+
+        <!-- Floating Reopen Workspace Tab when collapsed -->
+        <button type="button" id="btn-floating-reopen-workspace" class="floating-workspace-reopen-tab" onclick="toggleCodeWorkspace()" title="Reopen Code Workspace" style="display: none;">
+            <i data-lucide="chevron-left" style="width: 14px; height: 14px;"></i>
+            <span>Code Workspace</span>
+        </button>
     </div>
     <div id="active-job-data" data-active-job-id="{% if active_job %}{{ active_job.id }}{% endif %}" style="display:none;"></div>
 </div>
@@ -964,6 +990,8 @@
 
 {% block extra_js %}
 <script>
+    const activeSessionUuid = "{{ session.uuid }}";
+    window._lastModifiedFilePath = null;
     const chatForm = document.getElementById('chat-input-form');
     const inputField = document.getElementById('chat-input-field');
     const messagesBox = document.getElementById('messages-box');
@@ -971,15 +999,55 @@
     const sessionStatusBadge = document.getElementById('session-status-badge');
     const inputArea = document.querySelector('.console-input-area');
     const workspaceWrapper = document.getElementById('chat-workspace-wrapper');
-    const toggleIcon = document.getElementById('toggle-icon');
     
-    function toggleCodeWorkspace() {
-        if (workspaceWrapper.classList.contains('collapsed-code')) {
-            workspaceWrapper.classList.remove('collapsed-code');
-        } else {
+    window.toggleCodeWorkspace = function() {
+        if (!workspaceWrapper) return;
+        const isNowCollapsed = !workspaceWrapper.classList.contains('collapsed-code');
+        if (isNowCollapsed) {
             workspaceWrapper.classList.add('collapsed-code');
+        } else {
+            workspaceWrapper.classList.remove('collapsed-code');
+        }
+        updateWorkspaceToggleUI(isNowCollapsed);
+    };
+
+    function updateWorkspaceToggleUI(isCollapsed) {
+        const toggleBtn = document.getElementById('workspace-toggle-button');
+        const toggleIcon = document.getElementById('toggle-icon');
+        const floatingReopen = document.getElementById('btn-floating-reopen-workspace');
+        const topbarBtn = document.getElementById('btn-topbar-toggle-workspace');
+        const topbarText = document.getElementById('topbar-workspace-btn-text');
+
+        if (isCollapsed) {
+            if (toggleIcon) toggleIcon.setAttribute('data-lucide', 'chevron-left');
+            if (toggleBtn) toggleBtn.title = "Reopen Code Workspace (<)";
+            if (floatingReopen) floatingReopen.style.display = 'flex';
+            if (topbarBtn) {
+                topbarBtn.classList.remove('btn-primary');
+                topbarBtn.classList.add('btn-secondary');
+            }
+            if (topbarText) topbarText.textContent = "Open Workspace";
+        } else {
+            if (toggleIcon) toggleIcon.setAttribute('data-lucide', 'chevron-right');
+            if (toggleBtn) toggleBtn.title = "Collapse Code Workspace (>)";
+            if (floatingReopen) floatingReopen.style.display = 'none';
+            if (topbarBtn) {
+                topbarBtn.classList.remove('btn-secondary');
+                topbarBtn.classList.add('btn-primary');
+            }
+            if (topbarText) topbarText.textContent = "Workspace";
+        }
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
         }
     }
+
+    // Initialize toggle state on page load
+    document.addEventListener('DOMContentLoaded', () => {
+        if (workspaceWrapper) {
+            updateWorkspaceToggleUI(workspaceWrapper.classList.contains('collapsed-code'));
+        }
+    });
 
     // Sidebar Toggling logic
     function toggleSidebar() {
@@ -1684,6 +1752,7 @@
 
                                 } else if (ev.type === 'file_action') {
                                     totalSteps++;
+                                    window._lastModifiedFilePath = ev.path;
                                     const stepDiv = document.createElement('div');
                                     stepDiv.className = 'activity-step completed';
                                     stepDiv.innerHTML = `
@@ -1691,7 +1760,7 @@
                                         <div class="step-content">
                                             <div class="step-title">
                                                 <span class="action-badge ${ev.action}">${ev.action.toUpperCase()}</span>
-                                                <a href="javascript:void(0)" onclick="openFileByPath('${escapeHtml(ev.path)}')" class="file-link"><code>${escapeHtml(ev.path)}</code></a>
+                                                <a href="javascript:void(0)" onclick="openFileByPath('${escapeHtml(ev.path)}', true)" class="file-link"><code>${escapeHtml(ev.path)}</code></a>
                                             </div>
                                             <div class="step-detail">${escapeHtml(ev.summary || '')}</div>
                                         </div>
@@ -1699,6 +1768,11 @@
                                     timeline.appendChild(stepDiv);
                                     if (stepCountElem) stepCountElem.textContent = `(${totalSteps} step${totalSteps > 1 ? 's' : ''})`;
                                     scrollToBottom();
+
+                                    // Auto-reload and reopen updated file immediately in editor
+                                    if (ev.action === 'update' || ev.action === 'create') {
+                                        openFileByPath(ev.path, true);
+                                    }
 
                                 } else if (ev.type === 'source') {
                                     totalSteps++;
@@ -1750,11 +1824,14 @@
                                     }
 
                                     if (ev.codes && ev.codes.length > 0) {
-                                        updateCodeFilesPanel(ev.codes);
+                                        updateCodeFilesPanel(ev.codes, window._lastModifiedFilePath);
                                         updateVerificationPills(true, ev.codes.length, 0, false);
                                         if (workspaceWrapper && workspaceWrapper.classList.contains('collapsed-code')) {
                                             workspaceWrapper.classList.remove('collapsed-code');
+                                            updateWorkspaceToggleUI(false);
                                         }
+                                    } else if (window._lastModifiedFilePath) {
+                                        openFileByPath(window._lastModifiedFilePath, true);
                                     }
 
                                     if (ev.completeness_score !== undefined) {
@@ -1831,11 +1908,14 @@
                         }
                         
                         if (data.codes && data.codes.length > 0) {
-                            updateCodeFilesPanel(data.codes);
+                            updateCodeFilesPanel(data.codes, window._lastModifiedFilePath);
                             updateVerificationPills(true, data.codes.length, 0, false);
-                            if (workspaceWrapper.classList.contains('collapsed-code')) {
+                            if (workspaceWrapper && workspaceWrapper.classList.contains('collapsed-code')) {
                                 workspaceWrapper.classList.remove('collapsed-code');
+                                updateWorkspaceToggleUI(false);
                             }
+                        } else if (window._lastModifiedFilePath) {
+                            openFileByPath(window._lastModifiedFilePath, true);
                         }
                         
                         if (data.completeness_score !== undefined) {
@@ -2260,15 +2340,37 @@
         }
     };
 
-    window.openFileByPath = function(path) {
+    window.openFileByPath = async function(path, forceReload = true) {
+        if (!path) return;
         const inner = document.getElementById('file-tabs-inner') || fileTabsContainer;
-        const tabs = inner ? Array.from(inner.querySelectorAll('.file-tab')) : [];
-        const matched = tabs.find(t => t.textContent.trim() === path);
+        let tabs = inner ? Array.from(inner.querySelectorAll('.file-tab')) : [];
+        let matched = tabs.find(t => t.getAttribute('data-path') === path || t.textContent.trim() === path);
+        
+        if (!matched && typeof activeSessionUuid !== 'undefined' && activeSessionUuid) {
+            try {
+                const res = await fetch(`/api/session/${activeSessionUuid}/tree/?_t=${Date.now()}`);
+                if (res.ok) {
+                    const treeData = await res.json();
+                    const fileList = (treeData.project_files && treeData.project_files.length > 0)
+                        ? treeData.project_files.map(f => ({ id: f.id, module_name: f.path }))
+                        : (treeData.generated_codes || []);
+                    if (fileList.length > 0) {
+                        updateCodeFilesPanel(fileList, path);
+                        const refreshedTabs = (document.getElementById('file-tabs-inner') || fileTabsContainer).querySelectorAll('.file-tab');
+                        matched = Array.from(refreshedTabs).find(t => t.getAttribute('data-path') === path);
+                    }
+                }
+            } catch (e) {
+                console.error("Error refreshing file tree:", e);
+            }
+        }
+
         if (matched) {
             const id = matched.getAttribute('data-code-id');
-            loadCodeFile(id, matched);
+            loadCodeFile(id, matched, forceReload);
             if (workspaceWrapper && workspaceWrapper.classList.contains('collapsed-code')) {
                 workspaceWrapper.classList.remove('collapsed-code');
+                updateWorkspaceToggleUI(false);
             }
         }
     };
@@ -2295,7 +2397,7 @@
         }
         const files = tabs.map(t => ({
             id: t.getAttribute('data-code-id'),
-            path: t.textContent.trim(),
+            path: t.getAttribute('data-path') || t.textContent.trim(),
             isActive: t.classList.contains('active')
         }));
 
@@ -2319,7 +2421,7 @@
                 const indent = depth * 14;
                 if (val.__file) {
                     html += `
-                        <div class="tree-file-row ${val.active ? 'active' : ''}" style="padding: 3px 6px 3px ${indent + 6}px; cursor: pointer; display: flex; align-items: center; gap: 6px; border-radius: 4px; ${val.active ? 'background: var(--brand-tint); color: var(--brand); font-weight: 600;' : 'color: var(--ink-2);'}" onclick="loadCodeFile(${val.id})">
+                        <div class="tree-file-row ${val.active ? 'active' : ''}" style="padding: 3px 6px 3px ${indent + 6}px; cursor: pointer; display: flex; align-items: center; gap: 6px; border-radius: 4px; ${val.active ? 'background: var(--brand-tint); color: var(--brand); font-weight: 600;' : 'color: var(--ink-2);'}" onclick="loadCodeFile(${val.id}, null, true)">
                             <i data-lucide="file-code" style="width: 12px; height: 12px; flex-shrink: 0;"></i>
                             <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(key)}</span>
                         </div>
@@ -2341,46 +2443,85 @@
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
-    // Dynamic tabs updating
-    function updateCodeFilesPanel(codes) {
+    // Dynamic tabs updating & auto-reloading newest code
+    function updateCodeFilesPanel(codes, preferredPath = null) {
+        if (!codes || codes.length === 0) return;
         const tabsBox = document.getElementById('file-tabs-inner') || fileTabsContainer;
         const noticeTab = document.getElementById('no-files-notice-tab');
         if (noticeTab) noticeTab.remove();
         
-        const existingTabs = tabsBox.querySelectorAll('.file-tab');
-        const activeId = existingTabs.length > 0 ? Array.from(existingTabs).find(t => t.classList.contains('active'))?.getAttribute('data-code-id') : null;
-        
-        tabsBox.innerHTML = '';
-        
-        codes.forEach((code, index) => {
-            const btn = document.createElement('button');
-            btn.className = `file-tab ${((activeId && activeId == code.id) || (!activeId && index === 0)) ? 'active' : ''}`;
-            btn.setAttribute('data-code-id', code.id);
-            btn.setAttribute('data-path', code.module_name);
-            btn.setAttribute('onclick', `loadCodeFile(${code.id}, this)`);
-            btn.innerHTML = '<i data-lucide="file-code" class="icon-inline"></i> ';
-            btn.appendChild(document.createTextNode(code.module_name));
-            tabsBox.appendChild(btn);
-        });
-        
-        // Show actions bar
-        codeActionsBar.classList.remove('hidden');
-        
-        // Load first or active file content if not already showing
-        const activeTab = tabsBox.querySelector('.file-tab.active');
-        if (activeTab) {
-            const activeCodeId = activeTab.getAttribute('data-code-id');
-            if (document.getElementById('empty-code-notice')) {
-                loadCodeFile(activeCodeId, activeTab);
+        const existingTabs = tabsBox ? tabsBox.querySelectorAll('.file-tab') : [];
+        const currentActivePath = existingTabs.length > 0 ? Array.from(existingTabs).find(t => t.classList.contains('active'))?.getAttribute('data-path') : null;
+
+        // Smart target selection:
+        // 1. Explicit preferredPath
+        // 2. window._lastModifiedFilePath
+        // 3. Current active file (if still in codes and not a hidden dotfile)
+        // 4. Main candidate (main.dart, app.py, main.py, index.js, App.tsx, etc.)
+        // 5. First non-dotfile, non-readme file
+        // 6. First file in codes
+        const targetPath = preferredPath 
+            || window._lastModifiedFilePath 
+            || (currentActivePath && !currentActivePath.startsWith('.') ? currentActivePath : null);
+
+        let targetCode = null;
+        if (targetPath) {
+            targetCode = codes.find(c => (c.module_name || c.path) === targetPath);
+        }
+
+        if (!targetCode) {
+            const mainCandidates = ['lib/main.dart', 'main.dart', 'main.py', 'app.py', 'src/App.tsx', 'src/index.tsx', 'index.js', 'src/main.js'];
+            for (const cand of mainCandidates) {
+                targetCode = codes.find(c => (c.module_name || c.path || '').toLowerCase() === cand.toLowerCase());
+                if (targetCode) break;
             }
         }
-        
+
+        if (!targetCode) {
+            targetCode = codes.find(c => {
+                const name = c.module_name || c.path || '';
+                return !name.startsWith('.') && !name.toLowerCase().includes('readme');
+            });
+        }
+
+        if (!targetCode) {
+            targetCode = codes[0];
+        }
+
+        const targetCodeId = targetCode ? targetCode.id : null;
+
+        tabsBox.innerHTML = '';
+        let targetTabBtn = null;
+        codes.forEach((code) => {
+            const pathName = code.module_name || code.path;
+            const btn = document.createElement('button');
+            const isTarget = (code.id === targetCodeId);
+            btn.className = `file-tab ${isTarget ? 'active' : ''}`;
+            btn.setAttribute('data-code-id', code.id);
+            btn.setAttribute('data-path', pathName);
+            btn.setAttribute('onclick', `loadCodeFile(${code.id}, this, true)`);
+            btn.innerHTML = '<i data-lucide="file-code" class="icon-inline"></i> ';
+            btn.appendChild(document.createTextNode(pathName));
+            tabsBox.appendChild(btn);
+            if (isTarget) targetTabBtn = btn;
+        });
+
+        // Show actions bar
+        if (codeActionsBar) codeActionsBar.classList.remove('hidden');
+
+        // Always close old view and reopen target file with fresh code
+        if (targetCodeId) {
+            loadCodeFile(targetCodeId, targetTabBtn, true);
+        }
+
         renderTreeExplorer();
-        lucide.createIcons();
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+        }
     }
     
-    // Fetch file code content
-    async function loadCodeFile(codeId, tabElement) {
+    // Fetch file code content & reload fresh version
+    async function loadCodeFile(codeId, tabElement, forceCloseAndReopen = false) {
         if (typeof codeId === 'object' && codeId !== null) {
             tabElement = codeId;
             codeId = tabElement.dataset.codeId;
@@ -2398,16 +2539,35 @@
             }
         }
         renderTreeExplorer();
+
+        if (forceCloseAndReopen && codeViewContainer) {
+            codeViewContainer.style.opacity = '0.35';
+            codeViewContainer.style.transition = 'opacity 0.15s ease';
+        }
         
         try {
-            const response = await fetch(`/api/code/${codeId}/`);
+            const response = await fetch(`/api/code/${codeId}/?_t=${Date.now()}`, { cache: 'no-store' });
             if (response.ok) {
                 const data = await response.json();
                 
-                activeFileTitle.textContent = data.module_name;
+                if (activeFileTitle) activeFileTitle.textContent = data.module_name;
+
+                // Version & update indicator badge
+                const badge = document.getElementById('active-file-badge');
+                if (badge && data.version) {
+                    badge.textContent = `v${data.version} (Updated)`;
+                    badge.className = 'badge-file-version updated-flash';
+                    badge.classList.remove('hidden');
+                    setTimeout(() => {
+                        if (badge) {
+                            badge.textContent = `v${data.version}`;
+                            badge.classList.remove('updated-flash');
+                        }
+                    }, 3500);
+                }
                 
                 // Set code block with language class
-                const modName = data.module_name.toLowerCase();
+                const modName = (data.module_name || '').toLowerCase();
                 let langClass = 'language-python';
                 if (modName.endsWith('.html') || modName.endsWith('.htm')) langClass = 'language-html';
                 else if (modName.endsWith('.js') || modName.endsWith('.ts') || modName.endsWith('.jsx') || modName.endsWith('.tsx')) langClass = 'language-javascript';
@@ -2432,12 +2592,16 @@
                     Prism.highlightElement(codeNode);
                 }
 
+                if (forceCloseAndReopen && codeViewContainer) {
+                    codeViewContainer.style.opacity = '1';
+                }
                 
                 // Make sure action buttons are visible
-                codeActionsBar.classList.remove('hidden');
+                if (codeActionsBar) codeActionsBar.classList.remove('hidden');
             }
         } catch (err) {
             console.error("Error loading code file:", err);
+            if (codeViewContainer) codeViewContainer.style.opacity = '1';
         }
     }
     
@@ -2686,6 +2850,7 @@
         // Always uncollapse the workspace panel when a stage button is clicked
         if (workspaceWrapper && workspaceWrapper.classList.contains('collapsed-code')) {
             workspaceWrapper.classList.remove('collapsed-code');
+            updateWorkspaceToggleUI(false);
         }
 
         if (stageName === 'discover') {
@@ -2707,6 +2872,7 @@
     window.switchRightPanel = function(mode) {
         if (workspaceWrapper && workspaceWrapper.classList.contains('collapsed-code')) {
             workspaceWrapper.classList.remove('collapsed-code');
+            updateWorkspaceToggleUI(false);
         }
         document.querySelectorAll('.panel-tab-btn').forEach(btn => btn.classList.remove('active'));
 
@@ -2813,6 +2979,13 @@
                             item.textContent = `[${ev.kind.toUpperCase()}] ${ev.message}`;
                             logBox.appendChild(item);
                             logBox.scrollTop = logBox.scrollHeight;
+
+                            if (ev.message) {
+                                const fm = ev.message.match(/Completed '([^']+)'/) || ev.message.match(/Writing file \(\d+\/\d+\): '([^']+)'/);
+                                if (fm && fm[1]) {
+                                    window._lastModifiedFilePath = fm[1];
+                                }
+                            }
                         });
                         const lastEv = data.events[data.events.length - 1];
                         const statusTitle = document.getElementById('active-job-current-status');
@@ -2843,15 +3016,18 @@
                             if (banner) banner.classList.add('hidden');
                         }, 3000);
                         if (data.status === 'succeeded') {
-                            fetch(`/api/session/{{ session.uuid }}/tree/`)
+                            fetch(`/api/session/{{ session.uuid }}/tree/?_t=${Date.now()}`)
                                 .then(r => r.json())
                                 .then(treeData => {
                                     const fileList = (treeData.project_files && treeData.project_files.length > 0)
                                         ? treeData.project_files.map(f => ({ id: f.id, module_name: f.path }))
                                         : (treeData.generated_codes || []);
                                     if (fileList.length > 0) {
-                                        updateCodeFilesPanel(fileList);
-                                        if (workspaceWrapper) workspaceWrapper.classList.remove('collapsed-code');
+                                        updateCodeFilesPanel(fileList, window._lastModifiedFilePath);
+                                        if (workspaceWrapper && workspaceWrapper.classList.contains('collapsed-code')) {
+                                            workspaceWrapper.classList.remove('collapsed-code');
+                                            updateWorkspaceToggleUI(false);
+                                        }
                                     }
                                 });
                             const sessStatus = data.session_status || 'ready';

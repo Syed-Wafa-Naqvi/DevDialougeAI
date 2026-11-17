@@ -2,6 +2,7 @@ import json
 import os
 from django.conf import settings
 from django.test import TestCase, Client
+from django.urls import reverse
 from django.contrib.auth.models import User
 from unittest.mock import patch
 from accounts.models import Profile
@@ -1113,6 +1114,53 @@ class ChatTestCase(TestCase):
         self.assertTrue(res_get2.json()['has_verification'])
         self.assertTrue(res_get2.json()['passed'])
 
+    def test_workspace_collapsible_elements_and_smart_initial_file(self):
+        """
+        Verify that chat_view:
+        1. Selects key source file (e.g. lib/main.dart or app.py) over .gitignore.
+        2. Renders all workspace toggle and collapse controls (<, Close, Workspace, Floating reopen).
+        """
+        sess = Session.objects.create(user=self.user, title="Chess Game In Flutter", status="ready")
+
+        # Create files where .gitignore is alphabetically first
+        f_git = ProjectFile.objects.create(session=sess, path=".gitignore", content=".dart_tool/\nbuild/")
+        f_readme = ProjectFile.objects.create(session=sess, path="README.md", content="# Chess Game")
+        f_main = ProjectFile.objects.create(session=sess, path="lib/main.dart", content="void main() => runApp(MyApp());")
+
+        response = self.client.get(reverse('chat', kwargs={'session_id': sess.uuid}))
+        self.assertEqual(response.status_code, 200)
+
+        # 1. Smart initial file selection must pick lib/main.dart, not .gitignore
+        self.assertIn('active_initial_file', response.context)
+        self.assertEqual(response.context['active_initial_file'].path, 'lib/main.dart')
+
+        content = response.content.decode('utf-8')
+        # 2. Workspace toggle button on dividing edge
+        self.assertIn('id="workspace-toggle-button"', content)
+        # 3. Collapse button in workspace header
+        self.assertIn('class="panel-collapse-btn"', content)
+        # 4. Topbar workspace toggle button
+        self.assertIn('id="btn-topbar-toggle-workspace"', content)
+        # 5. Floating reopen button on right edge when collapsed
+        self.assertIn('id="btn-floating-reopen-workspace"', content)
+        # 6. Version & updated badge element
+        self.assertIn('id="active-file-badge"', content)
+
+    def test_get_code_file_api_returns_latest_code_and_version(self):
+        """
+        Verify that /api/code/<id>/ returns fresh code content and current version.
+        """
+        sess = Session.objects.create(user=self.user, title="Code Versioning Test", status="ready")
+        pf = ProjectFile.objects.create(session=sess, path="lib/board.dart", content="class Board { int size = 8; }")
+        pf.create_new_version("class Board { int size = 8; void reset() {} }", source='user_feedback')
+
+        resp = self.client.get(f"/api/code/{pf.id}/")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data['module_name'], 'lib/board.dart')
+        self.assertEqual(data['version'], 2)
+        self.assertIn("void reset()", data['code_content'])
+
 
 class SelfHealingEngineTestCase(TestCase):
     """Unit and integration test suite for DevDialogue AI Autonomous Self-Healing Engine."""
@@ -1228,6 +1276,9 @@ class SelfHealingEngineTestCase(TestCase):
         resp_html = middleware(html_req)
         self.assertEqual(resp_html.status_code, 503)
         self.assertIn('Autonomous Self-Healing Active', resp_html.content.decode('utf-8'))
+
+
+
 
 
 
