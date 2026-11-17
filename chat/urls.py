@@ -18,6 +18,7 @@ urlpatterns = [
     # API endpoints
     path('api/chat/<int:session_id>/send/', views.send_message_api, name='send_message_api'),
     path('api/chat/<int:session_id>/stream/', views.stream_chat_api, name='stream_chat_api'),
+    path('api/chat/<int:session_id>/message/<int:message_id>/delete/', views.delete_message_api, name='delete_message_api'),
     path('api/code/<int:code_id>/', views.get_code_file_api, name='get_code_file_api'),
     path('api/jobs/<int:job_id>/events/', views.get_job_events_api, name='get_job_events_api'),
     path('api/jobs/<int:job_id>/cancel/', views.cancel_job_api, name='cancel_job_api'),

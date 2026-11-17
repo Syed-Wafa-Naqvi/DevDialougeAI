@@ -26,7 +26,99 @@
 <link href="/static/css/components/diff_view.css" rel="stylesheet" />
 <link href="/static/css/components/checks_panel.css" rel="stylesheet" />
 <style>
-/* Edit User Message Button & Inline Editor */
+/* 3-Dots Message Action Menu & Inline Editor */
+.msg-menu-container {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+.btn-msg-more {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm, 6px);
+    color: var(--pencil, #94a3b8);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    padding: 0;
+}
+.btn-msg-more:hover,
+.btn-msg-more:focus {
+    color: var(--ink, #f8fafc);
+    background: var(--paper, rgba(255, 255, 255, 0.08));
+    border-color: var(--rule, rgba(255, 255, 255, 0.15));
+}
+.msg-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    min-width: 130px;
+    background: var(--sheet, #0f172a);
+    border: 1px solid var(--rule, rgba(255, 255, 255, 0.12));
+    border-radius: var(--radius-sm, 8px);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+    padding: 4px;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+.msg-dropdown-menu.hidden {
+    display: none !important;
+}
+.msg-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ink, #f1f5f9);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm, 6px);
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.12s ease;
+    font-family: inherit;
+}
+.msg-dropdown-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+}
+.msg-dropdown-item.text-danger {
+    color: #f87171;
+}
+.msg-dropdown-item.text-danger:hover {
+    background: rgba(239, 68, 68, 0.12);
+    color: #fca5a5;
+}
+[data-theme="light"] .msg-dropdown-menu {
+    background: #ffffff;
+    border-color: rgba(0, 0, 0, 0.12);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+}
+[data-theme="light"] .msg-dropdown-item {
+    color: #1e293b;
+}
+[data-theme="light"] .msg-dropdown-item:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+}
+[data-theme="light"] .msg-dropdown-item.text-danger {
+    color: #dc2626;
+}
+[data-theme="light"] .msg-dropdown-item.text-danger:hover {
+    background: #fee2e2;
+    color: #b91c1c;
+}
 .btn-edit-user-msg {
     display: inline-flex;
     align-items: center;
@@ -531,9 +623,25 @@
                                             <div class="msg-avatar-initials user-avatar">{{ user.username|slice:":1"|upper }}</div>
                                             <span class="msg-author-name">You</span>
                                         </div>
-                                        <button type="button" class="btn-edit-user-msg" onclick="startEditMessage(this)" title="Edit and resend message">
-                                            <i data-lucide="edit-3" style="width: 12px; height: 12px;"></i> Edit
-                                        </button>
+                                        <div class="msg-menu-container">
+                                            <button type="button" class="btn-msg-more" onclick="toggleMessageMenu(this, event)" title="Message options" aria-label="Message options">
+                                                <i data-lucide="more-horizontal" style="width: 14px; height: 14px;"></i>
+                                            </button>
+                                            <div class="msg-dropdown-menu hidden">
+                                                <button type="button" class="msg-dropdown-item btn-menu-edit" onclick="startEditMessageFromMenu(this, '{{ msg.id }}')">
+                                                    <i data-lucide="edit-3" style="width: 13px; height: 13px;"></i>
+                                                    <span>Edit</span>
+                                                </button>
+                                                <button type="button" class="msg-dropdown-item text-danger btn-menu-unsend" onclick="unsendMessage(this, '{{ msg.id }}')">
+                                                    <i data-lucide="undo-2" style="width: 13px; height: 13px;"></i>
+                                                    <span>Unsend</span>
+                                                </button>
+                                                <button type="button" class="msg-dropdown-item text-danger btn-menu-delete" onclick="deleteMessage(this, '{{ msg.id }}')">
+                                                    <i data-lucide="trash-2" style="width: 13px; height: 13px;"></i>
+                                                    <span>Delete</span>
+                                                </button>
+                                            </div>
+                                        </div>
                                     {% else %}
                                         <div class="msg-author-info" style="display: flex; align-items: center; gap: 8px;">
                                             <div class="msg-avatar-initials assistant-avatar">AI</div>
@@ -1580,6 +1688,13 @@
                                         const topbarTitleText = document.getElementById('active-topbar-title-text');
                                         if (topbarTitleText) topbarTitleText.textContent = ev.title;
                                     }
+
+                                    if (ev.user_message_id) {
+                                        const userRow = rowDiv.previousElementSibling;
+                                        if (userRow && userRow.classList.contains('user-row')) {
+                                            userRow.setAttribute('data-msg-id', ev.user_message_id);
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1652,6 +1767,13 @@
                             }
                             const topbarTitleText = document.getElementById('active-topbar-title-text');
                             if (topbarTitleText) topbarTitleText.textContent = data.title;
+                        }
+
+                        if (data.user_message_id) {
+                            const userRows = document.querySelectorAll('.message-row.user-row');
+                            if (userRows.length > 0) {
+                                userRows[userRows.length - 1].setAttribute('data-msg-id', data.user_message_id);
+                            }
                         }
                     } else {
                         appendMessageBubble('assistant', `⚠️ ${data.error || 'Something went wrong.'}`);
@@ -1732,9 +1854,25 @@
                 <div class="msg-author-info" style="display: flex; align-items: center; gap: 8px;">
                     ${avatarHTML}<span class="msg-author-name">${authorName}</span>
                 </div>
-                <button type="button" class="btn-edit-user-msg" onclick="startEditMessage(this, null)" title="Edit and resend message">
-                    <i data-lucide="edit-3" style="width: 12px; height: 12px;"></i> Edit
-                </button>
+                <div class="msg-menu-container">
+                    <button type="button" class="btn-msg-more" onclick="toggleMessageMenu(this, event)" title="Message options" aria-label="Message options">
+                        <i data-lucide="more-horizontal" style="width: 14px; height: 14px;"></i>
+                    </button>
+                    <div class="msg-dropdown-menu hidden">
+                        <button type="button" class="msg-dropdown-item btn-menu-edit" onclick="startEditMessageFromMenu(this, '')">
+                            <i data-lucide="edit-3" style="width: 13px; height: 13px;"></i>
+                            <span>Edit</span>
+                        </button>
+                        <button type="button" class="msg-dropdown-item text-danger btn-menu-unsend" onclick="unsendMessage(this, '')">
+                            <i data-lucide="undo-2" style="width: 13px; height: 13px;"></i>
+                            <span>Unsend</span>
+                        </button>
+                        <button type="button" class="msg-dropdown-item text-danger btn-menu-delete" onclick="deleteMessage(this, '')">
+                            <i data-lucide="trash-2" style="width: 13px; height: 13px;"></i>
+                            <span>Delete</span>
+                        </button>
+                    </div>
+                </div>
             `;
         } else {
             authorDiv.innerHTML = `${avatarHTML}<span class="msg-author-name">${authorName}</span>`;
@@ -1791,6 +1929,126 @@
         messagesBox.insertBefore(rowDiv, typingIndicator);
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
+
+    // 3-Dots Message Action Menu & Unsend / Delete Handlers
+    window.toggleMessageMenu = function(button, event) {
+        if (event) {
+            event.stopPropagation();
+            event.preventDefault();
+        }
+        const container = button.closest('.msg-menu-container');
+        if (!container) return;
+        const menu = container.querySelector('.msg-dropdown-menu');
+        if (!menu) return;
+
+        const isHidden = menu.classList.contains('hidden');
+        window.closeAllMessageMenus();
+        if (isHidden) {
+            menu.classList.remove('hidden');
+        }
+    };
+
+    window.closeAllMessageMenus = function() {
+        document.querySelectorAll('.msg-dropdown-menu:not(.hidden)').forEach(m => {
+            m.classList.add('hidden');
+        });
+    };
+
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.msg-menu-container')) {
+            window.closeAllMessageMenus();
+        }
+    });
+
+    window.startEditMessageFromMenu = function(button, msgId) {
+        window.closeAllMessageMenus();
+        const row = button.closest('.message-row');
+        if (!row) return;
+        const finalMsgId = msgId || row.getAttribute('data-msg-id') || row.dataset.msgId || '';
+        window.startEditMessage(button, finalMsgId);
+    };
+
+    window.unsendMessage = async function(button, msgId) {
+        window.closeAllMessageMenus();
+        const row = button.closest('.message-row');
+        if (!row) return;
+        const finalMsgId = msgId || row.getAttribute('data-msg-id') || row.dataset.msgId;
+
+        if (!finalMsgId) {
+            // Message still generating or local unsaved
+            if (currentAbortController) {
+                currentAbortController.abort();
+                currentAbortController = null;
+            }
+            row.style.transition = 'all 0.25s ease';
+            row.style.opacity = '0';
+            row.style.transform = 'translateY(-10px)';
+            setTimeout(() => row.remove(), 250);
+            return;
+        }
+
+        if (!confirm('Unsend this message? This will remove the message and the AI response.')) {
+            return;
+        }
+
+        try {
+            const deleteUrl = `/api/chat/{{ session.id }}/message/${finalMsgId}/delete/`;
+            const resp = await fetch(deleteUrl, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'Content-Type': 'application/json'
+                }
+            });
+            const resData = await resp.json();
+            if (resp.ok && resData.success) {
+                // Animate removal of user row
+                row.style.transition = 'all 0.25s ease';
+                row.style.opacity = '0';
+                row.style.transform = 'translateY(-10px)';
+
+                // Remove associated assistant reply row(s) directly following it
+                let nextRow = row.nextElementSibling;
+                while (nextRow && nextRow.classList.contains('assistant-row') && !nextRow.classList.contains('typing-indicator-row')) {
+                    const targetRow = nextRow;
+                    nextRow = nextRow.nextElementSibling;
+                    targetRow.style.transition = 'all 0.25s ease';
+                    targetRow.style.opacity = '0';
+                    targetRow.style.transform = 'translateY(-10px)';
+                    setTimeout(() => targetRow.remove(), 250);
+                }
+
+                setTimeout(() => {
+                    row.remove();
+                    const remainingRows = document.querySelectorAll('#messages-box .message-row:not(.typing-indicator-row)');
+                    if (remainingRows.length === 0) {
+                        const consolePanel = document.querySelector('.chat-console-panel');
+                        if (consolePanel) consolePanel.classList.add('first-load-state');
+                    }
+                }, 250);
+
+                if (resData.completeness_score !== undefined) {
+                    const scoreVal = document.getElementById('completeness-score-val');
+                    const barFill = document.getElementById('completeness-bar-fill');
+                    if (scoreVal) scoreVal.textContent = `${resData.completeness_score}%`;
+                    if (barFill) barFill.style.width = `${resData.completeness_score}%`;
+                }
+                if (resData.session_status) {
+                    updateStatusBadge(resData.session_status);
+                    updateStepperStage(resData.session_status);
+                }
+            } else {
+                alert(resData.error || 'Failed to unsend message.');
+            }
+        } catch (e) {
+            console.error('Unsend error:', e);
+            alert('Network error while unsending message.');
+        }
+    };
+
+    window.deleteMessage = function(button, msgId) {
+        window.unsendMessage(button, msgId);
+    };
 
     // Inline Message Editing Controls
     window.startEditMessage = function(button, msgId) {

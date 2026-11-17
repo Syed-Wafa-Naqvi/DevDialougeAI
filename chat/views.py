@@ -854,7 +854,7 @@ def send_message_api(request, session_id):
             'status': session.status
         })
 
-    Message.objects.create(session=session, role='assistant', content=response_text)
+    assistant_msg = Message.objects.create(session=session, role='assistant', content=response_text)
 
     
     if not session.has_custom_title:
@@ -892,6 +892,8 @@ def send_message_api(request, session_id):
         'completeness_score': comp_score,
         'rubric_cats': rubric_cats,
         'job_id': active_job.id if active_job else None,
+        'user_message_id': user_msg.id,
+        'assistant_message_id': assistant_msg.id,
         'attachment': {
             'id': attachment_obj.id,
             'file_name': attachment_obj.file_name,
@@ -1304,5 +1306,56 @@ def get_file_tree_api(request, session_id):
         'project_files': p_files,
         'generated_codes': [{'id': f['id'], 'module_name': f['path']} for f in p_files]
     })
+
+@verification_required
+def delete_message_api(request, session_id, message_id):
+    """
+    Unsend / delete a chat message.
+    Also deletes any assistant response that directly answered this message,
+    and updates session status and completeness score.
+    """
+    if request.method not in ('POST', 'DELETE'):
+        return JsonResponse({'error': 'POST or DELETE request required'}, status=405)
+
+    session = get_object_or_404(Session.objects.select_related('user'), id=session_id, user=request.user)
+    target_msg = session.messages.filter(id=message_id).first()
+    if not target_msg:
+        return JsonResponse({'error': 'Message not found'}, status=404)
+
+    # Find associated assistant replies following this user message before any next user message
+    next_user_msg = session.messages.filter(id__gt=target_msg.id, role='user').order_by('id').first()
+    if next_user_msg:
+        associated_replies = list(session.messages.filter(id__gt=target_msg.id, id__lt=next_user_msg.id, role='assistant'))
+    else:
+        associated_replies = list(session.messages.filter(id__gt=target_msg.id, role='assistant'))
+
+    deleted_reply_ids = [r.id for r in associated_replies]
+
+    # Delete replies and target message
+    for r in associated_replies:
+        r.delete()
+    target_msg.delete()
+
+    # Recalculate remaining history and session state
+    remaining_messages = list(session.messages.values('role', 'content'))
+    if not remaining_messages:
+        session.status = 'active'
+        session.save(update_fields=['status'])
+        comp_score = 0
+    else:
+        try:
+            comp_score = CompletenessEngine.compute_completeness_score(remaining_messages)
+        except Exception:
+            comp_score = 0
+
+    return JsonResponse({
+        'success': True,
+        'deleted_message_id': message_id,
+        'deleted_reply_ids': deleted_reply_ids,
+        'remaining_count': len(remaining_messages),
+        'completeness_score': comp_score,
+        'session_status': session.status
+    })
+
 
 

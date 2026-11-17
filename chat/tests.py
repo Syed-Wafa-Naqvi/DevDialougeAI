@@ -922,4 +922,49 @@ class ChatTestCase(TestCase):
         self.assertEqual(pf.current_version, 2)
         self.assertEqual(pf.versions.count(), 2)
 
+    def test_unsend_user_message_deletes_both_message_and_assistant_reply(self):
+        """Unsending a message removes the user prompt and the assistant response that followed it."""
+        session = Session.objects.create(user=self.user, mode='mode1', status='interviewing')
+        u_msg = Message.objects.create(session=session, role='user', content='Hello, I need a booking app')
+        a_msg = Message.objects.create(session=session, role='assistant', content='Sure, what features do you need?')
+
+        response = self.client.post(f'/api/chat/{session.id}/message/{u_msg.id}/delete/')
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data.get('success'))
+        self.assertEqual(data.get('deleted_message_id'), u_msg.id)
+        self.assertIn(a_msg.id, data.get('deleted_reply_ids', []))
+
+        self.assertFalse(Message.objects.filter(id=u_msg.id).exists())
+        self.assertFalse(Message.objects.filter(id=a_msg.id).exists())
+        self.assertEqual(session.messages.count(), 0)
+
+    def test_unsend_intermediate_message_preserves_earlier_messages(self):
+        """Unsending the second turn removes turn 2 while keeping turn 1 safe."""
+        session = Session.objects.create(user=self.user, mode='mode1', status='interviewing')
+        u1 = Message.objects.create(session=session, role='user', content='Turn 1 user')
+        a1 = Message.objects.create(session=session, role='assistant', content='Turn 1 assistant')
+        u2 = Message.objects.create(session=session, role='user', content='Turn 2 user')
+        a2 = Message.objects.create(session=session, role='assistant', content='Turn 2 assistant')
+
+        response = self.client.post(f'/api/chat/{session.id}/message/{u2.id}/delete/')
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json().get('success'))
+
+        self.assertTrue(Message.objects.filter(id=u1.id).exists())
+        self.assertTrue(Message.objects.filter(id=a1.id).exists())
+        self.assertFalse(Message.objects.filter(id=u2.id).exists())
+        self.assertFalse(Message.objects.filter(id=a2.id).exists())
+
+    def test_unsend_message_unauthorized_user_forbidden(self):
+        """A user cannot delete/unsend messages from another user's session."""
+        other_user = User.objects.create_user(username='other_user', password='password123')
+        session = Session.objects.create(user=other_user, mode='mode1', status='active')
+        msg = Message.objects.create(session=session, role='user', content='Secret msg')
+
+        response = self.client.post(f'/api/chat/{session.id}/message/{msg.id}/delete/')
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(Message.objects.filter(id=msg.id).exists())
+
+
 

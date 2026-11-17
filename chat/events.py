@@ -99,7 +99,9 @@ class AgentEvent:
         rubric_cats: Optional[Dict[str, Any]] = None,
         codes: Optional[list] = None,
         title: Optional[str] = None,
-        attachment: Optional[Dict[str, Any]] = None
+        attachment: Optional[Dict[str, Any]] = None,
+        user_message_id: Optional[int] = None,
+        assistant_message_id: Optional[int] = None
     ) -> Dict[str, Any]:
         return {
             "type": "done",
@@ -112,6 +114,8 @@ class AgentEvent:
             "codes": codes or [],
             "title": title,
             "attachment": attachment,
+            "user_message_id": user_message_id,
+            "assistant_message_id": assistant_message_id,
             "timestamp": time.time(),
         }
 
@@ -558,7 +562,7 @@ def stream_agent_response(
         yield format_sse(AgentEvent.answer_chunk(delta="".join(chunk_buffer)))
 
     # Step 5: Save assistant message in DB
-    Message.objects.create(session=session, role='assistant', content=response_text)
+    assistant_msg = Message.objects.create(session=session, role='assistant', content=response_text)
 
     # Auto-generate custom title if not yet set
     new_title = None
@@ -615,5 +619,7 @@ def stream_agent_response(
         rubric_cats=rubric_cats,
         codes=codes_list,
         title=new_title or session.title,
-        attachment=att_dict
+        attachment=att_dict,
+        user_message_id=user_msg.id,
+        assistant_message_id=assistant_msg.id
     ))
