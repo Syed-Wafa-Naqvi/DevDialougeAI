@@ -3,6 +3,7 @@ import logging
 import re
 from llm_engine.router import LLMRouter
 from generator.path_safety import PathSafetyManager
+from generator.harmonizer import UniversalProjectHarmonizer
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,7 @@ class AIHarnessPackager:
 
     @classmethod
     def generate_harness(cls, session, existing_files: dict, project_name: str) -> dict:
+        orig_existing = dict(existing_files)
         file_list = sorted(list(existing_files.keys()))
         display_title = project_name.replace('_', ' ')
 
@@ -197,8 +199,16 @@ class AIHarnessPackager:
                     if m:
                         asset_path = m.group(1).rstrip('/')
                         gitkeep_path = f"{asset_path}/.gitkeep"
-                        if not any(f.startswith(asset_path + "/") for f in existing_files.keys()):
+                        if not any(f.startswith(asset_path + "/") for f in orig_existing.keys()):
                             new_files[gitkeep_path] = ""
+
+        combined = {**existing_files, **new_files}
+        UniversalProjectHarmonizer.harmonize(combined, project_name)
+        for k, v in combined.items():
+            if k not in existing_files:
+                new_files[k] = v
+            elif k in ('pubspec.yaml', 'requirements.txt', 'package.json') and v != existing_files[k]:
+                new_files[k] = v
 
         logger.info("📦 [HARNESS PACKAGER] Generated %d runner/manifest files for '%s': %s", len(new_files), project_name, list(new_files.keys()))
         return new_files

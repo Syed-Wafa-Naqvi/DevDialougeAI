@@ -3,6 +3,7 @@ import re
 import zipfile
 from chat.models import GeneratedCode, ProjectFile, VerificationRun
 from generator.path_safety import PathSafetyManager
+from generator.harmonizer import UniversalProjectHarmonizer
 from exporter.harness_agent import AIHarnessPackager
 
 class ZipArchiver:
@@ -111,6 +112,7 @@ class ZipArchiver:
 
         # Merge files
         final_files = {**existing_files, **harness_files}
+        UniversalProjectHarmonizer.harmonize(final_files, project_name)
 
         # 3. Assemble the in-memory ZIP archive
         with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zf:

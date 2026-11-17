@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import sys
+from generator.harmonizer import UniversalProjectHarmonizer
 
 logger = logging.getLogger('generator.verifier')
 
@@ -580,6 +581,56 @@ class StaticVerifier:
                             severity='warning',
                             check='missing_asset_dir',
                             message=f"Asset directory '{dir_path}/' is listed in pubspec.yaml but contains no files. Placeholder .gitkeep will be added."
+                        ))
+
+            # Check 7: Package name alignment between pubspec.yaml and Dart package imports
+            declared_name_m = re.search(r'^name:\s*([a-zA-Z0-9_]+)', pub_content, re.MULTILINE)
+            declared_name = declared_name_m.group(1) if declared_name_m else ''
+
+            for path, content in dart_files.items():
+                for m in re.finditer(r"import\s+['\"]package:([a-zA-Z0-9_]+)/([^'\"]+)['\"]", content):
+                    pkg = m.group(1)
+                    sub = m.group(2)
+                    if pkg not in ('flutter', 'flutter_test', 'flutter_lints'):
+                        # If subpath exists in project lib/, this is an internal package import
+                        if f"lib/{sub}" in files or any(p.endswith(sub) for p in files):
+                            if declared_name and pkg != declared_name:
+                                issues.append(cls._create_issue(
+                                    file_path=path,
+                                    line=1,
+                                    severity='error',
+                                    check='package_name_mismatch',
+                                    message=f"Internal import 'package:{pkg}/{sub}' mismatches declared package name '{declared_name}' in pubspec.yaml."
+                                ))
+
+            # Check 8: Missing dependencies in pubspec.yaml
+            for path, content in dart_files.items():
+                for m in re.finditer(r"import\s+['\"]package:([a-zA-Z0-9_]+)/", content):
+                    pkg = m.group(1)
+                    if pkg not in ('flutter', 'flutter_test', 'flutter_lints', declared_name):
+                        if not re.search(r'^\s*' + re.escape(pkg) + r'\s*:', pub_content, re.MULTILINE):
+                            issues.append(cls._create_issue(
+                                file_path='pubspec.yaml',
+                                line=1,
+                                severity='error',
+                                check='missing_pubspec_dependency',
+                                message=f"Package '{pkg}' is imported in '{path}' but not declared in pubspec.yaml dependencies."
+                            ))
+
+        # Check 9: Non-existent relative imports in Dart files
+        for path, content in dart_files.items():
+            dir_name = os.path.dirname(path)
+            for m in re.finditer(r"import\s+['\"]([a-zA-Z0-9_\-\./]+\.dart)['\"]", content):
+                rel_file = m.group(1)
+                if not rel_file.startswith('package:') and not rel_file.startswith('dart:'):
+                    target_path = os.path.normpath(os.path.join(dir_name, rel_file))
+                    if target_path not in files:
+                        issues.append(cls._create_issue(
+                            file_path=path,
+                            line=1,
+                            severity='error',
+                            check='broken_relative_import',
+                            message=f"Imported relative file '{rel_file}' (resolved as '{target_path}') does not exist in the project."
                         ))
 
         return issues

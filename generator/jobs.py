@@ -6,6 +6,7 @@ from generator.planner import PlanGenerator
 from generator.code_builder import CodeBuilder
 from generator.repair import CodeRepairEngine
 from generator.verifier import StaticVerifier
+from generator.harmonizer import UniversalProjectHarmonizer
 
 logger = logging.getLogger('generator.jobs')
 
@@ -263,6 +264,7 @@ class JobExecutionEngine:
                         )
 
         # Verification & Automated Self-Repair Loop Phase
+        UniversalProjectHarmonizer.harmonize(generated_files, project_name)
         SessionStateMachine.transition_to(session, 'verifying')
         job.log_event('info', "Running pre-flight compiler verification and repair loop...")
         logger.info("🛡️ [VERIFICATION PHASE] Starting pre-flight verification & repair loop for Session #%s (%d files)...", session.id, len(generated_files))
@@ -274,6 +276,15 @@ class JobExecutionEngine:
             max_attempts=4,
             provider_name=provider_name
         )
+
+        # Sync all repaired files back into ProjectFile records
+        for r_path, r_content in repair_res['files'].items():
+            pf = session.project_files.filter(path=r_path).first()
+            if pf:
+                if pf.content != r_content:
+                    pf.create_new_version(r_content, source='repair')
+            else:
+                ProjectFile.objects.create(session=session, path=r_path, content=r_content, status='verified', current_version=1)
 
         final_status = repair_res['status']
         if final_status in ('verified', 'verified_with_warnings'):

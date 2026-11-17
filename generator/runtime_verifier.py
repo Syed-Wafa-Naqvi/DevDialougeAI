@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 from django.conf import settings
 from generator.verifier import StaticVerifier
+from generator.harmonizer import UniversalProjectHarmonizer
 
 logger = logging.getLogger('generator.runtime_verifier')
 
@@ -117,6 +118,7 @@ class RuntimeVerifier:
     @classmethod
     def run_dart_verification(cls, files: dict) -> dict:
         """Runs flutter analyze or dart analyze on Dart/Flutter projects if SDK is available."""
+        UniversalProjectHarmonizer.harmonize(files)
         dart_files = [p for p in files.keys() if p.endswith('.dart')]
         if not dart_files:
             return {'executed': False, 'passed': True, 'issues': []}
@@ -515,6 +517,7 @@ class RuntimeVerifier:
         Executes guarded runtime and native compiler checks across all project languages.
         Returns verification result dictionary.
         """
+        UniversalProjectHarmonizer.harmonize(files)
         all_compiler_issues = []
         any_executed = False
         logger.info("🔬 [RUNTIME VERIFIER] Inspecting %d files for native compiler / syntax checks...", len(files))

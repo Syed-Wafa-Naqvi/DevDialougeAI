@@ -971,6 +971,96 @@ class CodeGenerationRobustnessTestCase(TestCase):
             self.assertTrue(res_clean['passed'])
 
 
+class HarmonizerAndRepairTestCase(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='harmuser', email='harm@example.com', password='Password123!')
+        self.session = Session.objects.create(user=self.user, title="Harmonizer Session")
+
+    def test_dart_harmonizer_package_name_sync(self):
+        from generator.harmonizer import UniversalProjectHarmonizer
+        files = {
+            'pubspec.yaml': "name: chess_application\ndescription: Chess App\ndependencies:\n  flutter:\n    sdk: flutter\n",
+            'lib/main.dart': "import 'package:flutter_chess_game/ui/game_screen.dart';\nvoid main() {}\n",
+            'lib/ui/game_screen.dart': "class GameScreen {}\n"
+        }
+        UniversalProjectHarmonizer.harmonize(files)
+        self.assertIn("name: flutter_chess_game", files['pubspec.yaml'])
+
+    def test_dart_harmonizer_inject_dependencies_and_assets_gitkeep(self):
+        from generator.harmonizer import UniversalProjectHarmonizer
+        files = {
+            'pubspec.yaml': (
+                "name: flutter_chess_game\n"
+                "dependencies:\n"
+                "  flutter:\n"
+                "    sdk: flutter\n\n"
+                "flutter:\n"
+                "  assets:\n"
+                "    - assets/images/\n"
+                "    - assets/sounds/\n"
+            ),
+            'lib/main.dart': (
+                "import 'package:uuid/uuid.dart';\n"
+                "import 'package:http/http.dart' as http;\n"
+                "import 'package:collection/collection.dart';\n"
+                "void main() {}\n"
+            )
+        }
+        UniversalProjectHarmonizer.harmonize(files)
+        # Verify dependencies were injected
+        self.assertIn("uuid:", files['pubspec.yaml'])
+        self.assertIn("http:", files['pubspec.yaml'])
+        self.assertIn("collection:", files['pubspec.yaml'])
+        # Verify .gitkeep placeholders were generated for declared assets
+        self.assertIn("assets/images/.gitkeep", files)
+        self.assertIn("assets/sounds/.gitkeep", files)
+
+    def test_dart_harmonizer_removes_broken_imports(self):
+        from generator.harmonizer import UniversalProjectHarmonizer
+        files = {
+            'pubspec.yaml': "name: flutter_chess_game\ndependencies:\n  flutter:\n    sdk: flutter\n",
+            'lib/main.dart': (
+                "import 'package:flutter_chess_game/nonexistent_file.dart';\n"
+                "import 'missing_relative.dart';\n"
+                "void main() {}\n"
+            )
+        }
+        UniversalProjectHarmonizer.harmonize(files)
+        self.assertNotIn("nonexistent_file.dart", files['lib/main.dart'])
+        self.assertNotIn("missing_relative.dart", files['lib/main.dart'])
+
+    def test_python_harmonizer_requirements_sync(self):
+        from generator.harmonizer import UniversalProjectHarmonizer
+        files = {
+            'requirements.txt': "Django>=4.2\n",
+            'views.py': "import rest_framework\nfrom PIL import Image\nimport requests\nimport yaml\n"
+        }
+        UniversalProjectHarmonizer.harmonize(files)
+        reqs = files['requirements.txt']
+        self.assertIn("djangorestframework", reqs)
+        self.assertIn("Pillow", reqs)
+        self.assertIn("requests", reqs)
+        self.assertIn("PyYAML", reqs)
+
+    def test_node_harmonizer_package_json(self):
+        from generator.harmonizer import UniversalProjectHarmonizer
+        files = {
+            'index.js': "console.log('Hello Node');\n"
+        }
+        UniversalProjectHarmonizer.harmonize(files, project_name="my_express_app")
+        self.assertIn('package.json', files)
+        self.assertIn('"name": "my-express-app"', files['package.json'])
+
+    def test_runner_harmonizer_shebang(self):
+        from generator.harmonizer import UniversalProjectHarmonizer
+        files = {
+            'run.sh': "flutter run -d chrome\n"
+        }
+        UniversalProjectHarmonizer.harmonize(files)
+        self.assertTrue(files['run.sh'].startswith("#!/usr/bin/env bash\nset -e\n"))
+
+
+
 
 
 

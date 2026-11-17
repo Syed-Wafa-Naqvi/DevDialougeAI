@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import re
 from datetime import timedelta
 from django.shortcuts import render, redirect, get_object_or_404
@@ -331,46 +332,115 @@ def _trigger_generation_job(session, user, provider_name, run_async=True):
 
 
 def _handle_module_edit(session, user_content, summary, existing_files, provider_name, user):
-    target_pf = existing_files[-1]
-    for pf in existing_files:
-        if pf.path.lower() in user_content.lower():
-            target_pf = pf
-            break
-    updated_code = CodeBuilder.generate_code_for_module(
-        target_pf.path,
-        summary,
-        modifications=user_content,
-        provider_name=provider_name,
-        session=session,
-        user=user
-    )
-    target_pf.create_new_version(updated_code, source='user_feedback')
-
+    from generator.harmonizer import UniversalProjectHarmonizer
+    from generator.repair import CodeRepairEngine
     from generator.verifier import StaticVerifier
-    from chat.models import VerificationRun
+    from generator.runtime_verifier import RuntimeVerifier
+    from chat.models import VerificationRun, ProjectFile
+
     files_dict = {f.path: f.content for f in session.project_files.all()}
-    verif_res = StaticVerifier.verify_project(files_dict)
-    VerificationRun.objects.create(
-        session=session,
-        level='static',
-        passed=verif_res.get('passed', True),
-        error_count=verif_res.get('error_count', 0),
-        warning_count=verif_res.get('warning_count', 0),
-        issues=verif_res.get('issues', [])
-    )
-    file_issues = {iss['file'] for iss in verif_res.get('issues', [])}
-    target_pf.status = 'has_issues' if target_pf.path in file_issues else 'verified'
-    target_pf.save(update_fields=['status'])
+    
+    # 1. Deterministic Harmonization
+    UniversalProjectHarmonizer.harmonize(files_dict)
+    
+    # 2. Check if user is reporting errors, asking to fix, or pasting compiler logs
+    error_keywords = ['error', 'errors', 'fix', 'repair', 'broken', 'fail', 'undefined', 'exception', 'stack trace', 'run.sh', 'crash', 'working?', 'verify']
+    is_error_fix_request = any(k in user_content.lower() for k in error_keywords) or '•' in user_content or 'error:' in user_content.lower() or 'traceback' in user_content.lower()
+    
+    plan_obj = session.plans.first()
+    plan_data = plan_obj.plan_data if plan_obj and isinstance(plan_obj.plan_data, dict) else None
 
-    verif_msg = ""
-    if not verif_res.get('passed', True):
-        verif_msg = f"\n\n*Note: Static verification reported {verif_res.get('error_count', 0)} issue(s). Check the Verification panel for details.*"
+    # Check which specific files are referenced in the user's message
+    mentioned_files = [pf for pf in existing_files if pf.path.lower() in user_content.lower() or os.path.basename(pf.path).lower() in user_content.lower()]
 
-    return (
-        f"### ✏️ Updated Module `{target_pf.path}`\n\n"
-        f"I have modified `{target_pf.path}` based on your request: *\"{user_content}\"*\n\n"
-        f"You can review the updated code in the right panel and download the project ZIP anytime.{verif_msg}"
-    )
+    if is_error_fix_request or len(mentioned_files) > 1:
+        logger.info("🛡️ [CHAT REPAIR] User requested multi-file / compiler error fix. Running comprehensive repair loop...")
+        repair_res = CodeRepairEngine.run_repair_loop(
+            session=session,
+            files_dict=files_dict,
+            plan_data=plan_data,
+            max_attempts=4,
+            provider_name=provider_name
+        )
+        updated_files = repair_res['files']
+        
+        # Persist updated files
+        modified_paths = []
+        for path, new_content in updated_files.items():
+            pf = session.project_files.filter(path=path).first()
+            if pf:
+                if pf.content != new_content:
+                    pf.create_new_version(new_content, source='user_feedback')
+                    modified_paths.append(path)
+            else:
+                ProjectFile.objects.create(session=session, path=path, content=new_content, status='verified', current_version=1)
+                modified_paths.append(path)
+
+        # Run native runtime compiler verification
+        final_verif = RuntimeVerifier.run_verification(updated_files, user=user, plan_data=plan_data)
+        if final_verif.get('executed'):
+            VerificationRun.objects.create(
+                session=session,
+                level='runtime',
+                passed=final_verif['passed'],
+                error_count=final_verif['error_count'],
+                warning_count=final_verif['warning_count'],
+                issues=final_verif['issues'],
+                duration_ms=0
+            )
+
+        err_cnt = final_verif.get('error_count', 0)
+        warn_cnt = final_verif.get('warning_count', 0)
+        
+        if err_cnt == 0:
+            status_text = "✅ **All compiler and static checks passed with 0 errors!**"
+        else:
+            status_text = f"⚠️ Compiler checks report {err_cnt} error(s) remaining."
+
+        file_list_str = "\n".join([f"- `{p}`" for p in modified_paths]) if modified_paths else "All files inspected and harmonized."
+
+        return (
+            f"### 🛠️ Codebase Repaired & Verified\n\n"
+            f"I have inspected the project and resolved the reported issues across all files:\n\n"
+            f"{file_list_str}\n\n"
+            f"**Verification Status**: {status_text} ({warn_cnt} warnings)\n\n"
+            f"The codebase is fully up to date. You can re-run `./run.sh` or download the updated ZIP anytime."
+        )
+    else:
+        target_pf = mentioned_files[0] if mentioned_files else existing_files[-1]
+        updated_code = CodeBuilder.generate_code_for_module(
+            target_pf.path,
+            summary,
+            modifications=user_content,
+            provider_name=provider_name,
+            session=session,
+            user=user
+        )
+        target_pf.create_new_version(updated_code, source='user_feedback')
+        files_dict[target_pf.path] = updated_code
+        UniversalProjectHarmonizer.harmonize(files_dict)
+        
+        # Save any harmonized manifest changes
+        for h_path in ('pubspec.yaml', 'requirements.txt', 'package.json'):
+            if h_path in files_dict:
+                h_pf = session.project_files.filter(path=h_path).first()
+                if h_pf and h_pf.content != files_dict[h_path]:
+                    h_pf.create_new_version(files_dict[h_path], source='harmonizer')
+
+        verif_res = StaticVerifier.verify_project(files_dict)
+        runtime_res = RuntimeVerifier.run_verification(files_dict, user=user, plan_data=plan_data)
+        
+        err_cnt = runtime_res.get('error_count', verif_res.get('error_count', 0))
+        target_pf.status = 'has_issues' if err_cnt > 0 else 'verified'
+        target_pf.save(update_fields=['status'])
+
+        verif_msg = f"\n\n**Compiler / Static Verification**: {'✅ 0 errors' if err_cnt == 0 else f'⚠️ {err_cnt} error(s) remaining.'}"
+
+        return (
+            f"### ✏️ Updated Module `{target_pf.path}`\n\n"
+            f"I have modified `{target_pf.path}` based on your request: *\"{user_content}\"*\n\n"
+            f"You can review the updated code in the right panel and download the project ZIP anytime.{verif_msg}"
+        )
 
 
 _CHANGE_VERBS = r'\b(add|remove|delete|change|modify|update|rename|replace|fix|make|use|switch|include|refactor|rewrite|edit|implement)\b'
@@ -382,6 +452,8 @@ def _looks_like_question(text):
     False for change requests phrased as questions ("can you add a due date?")."""
     t = (text or '').strip().lower()
     if not t:
+        return False
+    if re.search(r'\b(error|errors|fix|repair|crash|failing|failed|issue|issues|broken|resolve|traceback)\b', t):
         return False
     if re.search(_CHANGE_VERBS, t) and not re.match(r'^(what|why|how|where|when|which|who|explain|describe)\b', t):
         return False
@@ -500,10 +572,11 @@ def _handle_mode1_message(session, user_content, action, is_approval, provider_n
     existing_files = list(session.project_files.all())
     if session.status in ('completed', 'ready', 'needs_attention') or bool(existing_files):
         edit_patterns = [
-            r'\b(modify|update|refactor|rewrite|edit|fix code|add field|add model|fix bug)\b',
+            r'\b(modify|update|refactor|rewrite|edit|fix|repair|resolve|error|errors|bug|bugs|issue|issues|broken|crash|failing|failed|check|verify|working)\b',
             r'\bchange\s+(the\s+)?(code|module|file|function|class|model|view|schema|implementation)\b'
         ]
-        wants_edit = (action == 'edit') or any(re.search(pat, user_content, re.IGNORECASE) for pat in edit_patterns)
+        has_error_traces = ('•' in user_content) or ('error:' in user_content.lower()) or ('traceback' in user_content.lower())
+        wants_edit = (action == 'edit') or has_error_traces or any(re.search(pat, user_content, re.IGNORECASE) for pat in edit_patterns)
         summary = session.summary_text or SRSSynthesizer.synthesize_summary(history, provider_name=provider_name, session=session, user=user)
         if wants_edit and existing_files:
             return None, _handle_module_edit(session, user_content, summary, existing_files, provider_name, user)

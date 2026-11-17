@@ -1,6 +1,7 @@
 import logging
 from generator.verifier import StaticVerifier
 from generator.runtime_verifier import RuntimeVerifier
+from generator.harmonizer import UniversalProjectHarmonizer
 from generator.protocol import EditProtocolEngine, ProtocolValidationError
 from llm_engine.router import LLMRouter
 from chat.models import VerificationRun, ProjectFile, FileVersion
@@ -32,6 +33,9 @@ class CodeRepairEngine:
         current_files = dict(files_dict)
         attempts = 0
         user = getattr(session, 'user', None)
+
+        # Pre-flight project harmonization
+        UniversalProjectHarmonizer.harmonize(current_files)
 
         # Initial Verification Run
         initial_verif = StaticVerifier.verify_project(current_files, plan_data=plan_data)
@@ -80,43 +84,41 @@ class CodeRepairEngine:
                 validated_ops = EditProtocolEngine.validate_operations(payload, current_files)
                 candidate_files = EditProtocolEngine.apply_operations_atomically(validated_ops, current_files)
             except ProtocolValidationError:
-                # If model response failed validation, stop repair loop and return current state
-                break
+                # If model response failed validation, allow next attempt
+                continue
 
             # Re-verify candidate files
             candidate_verif = StaticVerifier.verify_project(candidate_files, plan_data=plan_data)
-            candidate_fingerprints = {i['fingerprint'] for i in candidate_verif['issues'] if i['severity'] == 'error'}
+            if candidate_verif['error_count'] == 0:
+                runtime_cand = RuntimeVerifier.run_verification(candidate_files, user=user, plan_data=plan_data)
+                if runtime_cand.get('executed') and not runtime_cand['passed']:
+                    candidate_verif = runtime_cand
 
-            # Check termination rules:
-            # 1. Regression Check: New errors introduced
-            new_errors_introduced = candidate_fingerprints - prev_fingerprints
-            if new_errors_introduced and candidate_verif['error_count'] >= initial_verif['error_count']:
-                # Rollback attempt
-                break
+            candidate_errors = candidate_verif['error_count']
 
-            # 2. No Progress Check: Error fingerprints set did not shrink
-            if len(candidate_fingerprints) >= len(prev_fingerprints):
-                # Rollback attempt
-                break
+            # Check if this attempt made progress
+            if candidate_errors < initial_verif['error_count'] or candidate_errors == 0:
+                logger.info("✅ [REPAIR PROGRESS] Errors reduced: %d -> %d", initial_verif['error_count'], candidate_errors)
+                current_files = candidate_files
+                initial_verif = candidate_verif
+                prev_fingerprints = {i['fingerprint'] for i in candidate_verif['issues'] if i['severity'] == 'error'}
+                cls._persist_repaired_files(session, current_files, validated_ops)
+                cls._record_verification_run(session, initial_verif, level='static')
 
-            # Attempt succeeded in reducing errors! Apply changes to workspace
-            current_files = candidate_files
-            initial_verif = candidate_verif
-            prev_fingerprints = candidate_fingerprints
+                if candidate_errors == 0:
+                    break
+            else:
+                logger.warning("⚠️ [REPAIR ATTEMPT %d/%d] Errors did not decrease (%d -> %d). Retrying...",
+                    attempts, max_attempts, initial_verif['error_count'], candidate_errors)
 
-            # Persist repaired file versions
-            cls._persist_repaired_files(session, current_files, validated_ops)
-            cls._record_verification_run(session, initial_verif, level='static')
+        if initial_verif['error_count'] == 0:
+            runtime_res = RuntimeVerifier.run_verification(current_files, user=user, plan_data=plan_data)
+            if runtime_res.get('executed'):
+                cls._record_verification_run(session, runtime_res, level='runtime')
+                if not runtime_res['passed']:
+                    initial_verif = runtime_res
 
             if initial_verif['error_count'] == 0:
-                runtime_res = RuntimeVerifier.run_verification(current_files, user=user, plan_data=plan_data)
-                if runtime_res.get('executed'):
-                    cls._record_verification_run(session, runtime_res, level='runtime')
-                    if not runtime_res['passed']:
-                        initial_verif = runtime_res
-                        prev_fingerprints = {i['fingerprint'] for i in initial_verif['issues'] if i['severity'] == 'error'}
-                        continue
-
                 status = 'verified' if initial_verif['warning_count'] == 0 else 'verified_with_warnings'
                 msg = cls._format_honest_message(len(current_files), attempts, initial_verif, status, runtime_res=runtime_res)
                 return {

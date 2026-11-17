@@ -966,5 +966,19 @@ class ChatTestCase(TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertTrue(Message.objects.filter(id=msg.id).exists())
 
+    def test_mode2_compiler_error_report_triggers_repair_loop(self):
+        """Pasting compiler/runtime errors triggers CodeRepairEngine repair loop instead of Q&A."""
+        session = self._mode2_session(generated=('app/models.py', 'app/views.py'))
+        error_msg = "Error: unable to find directory entry in pubspec.yaml: assets/images/\nlib/main.dart:15:46: Error: undefined class"
+        response = self._send(session, error_msg)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        resp_text = data.get('response', '')
+        self.assertTrue(
+            any(w in resp_text.lower() for w in ['repair', 'update', 'fix', 'resolved']),
+            f"Expected repair acknowledgment in response: {resp_text}"
+        )
+
+
 
 
