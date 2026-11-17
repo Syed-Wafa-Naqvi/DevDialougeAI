@@ -2,9 +2,12 @@ import ast
 import hashlib
 import html.parser
 import json
+import logging
 import os
 import re
 import sys
+
+logger = logging.getLogger('generator.verifier')
 
 class StaticVerifier:
     PACKAGE_MAPPINGS = {
@@ -106,6 +109,14 @@ class StaticVerifier:
 
         error_count = sum(1 for i in issues if i['severity'] == 'error')
         warning_count = sum(1 for i in issues if i['severity'] == 'warning')
+
+        if error_count == 0:
+            logger.info("✅ [STATIC VERIFIER PASSED] 0 errors, %d warnings across %d files", warning_count, len(files))
+        else:
+            logger.warning("❌ [STATIC VERIFIER ISSUES] %d errors, %d warnings found in %d files", error_count, warning_count, len(files))
+            for iss in issues:
+                if iss['severity'] == 'error':
+                    logger.warning("   └─ ❌ %s:%s [%s] %s", iss['file'], iss['line'], iss['check'], iss['message'])
 
         return {
             'passed': error_count == 0,

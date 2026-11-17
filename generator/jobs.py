@@ -1,3 +1,4 @@
+import logging
 import time
 from chat.models import Job, JobEvent, Session, ProjectFile
 from chat.state_machine import SessionStateMachine
@@ -5,6 +6,8 @@ from generator.planner import PlanGenerator
 from generator.code_builder import CodeBuilder
 from generator.repair import CodeRepairEngine
 from generator.verifier import StaticVerifier
+
+logger = logging.getLogger('generator.jobs')
 
 class JobConcurrencyError(ValueError):
     """Raised when a job is created while another job is active for the same session."""
@@ -54,7 +57,7 @@ class JobExecutionEngine:
             if user_active >= max_user_jobs:
                 raise JobConcurrencyError(f"User has reached the maximum allowed concurrent background jobs ({max_user_jobs}).")
 
-        return Job.objects.create(
+        job = Job.objects.create(
             session=session,
             user=user,
             job_type=job_type,
@@ -62,6 +65,8 @@ class JobExecutionEngine:
             progress_current=0,
             progress_total=100
         )
+        logger.info("⚙️ [JOB CREATED] Job #%s (%s) created for Session #%s | User: %s", job.id, job_type, session.id, user)
+        return job
 
 
     @classmethod
@@ -80,6 +85,7 @@ class JobExecutionEngine:
         job.updated_at = timezone.now()
         job.save(update_fields=['status', 'updated_at'])
         job.log_event('info', f"Started background job #{job.id} [{job.job_type}].")
+        logger.info("🚀 [JOB STARTED] Job #%s (%s) executing for Session #%s...", job.id, job.job_type, job.session_id)
 
         try:
             if job.job_type == 'plan':
@@ -180,6 +186,7 @@ class JobExecutionEngine:
         job.progress_total = total_files * 10
         job.updated_at = timezone.now()
         job.save(update_fields=['progress_total', 'updated_at'])
+        logger.info("🏗️ [CODEGEN START] Session #%s | Generating %d files: %s", session.id, total_files, gen_order)
 
         generated_files = dict(existing_files)
 
@@ -191,9 +198,11 @@ class JobExecutionEngine:
                 job.updated_at = timezone.now()
                 job.save(update_fields=['status', 'updated_at'])
                 job.log_event('info', f"Job cancelled by user while writing '{file_path}'.")
+                logger.warning("🛑 [CODEGEN CANCELLED] User cancelled while writing '%s'", file_path)
                 return
 
             job.log_event('file_started', f"Writing file ({idx+1}/{total_files}): '{file_path}'...")
+            logger.info("🔨 [WRITING FILE] (%d/%d) '%s'...", idx + 1, total_files, file_path)
             
             # Generate code module with cross-file awareness
             code_content = CodeBuilder.generate_code_for_module(
@@ -206,6 +215,7 @@ class JobExecutionEngine:
                 user=job.user
             )
             generated_files[file_path] = code_content
+            logger.info("✅ [FILE GENERATED] '%s' (%d lines)", file_path, len(code_content.splitlines()))
 
             # Save / version ProjectFile
             pf, created = ProjectFile.objects.get_or_create(
@@ -255,6 +265,7 @@ class JobExecutionEngine:
         # Verification & Automated Self-Repair Loop Phase
         SessionStateMachine.transition_to(session, 'verifying')
         job.log_event('info', "Running pre-flight compiler verification and repair loop...")
+        logger.info("🛡️ [VERIFICATION PHASE] Starting pre-flight verification & repair loop for Session #%s (%d files)...", session.id, len(generated_files))
 
         repair_res = CodeRepairEngine.run_repair_loop(
             session=session,
@@ -275,5 +286,6 @@ class JobExecutionEngine:
         job.result_summary = repair_res['honest_message']
         job.updated_at = timezone.now()
         job.save(update_fields=['status', 'progress_current', 'result_summary', 'updated_at'])
+        logger.info("🎉 [JOB FINISHED] Job #%s completed | Session #%s status: %s | %s", job.id, session.id, session.status, repair_res['honest_message'])
 
         job.log_event('verify_result', repair_res['honest_message'], data=repair_res['verification'])

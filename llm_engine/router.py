@@ -1,7 +1,10 @@
+import logging
 import os
 import time
 from django.conf import settings
 from llm_engine.models import LLMCallLog
+
+logger = logging.getLogger('llm_engine.router')
 from llm_engine.providers.openai_provider import OpenAIProvider
 from llm_engine.providers.claude_provider import ClaudeProvider
 from llm_engine.providers.gemini_provider import GeminiProvider
@@ -114,6 +117,10 @@ class LLMRouter:
         m_name = getattr(provider, 'model', getattr(provider, 'model_name', 'default'))
 
         in_tokens = len(prompt) // 4
+        logger.info(
+            "🤖 [LLM CALL START] Purpose: '%s' | Requested: '%s' | Selected: '%s' (%s) | Prompt: %d chars",
+            purpose, provider_name or 'auto', p_name, m_name, len(prompt)
+        )
         fallback_used = False
         success = True
         err_msg = ""
@@ -159,6 +166,15 @@ class LLMRouter:
 
         latency_ms = int((time.time() - start_time) * 1000)
         out_tokens = len(result) // 4 if result else 0
+
+        if success:
+            logger.info(
+                "⚡ [LLM CALL SUCCESS] Provider: '%s' (%s) | Latency: %dms | InTokens: ~%d | OutTokens: ~%d | Output: %d chars%s",
+                p_name, m_name, latency_ms, in_tokens, out_tokens, len(result),
+                " (via fallback)" if fallback_used else ""
+            )
+        else:
+            logger.error("❌ [LLM CALL FAILED] Provider: '%s' | Latency: %dms | Error: %s", p_name, latency_ms, err_msg)
 
         # Log LLM Call
         try:

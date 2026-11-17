@@ -1,5 +1,6 @@
 import hashlib
 import importlib.util
+import logging
 import os
 import re
 import sys
@@ -7,6 +8,8 @@ import subprocess
 import tempfile
 from django.conf import settings
 from generator.verifier import StaticVerifier
+
+logger = logging.getLogger('generator.runtime_verifier')
 
 class RuntimeVerifier:
     @classmethod
@@ -514,9 +517,11 @@ class RuntimeVerifier:
         """
         all_compiler_issues = []
         any_executed = False
+        logger.info("🔬 [RUNTIME VERIFIER] Inspecting %d files for native compiler / syntax checks...", len(files))
 
         # 1. Shell runner script syntax check (bash -n)
         if any(p == 'run.sh' or p.endswith('.sh') for p in files):
+            logger.info("🐚 [SHELL CHECK] Running 'bash -n' syntax analysis on runner scripts...")
             shell_res = cls.run_shell_verification(files)
             if shell_res.get('executed'):
                 any_executed = True
@@ -524,6 +529,7 @@ class RuntimeVerifier:
 
         # 2. Dart / Flutter compiler analyze
         if any(p.endswith('.dart') for p in files):
+            logger.info("🎯 [DART/FLUTTER CHECK] Running native analyzer on Dart files...")
             dart_res = cls.run_dart_verification(files)
             if dart_res.get('executed'):
                 any_executed = True
@@ -531,6 +537,7 @@ class RuntimeVerifier:
 
         # 3. Node.js JavaScript syntax check (node --check)
         if any(p.endswith(('.js', '.cjs', '.mjs')) for p in files):
+            logger.info("🟢 [NODE CHECK] Running 'node --check' syntax validation...")
             node_res = cls.run_node_verification(files)
             if node_res.get('executed'):
                 any_executed = True
@@ -538,6 +545,7 @@ class RuntimeVerifier:
 
         # 4. GCC / G++ C/C++ syntax check (gcc/g++ -fsyntax-only)
         if any(p.endswith(('.c', '.cpp', '.cc', '.cxx')) for p in files):
+            logger.info("⚙️ [C/C++ CHECK] Running 'gcc/g++ -fsyntax-only' validation...")
             c_res = cls.run_c_cpp_verification(files)
             if c_res.get('executed'):
                 any_executed = True
@@ -546,6 +554,10 @@ class RuntimeVerifier:
         compiler_errors = sum(1 for i in all_compiler_issues if i['severity'] == 'error')
         if compiler_errors > 0:
             compiler_warns = sum(1 for i in all_compiler_issues if i['severity'] == 'warning')
+            logger.warning("❌ [RUNTIME/COMPILER ISSUES] %d errors, %d warnings detected", compiler_errors, compiler_warns)
+            for iss in all_compiler_issues:
+                if iss['severity'] == 'error':
+                    logger.warning("   └─ ❌ %s:%s [%s] %s", iss['file'], iss['line'], iss['check'], iss['message'])
             return {
                 'executed': True,
                 'passed': False,

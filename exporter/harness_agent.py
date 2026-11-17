@@ -200,6 +200,7 @@ class AIHarnessPackager:
                         if not any(f.startswith(asset_path + "/") for f in existing_files.keys()):
                             new_files[gitkeep_path] = ""
 
+        logger.info("📦 [HARNESS PACKAGER] Generated %d runner/manifest files for '%s': %s", len(new_files), project_name, list(new_files.keys()))
         return new_files
 
 

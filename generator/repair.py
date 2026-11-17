@@ -1,8 +1,11 @@
+import logging
 from generator.verifier import StaticVerifier
 from generator.runtime_verifier import RuntimeVerifier
 from generator.protocol import EditProtocolEngine, ProtocolValidationError
 from llm_engine.router import LLMRouter
 from chat.models import VerificationRun, ProjectFile, FileVersion
+
+logger = logging.getLogger('generator.repair')
 
 class CodeRepairEngine:
     SYSTEM_PROMPT = (
@@ -54,10 +57,12 @@ class CodeRepairEngine:
             }
 
         prev_fingerprints = {i['fingerprint'] for i in initial_verif['issues'] if i['severity'] == 'error'}
+        logger.info("🔧 [AUTO-REPAIR LOOP STARTED] Initial errors to resolve: %d | Max attempts: %d", len(prev_fingerprints), max_attempts)
 
         while attempts < max_attempts:
             attempts += 1
             failing_issues = [i for i in initial_verif['issues'] if i['severity'] == 'error']
+            logger.info("🔧 [REPAIR ATTEMPT %d/%d] Targeting %d errors...", attempts, max_attempts, len(failing_issues))
 
             prompt = cls._build_repair_prompt(current_files, failing_issues, plan_data)
 

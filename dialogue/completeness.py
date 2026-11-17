@@ -1,8 +1,11 @@
 import json
+import logging
 import re
 from django.conf import settings
 from llm_engine.router import LLMRouter
 from llm_engine.prompt_templates import PromptTemplates
+
+logger = logging.getLogger('dialogue.completeness')
 
 class CompletenessEngine:
     RUBRIC_WEIGHTS = {
@@ -66,6 +69,7 @@ class CompletenessEngine:
                 score_float += weight * multiplier
 
             score = int(round(score_float * 100))
+            logger.info("📊 [COMPLETENESS RUBRIC] Calculated score: %d%% | Categories: %s", score, categories)
             return {
                 'score': score,
                 'categories': categories,

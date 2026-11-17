@@ -1,4 +1,5 @@
 import json
+import logging
 import time
 import re
 from typing import Generator, Dict, Any, Optional
@@ -11,12 +12,15 @@ from dialogue.interviewer import InterviewerService
 from dialogue.synthesizer import SRSSynthesizer
 from generator.jobs import JobExecutionEngine
 
+logger = logging.getLogger('chat.events')
+
 
 class AgentEvent:
     """Helper methods to construct standardized agent lifecycle events."""
     
     @staticmethod
     def thinking(step_id: str, title: str, content: str = "", status: str = "running") -> Dict[str, Any]:
+        logger.info("🧠 [AGENT THINKING] [%s] %s: %s (%s)", step_id, title, content[:80] if content else '', status)
         return {
             "type": "thinking",
             "id": step_id,
@@ -28,6 +32,7 @@ class AgentEvent:
 
     @staticmethod
     def tool_call(call_id: str, tool: str, args: Dict[str, Any], summary: str = "") -> Dict[str, Any]:
+        logger.info("🛠️ [AGENT TOOL CALL] [%s] %s | %s", call_id, tool, summary or json.dumps(args, default=str)[:80])
         return {
             "type": "tool_call",
             "id": call_id,
@@ -39,6 +44,7 @@ class AgentEvent:
 
     @staticmethod
     def tool_result(call_id: str, tool: str, result: Any, duration_ms: int = 0, status: str = "success") -> Dict[str, Any]:
+        logger.info("✅ [AGENT TOOL RESULT] [%s] %s -> %s (%dms)", call_id, tool, status, duration_ms)
         return {
             "type": "tool_result",
             "id": call_id,
@@ -52,6 +58,7 @@ class AgentEvent:
     @staticmethod
     def file_action(action: str, path: str, summary: str = "", version: int = 1) -> Dict[str, Any]:
         """action: 'read' | 'create' | 'edit' | 'verify'"""
+        logger.info("📁 [AGENT FILE ACTION] %s %s (v%d): %s", action.upper(), path, version, summary)
         return {
             "type": "file_action",
             "action": action,
@@ -82,6 +89,7 @@ class AgentEvent:
 
     @staticmethod
     def error(message: str, code: str = "error") -> Dict[str, Any]:
+        logger.error("❌ [AGENT ERROR] [%s] %s", code, message)
         return {
             "type": "error",
             "message": message,
@@ -103,6 +111,10 @@ class AgentEvent:
         user_message_id: Optional[int] = None,
         assistant_message_id: Optional[int] = None
     ) -> Dict[str, Any]:
+        logger.info(
+            "🏁 [AGENT DONE] Status: %s | Duration: %dms | Tokens: %d | Completeness: %s%% | SessionStatus: %s",
+            status, total_duration_ms, tokens_used, completeness_score, session_status
+        )
         return {
             "type": "done",
             "status": status,
