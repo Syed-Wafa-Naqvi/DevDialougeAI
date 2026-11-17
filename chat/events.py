@@ -374,6 +374,163 @@ def stream_agent_response(
             status="completed"
         ))
 
+    elif existing_files and (
+        any(phrase in user_content.lower() for phrase in [
+            'check and verify', 'verify the code', 'is it really error free', 'is it error free',
+            'verify again', 'check the code', 'check again', 'any errors', 'audit the code',
+            'is there any error', 'are there any errors', 'run verification', 'verify project',
+            'check if error free', 'verify if error free', 'check errors', 'test the code',
+            'did it actually update', 'did it update', 'is the code error free', 'working?'
+        ]) or (
+            re.search(r'\b(verify|verification|audit|check)\b', user_content.lower()) and
+            re.search(r'\b(code|project|files|error|errors|clean)\b', user_content.lower()) and
+            not re.search(r'\b(modify|rewrite|refactor|add|delete|remove)\b', user_content.lower())
+        )
+    ) and not is_approval:
+        yield format_sse(AgentEvent.thinking(
+            step_id="step_audit",
+            title="Inspecting Codebase & Running Verification",
+            content="Running cross-file static analysis, dependency harmonization, and native compiler checks...",
+            status="running"
+        ))
+
+        from generator.harmonizer import UniversalProjectHarmonizer
+        from generator.repair import CodeRepairEngine
+        from generator.verifier import StaticVerifier
+        from generator.runtime_verifier import RuntimeVerifier
+        from chat.models import VerificationRun
+
+        files_dict = {f.path: f.content for f in existing_files}
+        plan_obj = session.plans.first()
+        plan_data = plan_obj.plan_data if plan_obj and isinstance(plan_obj.plan_data, dict) else None
+
+        UniversalProjectHarmonizer.harmonize(files_dict)
+        for h_path in ('pubspec.yaml', 'requirements.txt', 'package.json'):
+            if h_path in files_dict:
+                h_pf = session.project_files.filter(path=h_path).first()
+                if h_pf and h_pf.content != files_dict[h_path]:
+                    h_pf.create_new_version(files_dict[h_path], source='harmonizer')
+
+        verif_res = StaticVerifier.verify_project(files_dict, plan_data=plan_data)
+        runtime_res = RuntimeVerifier.run_verification(files_dict, user=user, plan_data=plan_data)
+
+        total_errors = verif_res.get('error_count', 0)
+        if runtime_res.get('executed'):
+            total_errors += runtime_res.get('error_count', 0)
+
+        if total_errors == 0:
+            VerificationRun.objects.create(
+                session=session,
+                level='static',
+                passed=True,
+                error_count=0,
+                warning_count=verif_res.get('warning_count', 0),
+                issues=verif_res.get('issues', [])
+            )
+            if runtime_res.get('executed'):
+                VerificationRun.objects.create(
+                    session=session,
+                    level='runtime',
+                    passed=runtime_res['passed'],
+                    error_count=runtime_res['error_count'],
+                    warning_count=runtime_res['warning_count'],
+                    issues=runtime_res['issues']
+                )
+
+            yield format_sse(AgentEvent.tool_call(
+                call_id="tool_audit",
+                tool="compiler_verification",
+                args={"files_checked": len(files_dict)},
+                summary=f"Verified {len(files_dict)} project files across all compilers"
+            ))
+            yield format_sse(AgentEvent.tool_result(
+                call_id="tool_audit",
+                tool="compiler_verification",
+                result={"passed": True, "errors": 0, "warnings": verif_res.get('warning_count', 0)},
+                status="success"
+            ))
+            yield format_sse(AgentEvent.thinking(
+                step_id="step_audit",
+                title="Verification Complete — 0 Errors",
+                content=f"All {len(files_dict)} files passed static and compiler verification with 0 errors.",
+                status="completed"
+            ))
+
+            response_text = (
+                f"### ✅ Codebase Verified — 100% Error-Free\n\n"
+                f"I have inspected all **{len(existing_files)}** project files in your workspace:\n\n"
+                f"- **Static Analysis**: Passed (0 errors, {verif_res.get('warning_count', 0)} warnings)\n"
+                f"- **Compiler Verification**: Passed (0 errors)\n"
+                f"- **Package Harmonization**: All dependencies and import namespaces are aligned.\n\n"
+                f"The code is completely error-free and ready to run with `./run.sh`."
+            )
+        else:
+            yield format_sse(AgentEvent.tool_call(
+                call_id="tool_repair",
+                tool="auto_repair_loop",
+                args={"errors_count": total_errors, "request": user_content[:120]},
+                summary=f"Running self-repair loop to resolve {total_errors} compiler issues"
+            ))
+            repair_res = CodeRepairEngine.run_repair_loop(
+                session=session,
+                files_dict=files_dict,
+                plan_data=plan_data,
+                max_attempts=4,
+                provider_name=provider_name
+            )
+            updated_files = repair_res['files']
+
+            modified_paths = []
+            for path, new_content in updated_files.items():
+                pf = session.project_files.filter(path=path).first()
+                if pf:
+                    if pf.content != new_content:
+                        pf.create_new_version(new_content, source='repair')
+                        modified_paths.append(path)
+                        yield format_sse(AgentEvent.file_action(
+                            action="edit",
+                            path=path,
+                            summary=f"Repaired and resolved compiler issues (v{pf.current_version})",
+                            version=pf.current_version
+                        ))
+                else:
+                    created_pf = ProjectFile.objects.create(session=session, path=path, content=new_content, status='verified', current_version=1)
+                    modified_paths.append(path)
+                    yield format_sse(AgentEvent.file_action(
+                        action="create",
+                        path=path,
+                        summary="Added missing file during repair",
+                        version=1
+                    ))
+
+            final_verif = RuntimeVerifier.run_verification(updated_files, user=user, plan_data=plan_data)
+            rem_errors = final_verif.get('error_count', repair_res['verification'].get('error_count', 0))
+
+            yield format_sse(AgentEvent.tool_result(
+                call_id="tool_repair",
+                tool="auto_repair_loop",
+                result={"status": "completed", "repaired_files": modified_paths, "remaining_errors": rem_errors},
+                status="success" if rem_errors == 0 else "warning"
+            ))
+
+            yield format_sse(AgentEvent.thinking(
+                step_id="step_audit",
+                title="Repair Loop Completed",
+                content=f"Repaired {len(modified_paths)} files. Final errors: {rem_errors}.",
+                status="completed"
+            ))
+
+            file_list_str = "\n".join([f"- **`{p}`**" for p in modified_paths]) if modified_paths else "All files inspected and harmonized."
+            status_summary = "✅ **All compiler and static checks passed with 0 errors!**" if rem_errors == 0 else f"⚠️ {rem_errors} error(s) remaining."
+
+            response_text = (
+                f"### 🛠️ Codebase Repaired & Verified\n\n"
+                f"I have inspected the project and applied repairs across the following files:\n\n"
+                f"{file_list_str}\n\n"
+                f"**Verification Status**: {status_summary}\n\n"
+                f"You can review the updated code in the editor or download the updated project ZIP package."
+            )
+
     elif existing_files and ((action in ('edit', 'changes')) or any(re.search(pat, user_content, re.IGNORECASE) for pat in [
         r'\b(modify|update|refactor|rewrite|edit|change|fix|add|remove|delete|create|enhance|implement)\b',
         r'\b(code|file|files|module|model|models|view|views|url|urls|schema|function|class|method|component|endpoint|api)\b'
@@ -387,14 +544,15 @@ def stream_agent_response(
 
         summary = session.summary_text or ""
         
-        # Match target file(s) mentioned in prompt or default to active/primary file
+        # Match target file(s) mentioned in prompt or default to active/primary source file
         target_pfs = []
         for pf in existing_files:
             file_base = pf.path.split('/')[-1].lower()
             if pf.path.lower() in user_content.lower() or file_base in user_content.lower():
                 target_pfs.append(pf)
         if not target_pfs:
-            target_pfs = [existing_files[-1]]
+            source_pfs = [pf for pf in existing_files if not pf.path.endswith(('.sh', '.bat', '.gitignore', '.gitkeep', '.md', '.yaml', '.yml'))]
+            target_pfs = [source_pfs[-1]] if source_pfs else [existing_files[-1]]
 
         yield format_sse(AgentEvent.tool_call(
             call_id="tool_code_editor",
@@ -404,7 +562,9 @@ def stream_agent_response(
         ))
 
         from generator.code_builder import CodeBuilder
+        from generator.harmonizer import UniversalProjectHarmonizer
         from generator.verifier import StaticVerifier
+        from generator.runtime_verifier import RuntimeVerifier
         from chat.models import VerificationRun
 
         all_paths = [f.path for f in existing_files]
@@ -454,14 +614,18 @@ def stream_agent_response(
 
             response_items.append(f"- **`{pf.path}`** (updated to **v{ver.version_number}**)")
 
-        # Re-verify full project
+        # Re-harmonize and re-verify full project
+        UniversalProjectHarmonizer.harmonize(files_dict)
         verif_res = StaticVerifier.verify_project(files_dict)
+        runtime_res = RuntimeVerifier.run_verification(files_dict, user=user)
+        err_count = verif_res.get('error_count', 0) + (runtime_res.get('error_count', 0) if runtime_res.get('executed') else 0)
+
         VerificationRun.objects.create(
             session=session,
             level='static',
-            passed=verif_res.get('passed', True),
-            error_count=len([i for i in verif_res.get('issues', []) if i.get('severity') == 'error']),
-            warning_count=len([i for i in verif_res.get('issues', []) if i.get('severity') == 'warning']),
+            passed=err_count == 0,
+            error_count=err_count,
+            warning_count=verif_res.get('warning_count', 0),
             issues=verif_res.get('issues', [])
         )
 

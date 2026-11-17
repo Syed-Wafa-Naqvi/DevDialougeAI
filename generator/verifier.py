@@ -503,19 +503,32 @@ class StaticVerifier:
                         ))
 
         # Check 2: Cross-file private calls (e.g. _board._initializeBoard() or _chessEngine._isInCheck())
+        private_method_decl_files = {}
+        for cname, decl_map in declared_classes.items():
+            for decl_file, cinfo in decl_map.items():
+                for mname in cinfo.get('methods', set()):
+                    if mname.startswith('_'):
+                        if mname not in private_method_decl_files:
+                            private_method_decl_files[mname] = set()
+                        private_method_decl_files[mname].add(decl_file)
+
         for path, content in dart_files.items():
             for m in re.finditer(r'\b([a-zA-Z0-9_]+)\s*\.\s*(_[a-zA-Z0-9_]+)\s*\(', content):
                 target_var = m.group(1)
                 private_member = m.group(2)
                 if target_var not in ('this', 'super') and not private_member.startswith('__'):
-                    line_no = content[:m.start()].count('\n') + 1
-                    issues.append(cls._create_issue(
-                        file_path=path,
-                        line=line_no,
-                        severity='error',
-                        check='private_member_access',
-                        message=f"Cannot call library-private method '{private_member}' on '{target_var}'. In Dart, leading underscore makes identifiers library-private. Remove leading '_' to make it public."
-                    ))
+                    # In Dart, private members are library-scoped (accessible anywhere in the declaring file).
+                    # If this private member is declared in the current file `path`, it is legal!
+                    decl_files = private_method_decl_files.get(private_member, set())
+                    if path not in decl_files:
+                        line_no = content[:m.start()].count('\n') + 1
+                        issues.append(cls._create_issue(
+                            file_path=path,
+                            line=line_no,
+                            severity='error',
+                            check='private_member_access',
+                            message=f"Cannot call library-private method '{private_member}' on '{target_var}'. In Dart, leading underscore makes identifiers library-private. Remove leading '_' to make it public."
+                        ))
 
         # Check 3: Constructor calls with missing required named arguments
         for path, content in dart_files.items():
@@ -526,6 +539,9 @@ class StaticVerifier:
                         if reqs:
                             for call_m in re.finditer(r'\b' + cname + r'\s*\(([^)]*)\)', content):
                                 call_args = call_m.group(1)
+                                # Skip constructor declarations (e.g. Piece({required this.type, required this.color}))
+                                if re.search(r'\b(?:required\s+this\.|this\.|super\.|required\s+)', call_args):
+                                    continue
                                 line_no = content[:call_m.start()].count('\n') + 1
                                 for req in reqs:
                                     if not re.search(r'\b' + req + r'\s*:', call_args):

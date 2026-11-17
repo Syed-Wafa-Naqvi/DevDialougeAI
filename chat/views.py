@@ -407,7 +407,9 @@ def _handle_module_edit(session, user_content, summary, existing_files, provider
             f"The codebase is fully up to date. You can re-run `./run.sh` or download the updated ZIP anytime."
         )
     else:
-        target_pf = mentioned_files[0] if mentioned_files else existing_files[-1]
+        source_pfs = [pf for pf in existing_files if not pf.path.endswith(('.sh', '.bat', '.gitignore', '.gitkeep', '.md', '.yaml', '.yml'))]
+        default_pf = source_pfs[-1] if source_pfs else existing_files[-1]
+        target_pf = mentioned_files[0] if mentioned_files else default_pf
         updated_code = CodeBuilder.generate_code_for_module(
             target_pf.path,
             summary,
