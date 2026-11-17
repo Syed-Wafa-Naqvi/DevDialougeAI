@@ -645,6 +645,7 @@ def send_message_api(request, session_id):
     provider_name = None
     action = None
     req_id = None
+    edit_message_id = None
 
     try:
         data = json.loads(request.body)
@@ -652,6 +653,7 @@ def send_message_api(request, session_id):
         provider_name = data.get('provider', None)
         action = data.get('action', None)
         req_id = data.get('request_id', None)
+        edit_message_id = data.get('edit_message_id', None)
         if not file_bytes and data.get('file_base64'):
             import base64
             try:
@@ -665,6 +667,7 @@ def send_message_api(request, session_id):
         provider_name = request.POST.get('provider', None)
         action = request.POST.get('action', None)
         req_id = request.POST.get('request_id', None)
+        edit_message_id = request.POST.get('edit_message_id', None)
 
     if not user_content and file_name:
         user_content = f"Please analyze the attached {file_name} and incorporate its requirements and architecture specifications."
@@ -699,7 +702,21 @@ def send_message_api(request, session_id):
         )
         attachment_obj.file.save(file_name, ContentFile(file_bytes), save=True)
 
-    user_msg = Message.objects.create(session=session, role='user', content=user_content)
+    if edit_message_id:
+        try:
+            edit_id = int(edit_message_id)
+            user_msg = session.messages.filter(id=edit_id, role='user').first()
+        except (ValueError, TypeError):
+            user_msg = None
+
+        if user_msg:
+            session.messages.filter(id__gt=user_msg.id).delete()
+            user_msg.content = user_content
+            user_msg.save(update_fields=['content'])
+        else:
+            user_msg = Message.objects.create(session=session, role='user', content=user_content)
+    else:
+        user_msg = Message.objects.create(session=session, role='user', content=user_content)
     if attachment_obj:
         attachment_obj.message = user_msg
         attachment_obj.save(update_fields=['message'])
@@ -911,6 +928,7 @@ def stream_chat_api(request, session_id):
     provider_name = None
     action = None
     req_id = None
+    edit_message_id = None
 
     try:
         data = json.loads(request.body)
@@ -918,6 +936,7 @@ def stream_chat_api(request, session_id):
         provider_name = data.get('provider', None)
         action = data.get('action', None)
         req_id = data.get('request_id', None)
+        edit_message_id = data.get('edit_message_id', None)
         if not file_bytes and data.get('file_base64'):
             import base64
             try:
@@ -931,6 +950,7 @@ def stream_chat_api(request, session_id):
         provider_name = request.POST.get('provider', None)
         action = request.POST.get('action', None)
         req_id = request.POST.get('request_id', None)
+        edit_message_id = request.POST.get('edit_message_id', None)
 
     if not user_content and file_name:
         user_content = f"Please analyze the attached {file_name} and incorporate its requirements and architecture specifications."
@@ -972,7 +992,8 @@ def stream_chat_api(request, session_id):
             action=action,
             user=request.user,
             request_id=req_id,
-            attachment=attachment_obj
+            attachment=attachment_obj,
+            edit_message_id=edit_message_id
         ),
         content_type='text/event-stream'
     )
@@ -1181,6 +1202,96 @@ def get_verification_api(request, session_id):
         'warning_count': verif.warning_count,
         'issues': verif.issues,
         'created_at': verif.created_at.strftime('%Y-%m-%d %H:%M:%S UTC')
+    })
+
+@verification_required
+def get_session_diffs_api(request, session_id):
+    import difflib
+    session = get_object_or_404(Session, id=session_id, user=request.user)
+    files = session.project_files.prefetch_related('versions').all().order_by('path')
+
+    file_diffs = []
+    for pf in files:
+        versions = list(pf.versions.all().order_by('version_number'))
+        v_count = len(versions)
+        diff_lines = []
+        if v_count >= 2:
+            prev_ver = versions[-2]
+            curr_ver = versions[-1]
+            old_lines = prev_ver.content.splitlines()
+            new_lines = curr_ver.content.splitlines()
+            matcher = difflib.SequenceMatcher(None, old_lines, new_lines)
+            for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+                if tag == 'equal':
+                    for k in range(j1, j2):
+                        diff_lines.append({
+                            'type': 'unchanged',
+                            'old_num': i1 + (k - j1) + 1,
+                            'new_num': k + 1,
+                            'text': new_lines[k]
+                        })
+                elif tag == 'replace':
+                    for k in range(i1, i2):
+                        diff_lines.append({
+                            'type': 'removed',
+                            'old_num': k + 1,
+                            'new_num': '',
+                            'text': old_lines[k]
+                        })
+                    for k in range(j1, j2):
+                        diff_lines.append({
+                            'type': 'added',
+                            'old_num': '',
+                            'new_num': k + 1,
+                            'text': new_lines[k]
+                        })
+                elif tag == 'delete':
+                    for k in range(i1, i2):
+                        diff_lines.append({
+                            'type': 'removed',
+                            'old_num': k + 1,
+                            'new_num': '',
+                            'text': old_lines[k]
+                        })
+                elif tag == 'insert':
+                    for k in range(j1, j2):
+                        diff_lines.append({
+                            'type': 'added',
+                            'old_num': '',
+                            'new_num': k + 1,
+                            'text': new_lines[k]
+                        })
+        elif v_count == 1:
+            curr_ver = versions[0]
+            new_lines = curr_ver.content.splitlines()
+            for k, line in enumerate(new_lines[:150]):
+                diff_lines.append({
+                    'type': 'added',
+                    'old_num': '',
+                    'new_num': k + 1,
+                    'text': line
+                })
+
+        file_diffs.append({
+            'file_id': pf.id,
+            'path': pf.path,
+            'current_version': pf.current_version,
+            'version_count': v_count,
+            'versions': [
+                {
+                    'version_number': v.version_number,
+                    'source': v.get_source_display(),
+                    'created_at': v.created_at.strftime('%H:%M:%S')
+                }
+                for v in versions
+            ],
+            'diff_lines': diff_lines
+        })
+
+    return JsonResponse({
+        'session_id': session.id,
+        'has_diffs': any(f['version_count'] >= 2 for f in file_diffs) or len(file_diffs) > 0,
+        'files': file_diffs
     })
 
 @verification_required

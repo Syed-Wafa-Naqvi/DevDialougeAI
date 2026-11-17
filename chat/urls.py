@@ -26,6 +26,7 @@ urlpatterns = [
     path('api/session/<int:session_id>/cancel/', views.cancel_session_api, name='cancel_session_api'),
     path('api/session/<int:session_id>/mode/', views.update_session_mode_api, name='update_session_mode_api'),
     path('api/session/<int:session_id>/verification/', views.get_verification_api, name='get_verification_api'),
+    path('api/session/<int:session_id>/diffs/', views.get_session_diffs_api, name='get_session_diffs_api'),
     path('api/session/<int:session_id>/tree/', views.get_file_tree_api, name='get_file_tree_api'),
 ]
 

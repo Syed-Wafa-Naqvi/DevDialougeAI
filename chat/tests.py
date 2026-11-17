@@ -1,3 +1,4 @@
+import json
 from django.test import TestCase, Client
 from django.contrib.auth.models import User
 from unittest.mock import patch
@@ -825,4 +826,100 @@ class ChatTestCase(TestCase):
         prompt = ctx['assembled_prompt']
         self.assertIn('ATTACHED SPECIFICATIONS & DOCUMENTS', prompt)
         self.assertIn('PostgreSQL 16, Django 5.1, Stripe Webhooks', prompt)
+
+    def test_edit_message_prunes_subsequent_messages(self):
+        """Editing an existing user message deletes subsequent messages and regenerates a new response."""
+        session = Session.objects.create(user=self.user, mode='mode1', status='active')
+        msg1 = Message.objects.create(session=session, role='user', content='Hello, I need an app')
+        msg2 = Message.objects.create(session=session, role='assistant', content='What kind of app?')
+        msg3 = Message.objects.create(session=session, role='user', content='A simple calculator')
+        msg4 = Message.objects.create(session=session, role='assistant', content='Great, what platforms?')
+
+        # User edits msg1
+        response = self.client.post(
+            f'/api/chat/{session.id}/send/',
+            data={
+                'message': 'Hello, I want to build a Flutter Todo app with local storage',
+                'edit_message_id': msg1.id,
+                'provider': 'mock'
+            },
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+
+        # Ensure msg1 was updated
+        msg1.refresh_from_db()
+        self.assertEqual(msg1.content, 'Hello, I want to build a Flutter Todo app with local storage')
+
+        # Ensure msg2, msg3, and msg4 were pruned
+        self.assertFalse(Message.objects.filter(id__in=[msg2.id, msg3.id, msg4.id]).exists())
+
+        # A new assistant response was appended after msg1
+        new_msgs = list(session.messages.order_by('id'))
+        self.assertEqual(len(new_msgs), 2)
+        self.assertEqual(new_msgs[0].id, msg1.id)
+        self.assertEqual(new_msgs[1].role, 'assistant')
+
+    def test_get_session_diffs_api(self):
+        """get_session_diffs_api returns unified diffs with line-by-line additions and removals."""
+        session = Session.objects.create(user=self.user, mode='mode1', status='ready')
+        pf = ProjectFile.objects.create(
+            session=session,
+            path='lib/main.dart',
+            content='void main() {\n  print("Hello");\n}\n',
+            status='verified'
+        )
+        # Create version 2 with user modifications
+        pf.create_new_version(
+            'void main() {\n  print("Hello");\n  print("Updated Flutter App");\n}\n',
+            source='user_feedback'
+        )
+
+        response = self.client.get(f'/api/session/{session.id}/diffs/')
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['has_diffs'])
+        self.assertEqual(len(data['files']), 1)
+
+        f_diff = data['files'][0]
+        self.assertEqual(f_diff['path'], 'lib/main.dart')
+        self.assertEqual(f_diff['version_count'], 2)
+        self.assertEqual(f_diff['current_version'], 2)
+        added_lines = [l for l in f_diff['diff_lines'] if l['type'] == 'added']
+        self.assertTrue(any('Updated Flutter App' in l['text'] for l in added_lines))
+
+    def test_incremental_code_modification_stream(self):
+        """When code exists, user edit request generates a new version and AST verification events."""
+        session = Session.objects.create(user=self.user, mode='mode1', status='ready')
+        session.summary_text = '### Project Requirements Summary\nTodo App'
+        session.save(update_fields=['summary_text'])
+        
+        pf = ProjectFile.objects.create(
+            session=session,
+            path='app/models.py',
+            content='class Todo:\n    title = "Buy milk"\n',
+            status='verified'
+        )
+
+        response = self.client.post(
+            f'/api/chat/{session.id}/stream/',
+            data={
+                'message': 'Please add a priority field to the Todo model in app/models.py',
+                'provider': 'mock'
+            },
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+        content = b"".join(response.streaming_content).decode('utf-8')
+        lines = [line.strip() for line in content.split('\n') if line.startswith('data: ')]
+        event_types = [json.loads(line[len('data: '):]).get('type') for line in lines]
+
+        self.assertIn('thinking', event_types)
+        self.assertIn('tool_call', event_types)
+        self.assertIn('file_action', event_types)
+
+        pf.refresh_from_db()
+        self.assertEqual(pf.current_version, 2)
+        self.assertEqual(pf.versions.count(), 2)
+
 
