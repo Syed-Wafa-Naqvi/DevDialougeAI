@@ -65,7 +65,7 @@ class DocumentProcessor:
             'file_type': file_type,
             'file_size': len(file_bytes),
         }
-        logger.info("📄 [DOC PROCESSOR] Processing '%s' (type: %s, size: %d bytes)...", filename, file_type, len(file_bytes))
+        logger.info("[DOC PROCESSOR] Processing '%s' (type: %s, size: %d bytes)...", filename, file_type, len(file_bytes))
 
         try:
             if file_type == 'pdf':
@@ -84,7 +84,7 @@ class DocumentProcessor:
                 text, meta = cls._extract_fallback(file_bytes, filename)
             
             metadata.update(meta)
-            logger.info("✅ [DOC PROCESSOR DONE] '%s' (%s): successfully extracted %d characters", filename, file_type, len(text))
+            logger.info("[DOC PROCESSOR DONE] '%s' (%s): successfully extracted %d characters", filename, file_type, len(text))
             return text.strip(), file_type, metadata
 
         except Exception as e:

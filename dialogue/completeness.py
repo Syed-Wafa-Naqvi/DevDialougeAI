@@ -69,7 +69,7 @@ class CompletenessEngine:
                 score_float += weight * multiplier
 
             score = int(round(score_float * 100))
-            logger.info("📊 [COMPLETENESS RUBRIC] Calculated score: %d%% | Categories: %s", score, categories)
+            logger.info("[COMPLETENESS RUBRIC] Calculated score: %d%% | Categories: %s", score, categories)
             return {
                 'score': score,
                 'categories': categories,

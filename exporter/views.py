@@ -18,7 +18,7 @@ def download_project_zip_api(request, session_id):
     
     project_name = ZipArchiver.get_project_name(session)
     filename = f"{project_name}.zip"
-    logger.info("📦 [EXPORT ZIP] User %s downloaded project ZIP '%s' for Session #%s (%d bytes)", request.user, filename, session.id, len(zip_bytes))
+    logger.info("[EXPORT ZIP] User %s downloaded project ZIP '%s' for Session #%s (%d bytes)", request.user, filename, session.id, len(zip_bytes))
     
     response = HttpResponse(zip_bytes, content_type='application/zip')
     response['Content-Disposition'] = f'attachment; filename="{filename}"'

@@ -61,12 +61,12 @@ class CodeRepairEngine:
             }
 
         prev_fingerprints = {i['fingerprint'] for i in initial_verif['issues'] if i['severity'] == 'error'}
-        logger.info("🔧 [AUTO-REPAIR LOOP STARTED] Initial errors to resolve: %d | Max attempts: %d", len(prev_fingerprints), max_attempts)
+        logger.info("[AUTO-REPAIR LOOP STARTED] Initial errors to resolve: %d | Max attempts: %d", len(prev_fingerprints), max_attempts)
 
         while attempts < max_attempts:
             attempts += 1
             failing_issues = [i for i in initial_verif['issues'] if i['severity'] == 'error']
-            logger.info("🔧 [REPAIR ATTEMPT %d/%d] Targeting %d errors...", attempts, max_attempts, len(failing_issues))
+            logger.info("[REPAIR ATTEMPT %d/%d] Targeting %d errors...", attempts, max_attempts, len(failing_issues))
 
             prompt = cls._build_repair_prompt(current_files, failing_issues, plan_data)
 
@@ -98,7 +98,7 @@ class CodeRepairEngine:
 
             # Check if this attempt made progress
             if candidate_errors < initial_verif['error_count'] or candidate_errors == 0:
-                logger.info("✅ [REPAIR PROGRESS] Errors reduced: %d -> %d", initial_verif['error_count'], candidate_errors)
+                logger.info("[REPAIR PROGRESS] Errors reduced: %d -> %d", initial_verif['error_count'], candidate_errors)
                 current_files = candidate_files
                 initial_verif = candidate_verif
                 prev_fingerprints = {i['fingerprint'] for i in candidate_verif['issues'] if i['severity'] == 'error'}
@@ -108,7 +108,7 @@ class CodeRepairEngine:
                 if candidate_errors == 0:
                     break
             else:
-                logger.warning("⚠️ [REPAIR ATTEMPT %d/%d] Errors did not decrease (%d -> %d). Retrying...",
+                logger.warning("[REPAIR ATTEMPT %d/%d] Errors did not decrease (%d -> %d). Retrying...",
                     attempts, max_attempts, initial_verif['error_count'], candidate_errors)
 
         if initial_verif['error_count'] == 0:

@@ -134,11 +134,11 @@ def new_chat_view(request):
         .first()
     )
     if unused_session:
-        logger.info("🆕 [NEW CHAT] Redirecting %s to existing empty Session #%s", request.user, unused_session.id)
+        logger.info("[NEW CHAT] Redirecting %s to existing empty Session #%s", request.user, unused_session.id)
         return redirect('chat', session_id=unused_session.id)
 
     session = Session.objects.create(user=request.user, mode='mode1', status='active')
-    logger.info("🆕 [NEW CHAT] Created fresh Session #%s for %s", session.id, request.user)
+    logger.info("[NEW CHAT] Created fresh Session #%s for %s", session.id, request.user)
     return redirect('chat', session_id=session.id)
 
 @verification_required
@@ -157,7 +157,7 @@ def create_session_view(request):
             title=generate_title_from_user_msg(description),
             has_custom_title=True
         )
-        logger.info("✨ [CREATE SESSION] Created Session #%s '%s' for %s", session.id, session.title, request.user)
+        logger.info("[CREATE SESSION] Created Session #%s '%s' for %s", session.id, session.title, request.user)
         
         Message.objects.create(session=session, role='user', content=description)
         history = list(session.messages.values('role', 'content'))
@@ -170,7 +170,7 @@ def create_session_view(request):
 def chat_view(request, session_id):
     session = get_object_or_404(Session.objects.select_related('user'), id=session_id, user=request.user)
     messages_list = session.messages.all().order_by('timestamp').prefetch_related('attachments')
-    logger.info("💬 [OPEN CHAT] Session #%s '%s' (status: %s) | %d messages | User: %s", session.id, session.title, session.status, messages_list.count(), request.user)
+    logger.info("[OPEN CHAT] Session #%s '%s' (status: %s) | %d messages | User: %s", session.id, session.title, session.status, messages_list.count(), request.user)
     
     # ProjectFile is single source of truth; backfill if legacy GeneratedCode exists (#27)
     from chat.models import ProjectFile
@@ -354,7 +354,7 @@ def _handle_module_edit(session, user_content, summary, existing_files, provider
     mentioned_files = [pf for pf in existing_files if pf.path.lower() in user_content.lower() or os.path.basename(pf.path).lower() in user_content.lower()]
 
     if is_error_fix_request or len(mentioned_files) > 1:
-        logger.info("🛡️ [CHAT REPAIR] User requested multi-file / compiler error fix. Running comprehensive repair loop...")
+        logger.info("[CHAT REPAIR] User requested multi-file / compiler error fix. Running comprehensive repair loop...")
         repair_res = CodeRepairEngine.run_repair_loop(
             session=session,
             files_dict=files_dict,
@@ -1040,9 +1040,9 @@ def stream_chat_api(request, session_id):
     if not user_content and not file_bytes:
         return JsonResponse({'error': 'Message content or attachment is required'}, status=400)
 
-    logger.info("🌊 [STREAM API HIT] Session #%s | Action: %s | Provider: %s | RequestID: %s | User: %s", session.id, action, provider_name, req_id, request.user)
+    logger.info("[STREAM API HIT] Session #%s | Action: %s | Provider: %s | RequestID: %s | User: %s", session.id, action, provider_name, req_id, request.user)
     if user_content:
-        logger.info("📝 [USER PROMPT] \"%s\"", user_content[:150] + ('...' if len(user_content) > 150 else ''))
+        logger.info("[USER PROMPT] \"%s\"", user_content[:150] + ('...' if len(user_content) > 150 else ''))
 
     # Process attachment if uploaded
     attachment_obj = None
@@ -1051,14 +1051,14 @@ def stream_chat_api(request, session_id):
         from chat.document_processor import DocumentProcessor
         from django.core.files.base import ContentFile
 
-        logger.info("📎 [ATTACHMENT] Extracting text & structure from '%s' (%s bytes, %s)...", file_name, len(file_bytes), content_type)
+        logger.info("[ATTACHMENT] Extracting text & structure from '%s' (%s bytes, %s)...", file_name, len(file_bytes), content_type)
         extracted_text, f_type, meta = DocumentProcessor.extract_content(
             file_bytes=file_bytes,
             filename=file_name,
             content_type=content_type,
             user=request.user
         )
-        logger.info("✅ [ATTACHMENT PARSED] '%s' (%s): %d chars of text extracted (metadata: %s)", file_name, f_type, len(extracted_text), meta)
+        logger.info("[ATTACHMENT PARSED] '%s' (%s): %d chars of text extracted (metadata: %s)", file_name, f_type, len(extracted_text), meta)
 
         attachment_obj = MessageAttachment.objects.create(
             session=session,
@@ -1437,7 +1437,7 @@ def delete_message_api(request, session_id, message_id):
         except Exception:
             comp_score = 0
 
-    logger.info("🗑️ [DELETE MESSAGE] Session #%s | Deleted Message #%s (%s) | Cascade deleted %d assistant replies (%s) | Remaining messages: %d",
+    logger.info("[DELETE MESSAGE] Session #%s | Deleted Message #%s (%s) | Cascade deleted %d assistant replies (%s) | Remaining messages: %d",
         session.id, message_id, target_msg.role, len(deleted_reply_ids), deleted_reply_ids, len(remaining_messages))
 
     return JsonResponse({

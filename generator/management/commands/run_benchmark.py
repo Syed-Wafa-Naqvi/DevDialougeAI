@@ -82,7 +82,7 @@ class Command(BaseCommand):
             return
 
         self.stdout.write(self.style.SUCCESS(
-            f"\n🚀 Running DevDialogue AI Evaluation Benchmark [{len(target_files)} specs | Provider: {provider} | Prompt: {PROMPT_VERSION}]"
+            f"\nRunning DevDialogue AI Evaluation Benchmark [{len(target_files)} specs | Provider: {provider} | Prompt: {PROMPT_VERSION}]"
         ))
         self.stdout.write("=" * 85)
 
@@ -102,7 +102,7 @@ class Command(BaseCommand):
             with open(spec_path, 'r', encoding='utf-8') as f:
                 spec_content = f.read()
 
-            self.stdout.write(f"\n📋 Benchmark Spec: {spec_filename}")
+            self.stdout.write(f"\nBenchmark Spec: {spec_filename}")
 
             session = Session.objects.create(
                 user=runner_user,
@@ -126,7 +126,7 @@ class Command(BaseCommand):
                     plan_valid = True
                     plan_data = plan_obj.plan_data
             except Exception as e:
-                self.stdout.write(self.style.WARNING(f"   ⚠️ Plan Generation Error: {str(e)}"))
+                self.stdout.write(self.style.WARNING(f"   Plan Generation Error: {str(e)}"))
 
 
 
@@ -258,7 +258,7 @@ class Command(BaseCommand):
 
     def _print_summary_table(self, summary: dict, json_path: str, csv_path: str):
         self.stdout.write("\n" + "=" * 85)
-        self.stdout.write(self.style.SUCCESS("📊 BENCHMARK EVALUATION SUMMARY METRICS"))
+        self.stdout.write(self.style.SUCCESS("BENCHMARK EVALUATION SUMMARY METRICS"))
         self.stdout.write("=" * 85)
         self.stdout.write(f"  • Total Specifications Evaluated:  {summary.get('total_specs')}")
         self.stdout.write(f"  • Valid Architecture Plans (%):   {summary.get('valid_plans_pct')}%")
@@ -269,8 +269,8 @@ class Command(BaseCommand):
         self.stdout.write(f"  • Average Token Consumption:       {summary.get('avg_total_tokens')} tokens")
         self.stdout.write(f"  • Average Estimated Cost:         ${summary.get('avg_estimated_cost')}")
         self.stdout.write("=" * 85)
-        self.stdout.write(f"📄 Saved JSON: {json_path}")
-        self.stdout.write(f"📊 Saved CSV:  {csv_path}\n")
+        self.stdout.write(f"Saved JSON: {json_path}")
+        self.stdout.write(f"Saved CSV:  {csv_path}\n")
 
     def _compare_results(self, baseline_path: str, current_payload: dict):
         if not os.path.exists(baseline_path):
@@ -284,7 +284,7 @@ class Command(BaseCommand):
         curr_results = {r['spec_name']: r for r in current_payload.get('results', [])}
 
         self.stdout.write("\n" + "=" * 85)
-        self.stdout.write(self.style.SUCCESS(f"📈 COMPARISON WITH BASELINE [{os.path.basename(baseline_path)}]"))
+        self.stdout.write(self.style.SUCCESS(f"COMPARISON WITH BASELINE [{os.path.basename(baseline_path)}]"))
         self.stdout.write("=" * 85)
         self.stdout.write(f"{'Spec Name':<28} | {'Baseline Status':<16} | {'Current Status':<16} | {'Delta':<12}")
         self.stdout.write("-" * 85)
@@ -292,22 +292,22 @@ class Command(BaseCommand):
         for spec_name, curr_r in curr_results.items():
             base_r = base_results.get(spec_name)
             if not base_r:
-                delta = "🆕 NEW"
+                delta = "NEW"
                 base_status = "N/A"
             else:
                 base_status = base_r.get('final_status', 'unknown')
                 curr_status = curr_r.get('final_status', 'unknown')
 
                 if base_status != curr_status and curr_status in ('verified', 'verified_with_warnings'):
-                    delta = "✅ IMPROVED"
+                    delta = "IMPROVED"
                 elif base_status in ('verified', 'verified_with_warnings') and curr_status == 'needs_attention':
-                    delta = "⚠️ REGRESSED"
+                    delta = "REGRESSED"
                 elif curr_r['repaired_errors'] < base_r['repaired_errors']:
-                    delta = "✅ IMPROVED"
+                    delta = "IMPROVED"
                 elif curr_r['repaired_errors'] > base_r['repaired_errors']:
-                    delta = "⚠️ REGRESSED"
+                    delta = "REGRESSED"
                 else:
-                    delta = "➡️ UNCHANGED"
+                    delta = "UNCHANGED"
 
             self.stdout.write(f"{spec_name:<28} | {base_status:<16} | {curr_r['final_status']:<16} | {delta:<12}")
 

@@ -126,7 +126,7 @@ class UniversalProjectHarmonizer:
                         count=1,
                         flags=re.MULTILINE
                     )
-                    logger.info("🎯 [DART HARMONIZER] Synced pubspec.yaml name: '%s' -> '%s'", curr_name, primary_pkg_name)
+                    logger.info("[DART HARMONIZER] Synced pubspec.yaml name: '%s' -> '%s'", curr_name, primary_pkg_name)
             else:
                 pubspec_content = f"name: {primary_pkg_name}\n" + pubspec_content
         else:
@@ -171,7 +171,7 @@ class UniversalProjectHarmonizer:
                     )
                 else:
                     pubspec_content += f"\ndependencies:\n{dep_entry}"
-                logger.info("📦 [DART HARMONIZER] Injected missing dependency '%s' (%s) into pubspec.yaml", ext_pkg, version_str)
+                logger.info("[DART HARMONIZER] Injected missing dependency '%s' (%s) into pubspec.yaml", ext_pkg, version_str)
 
         files['pubspec.yaml'] = pubspec_content
 
@@ -202,7 +202,7 @@ class UniversalProjectHarmonizer:
                         # Non-existent relative import! Remove statement to avoid compile failure
                         content = content.replace(full_stmt, '')
                         changed = True
-                        logger.warning("🧹 [DART HARMONIZER] Removed broken relative import '%s' in %s", rel_target, p)
+                        logger.warning("[DART HARMONIZER] Removed broken relative import '%s' in %s", rel_target, p)
 
             # Check package imports that point to non-existent internal files
             for imp in re.finditer(r"(?:import|export)\s+['\"]package:" + re.escape(active_pub_name) + r"/([^'\"]+)['\"][^;]*;", content):
@@ -212,7 +212,7 @@ class UniversalProjectHarmonizer:
                 if cand_path not in files:
                     content = content.replace(full_stmt, '')
                     changed = True
-                    logger.warning("🧹 [DART HARMONIZER] Removed broken package import '%s' in %s", cand_path, p)
+                    logger.warning("[DART HARMONIZER] Removed broken package import '%s' in %s", cand_path, p)
 
             # Remove duplicate local class Color definitions shadowing Flutter's Color
             if 'class Color {' in content and 'importLightColorHex' in content:
@@ -348,7 +348,7 @@ class UniversalProjectHarmonizer:
                 reqs_content += '\n'
             for pkg in missing_packages:
                 reqs_content += f"{pkg}\n"
-                logger.info("📦 [PYTHON HARMONIZER] Injected missing dependency '%s' into requirements.txt", pkg)
+                logger.info("[PYTHON HARMONIZER] Injected missing dependency '%s' into requirements.txt", pkg)
             files['requirements.txt'] = reqs_content
 
     @classmethod

@@ -130,7 +130,7 @@ class AIHarnessPackager:
                     new_files["run.sh"] = (
                         "#!/usr/bin/env bash\n"
                         "set -e\n"
-                        f"echo '🚀 Starting Flutter Project: {display_title}...'\n"
+                        f"echo 'Starting Flutter Project: {display_title}...'\n"
                         "if ! command -v flutter >/dev/null 2>&1; then\n"
                         "    for cand in \"$HOME/flutter/bin\" \"$HOME/development/flutter/bin\" \"$HOME/.flutter/bin\" \"/snap/bin\" \"/opt/flutter/bin\"; do\n"
                         "        if [ -x \"$cand/flutter\" ]; then\n"
@@ -140,20 +140,20 @@ class AIHarnessPackager:
                         "    done\n"
                         "fi\n"
                         "if ! command -v flutter >/dev/null 2>&1; then\n"
-                        "    echo '❌ Flutter SDK not found in PATH.'\n"
-                        "    echo '💡 If installed, add it to your PATH: export PATH=\"$HOME/flutter/bin:$PATH\"'\n"
+                        "    echo '[ERROR] Flutter SDK not found in PATH.'\n"
+                        "    echo 'If installed, add it to your PATH: export PATH=\"$HOME/flutter/bin:$PATH\"'\n"
                         "    echo '   Or install from https://flutter.dev/docs/get-started/install'\n"
                         "    exit 1\n"
                         "fi\n"
-                        "echo '📦 Fetching Flutter dependencies...'\n"
+                        "echo 'Fetching Flutter dependencies...'\n"
                         f"{asset_sh_snippet}"
                         "if [ ! -d \"web\" ] && [ ! -d \"linux\" ] && [ ! -d \"android\" ] && [ ! -d \"windows\" ] && [ ! -d \"macos\" ]; then\n"
-                        "    echo '📱 Generating native platform targets (web, desktop, mobile)...'\n"
+                        "    echo 'Generating native platform targets (web, desktop, mobile)...'\n"
                         "    flutter create . --suppress-analytics\n"
                         f"{asset_sh_snippet}"
                         "fi\n"
                         "flutter pub get\n"
-                        "echo '⚡ Launching Flutter App...'\n"
+                        "echo 'Launching Flutter App...'\n"
                         "flutter run -d chrome || flutter run\n"
                     )
 
@@ -210,7 +210,7 @@ class AIHarnessPackager:
             elif k in ('pubspec.yaml', 'requirements.txt', 'package.json') and v != existing_files[k]:
                 new_files[k] = v
 
-        logger.info("📦 [HARNESS PACKAGER] Generated %d runner/manifest files for '%s': %s", len(new_files), project_name, list(new_files.keys()))
+        logger.info("[HARNESS PACKAGER] Generated %d runner/manifest files for '%s': %s", len(new_files), project_name, list(new_files.keys()))
         return new_files
 
 
@@ -276,7 +276,7 @@ class AIHarnessPackager:
                 new_files["run.sh"] = (
                     "#!/usr/bin/env bash\n"
                     "set -e\n"
-                    f"echo '🚀 Starting Flutter Project: {display_title}...'\n"
+                    f"echo 'Starting Flutter Project: {display_title}...'\n"
                     "if ! command -v flutter >/dev/null 2>&1; then\n"
                     "    for cand in \"$HOME/flutter/bin\" \"$HOME/development/flutter/bin\" \"$HOME/.flutter/bin\" \"/snap/bin\" \"/opt/flutter/bin\"; do\n"
                     "        if [ -x \"$cand/flutter\" ]; then\n"
@@ -286,12 +286,12 @@ class AIHarnessPackager:
                     "    done\n"
                     "fi\n"
                     "if ! command -v flutter >/dev/null 2>&1; then\n"
-                    "    echo '❌ Flutter SDK not found in PATH.'\n"
-                    "    echo '💡 If installed, add it to your PATH: export PATH=\"$HOME/flutter/bin:$PATH\"'\n"
+                    "    echo '[ERROR] Flutter SDK not found in PATH.'\n"
+                    "    echo 'If installed, add it to your PATH: export PATH=\"$HOME/flutter/bin:$PATH\"'\n"
                     "    echo '   Or install from https://flutter.dev/docs/get-started/install'\n"
                     "    exit 1\n"
                     "fi\n"
-                    "echo '📦 Fetching Flutter dependencies...'\n"
+                    "echo 'Fetching Flutter dependencies...'\n"
                     "# Ensure all declared asset directories exist so Flutter does not halt\n"
                     "if [ -f \"pubspec.yaml\" ]; then\n"
                     "    grep -E '^\\s*-\\s*assets/' pubspec.yaml 2>/dev/null | sed -e 's/^[ \\t]*-[ \\t]*//' | while read -r asset_dir; do\n"
@@ -303,7 +303,7 @@ class AIHarnessPackager:
                     "    done\n"
                     "fi\n"
                     "if [ ! -d \"web\" ] && [ ! -d \"linux\" ] && [ ! -d \"android\" ] && [ ! -d \"windows\" ] && [ ! -d \"macos\" ]; then\n"
-                    "    echo '📱 Generating native platform targets (web, desktop, mobile)...'\n"
+                    "    echo 'Generating native platform targets (web, desktop, mobile)...'\n"
                     "    flutter create . --suppress-analytics\n"
                     "    if [ -f \"pubspec.yaml\" ]; then\n"
                     "        grep -E '^\\s*-\\s*assets/' pubspec.yaml 2>/dev/null | sed -e 's/^[ \\t]*-[ \\t]*//' | while read -r asset_dir; do\n"
@@ -316,7 +316,7 @@ class AIHarnessPackager:
                     "    fi\n"
                     "fi\n"
                     "flutter pub get\n"
-                    "echo '⚡ Launching Flutter App...'\n"
+                    "echo 'Launching Flutter App...'\n"
                     "flutter run -d chrome || flutter run\n"
                 )
             if "run.bat" not in all_files:
@@ -391,7 +391,7 @@ class AIHarnessPackager:
             if "run.sh" not in all_files:
                 new_files["run.sh"] = (
                     "#!/usr/bin/env bash\nset -e\n"
-                    f"echo '🚀 Starting {display_title}...'\n"
+                    f"echo 'Starting {display_title}...'\n"
                     "npm install\n"
                     "npm start\n"
                 )
@@ -405,7 +405,7 @@ class AIHarnessPackager:
             if "go.mod" not in all_files:
                 new_files["go.mod"] = f"module {project_name.lower()}\n\ngo 1.22\n"
             if "run.sh" not in all_files:
-                new_files["run.sh"] = f"#!/usr/bin/env bash\nset -e\necho '🚀 Starting {display_title}...'\ngo run .\n"
+                new_files["run.sh"] = f"#!/usr/bin/env bash\nset -e\necho 'Starting {display_title}...'\ngo run .\n"
             if "run.bat" not in all_files:
                 new_files["run.bat"] = f"@echo off\necho Starting {display_title}...\ngo run .\npause\n"
             if ".gitignore" not in all_files:
@@ -418,7 +418,7 @@ class AIHarnessPackager:
                     f"[package]\nname = \"{project_name.lower()}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\n"
                 )
             if "run.sh" not in all_files:
-                new_files["run.sh"] = f"#!/usr/bin/env bash\nset -e\necho '🚀 Starting {display_title}...'\ncargo run\n"
+                new_files["run.sh"] = f"#!/usr/bin/env bash\nset -e\necho 'Starting {display_title}...'\ncargo run\n"
             if "run.bat" not in all_files:
                 new_files["run.bat"] = f"@echo off\necho Starting {display_title}...\ncargo run\npause\n"
             if ".gitignore" not in all_files:
@@ -438,7 +438,7 @@ class AIHarnessPackager:
                 new_files["run.sh"] = (
                     "#!/usr/bin/env bash\n"
                     "set -e\n"
-                    f"echo '🚀 Starting {display_title}...'\n\n"
+                    f"echo 'Starting {display_title}...'\n\n"
                     "PY_BIN=''\n"
                     "for cand in python3.13 python3.12 python3.11 python3 python; do\n"
                     "    if command -v \"$cand\" >/dev/null 2>&1; then\n"

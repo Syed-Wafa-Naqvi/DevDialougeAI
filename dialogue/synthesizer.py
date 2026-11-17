@@ -6,7 +6,7 @@ logger = logging.getLogger('dialogue.synthesizer')
 class SRSSynthesizer:
     @classmethod
     def synthesize_summary(cls, conversation_history: list, is_mode2: bool = False, provider_name: str = None, session = None, user = None) -> str:
-        logger.info("📋 [SRS SYNTHESIZER] Generating Project Requirements Summary for session #%s...", getattr(session, 'id', 'None'))
+        logger.info("[SRS SYNTHESIZER] Generating Project Requirements Summary for session #%s...", getattr(session, 'id', 'None'))
         messages_text = "\n".join([f"{m.get('role').capitalize()}: {m.get('content')}" for m in conversation_history])
         if session and hasattr(session, 'attachments'):
             doc_texts = [att.extracted_text for att in session.attachments.all() if att.extracted_text]

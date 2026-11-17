@@ -118,7 +118,7 @@ class LLMRouter:
 
         in_tokens = len(prompt) // 4
         logger.info(
-            "🤖 [LLM CALL START] Purpose: '%s' | Requested: '%s' | Selected: '%s' (%s) | Prompt: %d chars",
+            "[LLM CALL START] Purpose: '%s' | Requested: '%s' | Selected: '%s' (%s) | Prompt: %d chars",
             purpose, provider_name or 'auto', p_name, m_name, len(prompt)
         )
         fallback_used = False
@@ -169,12 +169,12 @@ class LLMRouter:
 
         if success:
             logger.info(
-                "⚡ [LLM CALL SUCCESS] Provider: '%s' (%s) | Latency: %dms | InTokens: ~%d | OutTokens: ~%d | Output: %d chars%s",
+                "[LLM CALL SUCCESS] Provider: '%s' (%s) | Latency: %dms | InTokens: ~%d | OutTokens: ~%d | Output: %d chars%s",
                 p_name, m_name, latency_ms, in_tokens, out_tokens, len(result),
                 " (via fallback)" if fallback_used else ""
             )
         else:
-            logger.error("❌ [LLM CALL FAILED] Provider: '%s' | Latency: %dms | Error: %s", p_name, latency_ms, err_msg)
+            logger.error("[LLM CALL FAILED] Provider: '%s' | Latency: %dms | Error: %s", p_name, latency_ms, err_msg)
 
         # Log LLM Call
         try:

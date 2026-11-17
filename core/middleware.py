@@ -52,7 +52,7 @@ class TerminalActivityMiddleware:
         ip = request.META.get('REMOTE_ADDR', '127.0.0.1')
 
         # Log incoming request
-        logger.info("🚀 [HTTP HIT] [%s] %s | User: %s | IP: %s", method, path, user_str, ip)
+        logger.info("[HTTP HIT] [%s] %s | User: %s | IP: %s", method, path, user_str, ip)
 
         # Log payload details if POST/PUT
         if method in ('POST', 'PUT', 'PATCH'):
@@ -64,10 +64,8 @@ class TerminalActivityMiddleware:
             elapsed_ms = (time.time() - start_time) * 1000
             status_code = getattr(response, 'status_code', 200)
 
-            status_icon = "✅" if status_code < 400 else ("⚠️" if status_code < 500 else "❌")
             logger.info(
-                "%s [HTTP %s] [%s] %s -> %d %s (elapsed: %.1fms)",
-                status_icon,
+                "[HTTP %s] [%s] %s -> %d %s (elapsed: %.1fms)",
                 "COMPLETED" if status_code < 400 else "FAILED",
                 method,
                 path,
@@ -78,7 +76,7 @@ class TerminalActivityMiddleware:
             return response
         except Exception as exc:
             elapsed_ms = (time.time() - start_time) * 1000
-            logger.exception("❌ [HTTP ERROR] [%s] %s crashed after %.1fms: %s", method, path, elapsed_ms, str(exc))
+            logger.exception("[HTTP ERROR] [%s] %s crashed after %.1fms: %s", method, path, elapsed_ms, str(exc))
             raise
 
     def _log_payload(self, request):
@@ -89,7 +87,7 @@ class TerminalActivityMiddleware:
                 for field_name, f in request.FILES.items():
                     size_kb = max(0.1, round(f.size / 1024, 1))
                     file_summaries.append(f"{f.name} ({size_kb} KB, {getattr(f, 'content_type', '')})")
-                logger.info("📎 [FILES ATTACHED] %s", " | ".join(file_summaries))
+                logger.info("[FILES ATTACHED] %s", " | ".join(file_summaries))
 
             # Safely check JSON payload without triggering RawPostDataException
             content_type = request.META.get('CONTENT_TYPE', '')
@@ -111,7 +109,7 @@ class TerminalActivityMiddleware:
                             if msg:
                                 details.append(f"message=\"{msg_preview}\"")
                             if details:
-                                logger.info("📥 [PAYLOAD] %s", " | ".join(details))
+                                logger.info("[PAYLOAD] %s", " | ".join(details))
                 except Exception:
                     pass
         except Exception:

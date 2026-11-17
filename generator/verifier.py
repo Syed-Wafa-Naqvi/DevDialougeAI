@@ -112,12 +112,12 @@ class StaticVerifier:
         warning_count = sum(1 for i in issues if i['severity'] == 'warning')
 
         if error_count == 0:
-            logger.info("✅ [STATIC VERIFIER PASSED] 0 errors, %d warnings across %d files", warning_count, len(files))
+            logger.info("[STATIC VERIFIER PASSED] 0 errors, %d warnings across %d files", warning_count, len(files))
         else:
-            logger.warning("❌ [STATIC VERIFIER ISSUES] %d errors, %d warnings found in %d files", error_count, warning_count, len(files))
+            logger.warning("[STATIC VERIFIER ISSUES] %d errors, %d warnings found in %d files", error_count, warning_count, len(files))
             for iss in issues:
                 if iss['severity'] == 'error':
-                    logger.warning("   └─ ❌ %s:%s [%s] %s", iss['file'], iss['line'], iss['check'], iss['message'])
+                    logger.warning("   [-] %s:%s [%s] %s", iss['file'], iss['line'], iss['check'], iss['message'])
 
         return {
             'passed': error_count == 0,
