@@ -845,6 +845,132 @@ class CodeGenerationRobustnessTestCase(TestCase):
             self.assertTrue(res['passed'])
             self.assertEqual(res['error_count'], 0)
 
+    def test_static_verifier_bracket_mismatch(self):
+        from generator.verifier import StaticVerifier
+        bad_bracket_files = {
+            'src/index.js': "function test() { return (1 + 2; }"
+        }
+        res = StaticVerifier.verify_project(bad_bracket_files)
+        self.assertFalse(res['passed'])
+        self.assertTrue(any(i['check'] in ('bracket_mismatch', 'unclosed_bracket') for i in res['issues']))
+
+    def test_static_verifier_javascript_unresolved_import(self):
+        from generator.verifier import StaticVerifier
+        files = {
+            'src/index.js': "import { helper } from './utils/helper';\nconsole.log(helper());",
+            'package.json': json.dumps({"name": "test-app", "dependencies": {}})
+        }
+        res = StaticVerifier.verify_project(files)
+        self.assertFalse(res['passed'])
+        self.assertTrue(any(i['check'] == 'unresolved_import' for i in res['issues']))
+
+    def test_static_verifier_javascript_missing_package_dependency(self):
+        from generator.verifier import StaticVerifier
+        files = {
+            'src/index.js': "import axios from 'axios';\nconsole.log(axios);",
+            'package.json': json.dumps({"name": "test-app", "dependencies": {"react": "^18.0.0"}})
+        }
+        res = StaticVerifier.verify_project(files)
+        self.assertFalse(res['passed'])
+        self.assertTrue(any(i['check'] == 'missing_package_dependency' for i in res['issues']))
+
+    def test_static_verifier_go_multiple_packages_in_dir(self):
+        from generator.verifier import StaticVerifier
+        files = {
+            'pkg/util/a.go': "package util\nfunc A() {}",
+            'pkg/util/b.go': "package helper\nfunc B() {}"
+        }
+        res = StaticVerifier.verify_project(files)
+        self.assertFalse(res['passed'])
+        self.assertTrue(any(i['check'] == 'multiple_packages_in_dir' for i in res['issues']))
+
+    def test_static_verifier_rust_unresolved_module(self):
+        from generator.verifier import StaticVerifier
+        files = {
+            'Cargo.toml': '[package]\nname = "my_app"\nversion = "0.1.0"',
+            'src/main.rs': "mod non_existent;\nfn main() {}"
+        }
+        res = StaticVerifier.verify_project(files)
+        self.assertFalse(res['passed'])
+        self.assertTrue(any(i['check'] == 'unresolved_module' for i in res['issues']))
+
+    def test_static_verifier_c_missing_header(self):
+        from generator.verifier import StaticVerifier
+        files = {
+            'main.c': '#include "missing_header.h"\nint main() { return 0; }'
+        }
+        res = StaticVerifier.verify_project(files)
+        self.assertFalse(res['passed'])
+        self.assertTrue(any(i['check'] == 'missing_header' for i in res['issues']))
+
+    def test_static_verifier_runner_script_checks(self):
+        from generator.verifier import StaticVerifier
+        no_shebang = {
+            'run.sh': 'echo "no shebang"'
+        }
+        res1 = StaticVerifier.verify_project(no_shebang)
+        self.assertFalse(res1['passed'])
+        self.assertTrue(any(i['check'] == 'missing_shebang' for i in res1['issues']))
+
+        missing_target = {
+            'run.sh': '#!/bin/bash\npython manage.py runserver 0.0.0.0:8000'
+        }
+        res2 = StaticVerifier.verify_project(missing_target)
+        self.assertFalse(res2['passed'])
+        self.assertTrue(any(i['check'] == 'missing_runner_target' for i in res2['issues']))
+
+    def test_runtime_verifier_node_syntax_check(self):
+        from generator.runtime_verifier import RuntimeVerifier
+        broken_js = {
+            'index.js': "function broken() { const a = ; }"
+        }
+        res = RuntimeVerifier.run_node_verification(broken_js)
+        if res.get('executed'):
+            self.assertFalse(res['passed'])
+            self.assertTrue(any(i['check'] == 'node_syntax' for i in res['issues']))
+
+        clean_js = {
+            'index.js': "function clean() { return 42; }\nconsole.log(clean());"
+        }
+        res_clean = RuntimeVerifier.run_node_verification(clean_js)
+        if res_clean.get('executed'):
+            self.assertTrue(res_clean['passed'])
+
+    def test_runtime_verifier_shell_syntax_check(self):
+        from generator.runtime_verifier import RuntimeVerifier
+        broken_sh = {
+            'run.sh': "#!/bin/bash\nif [ \"$1\" == \"test\" ]; then\necho \"missing fi\"\n"
+        }
+        res = RuntimeVerifier.run_shell_verification(broken_sh)
+        if res.get('executed'):
+            self.assertFalse(res['passed'])
+            self.assertTrue(any(i['check'] == 'bash_syntax' for i in res['issues']))
+
+        clean_sh = {
+            'run.sh': "#!/bin/bash\necho 'Running clean runner'\nexit 0\n"
+        }
+        res_clean = RuntimeVerifier.run_shell_verification(clean_sh)
+        if res_clean.get('executed'):
+            self.assertTrue(res_clean['passed'])
+
+    def test_runtime_verifier_gcc_syntax_check(self):
+        from generator.runtime_verifier import RuntimeVerifier
+        broken_c = {
+            'main.c': "#include <stdio.h>\nint main() { printf(\"hi\") return 0; }\n"
+        }
+        res = RuntimeVerifier.run_c_cpp_verification(broken_c)
+        if res.get('executed'):
+            self.assertFalse(res['passed'])
+            self.assertTrue(any(i['check'] == 'gcc_syntax' for i in res['issues']))
+
+        clean_c = {
+            'main.c': "#include <stdio.h>\nint main() { printf(\"hi\\n\"); return 0; }\n"
+        }
+        res_clean = RuntimeVerifier.run_c_cpp_verification(clean_c)
+        if res_clean.get('executed'):
+            self.assertTrue(res_clean['passed'])
+
+
 
 
 

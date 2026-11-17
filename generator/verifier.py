@@ -2,6 +2,7 @@ import ast
 import hashlib
 import html.parser
 import json
+import os
 import re
 import sys
 
@@ -79,7 +80,27 @@ class StaticVerifier:
         dart_issues = cls._verify_dart_project(files)
         issues.extend(dart_issues)
 
-        # 6. Non-Python File Validation
+        # 6. JavaScript / TypeScript Semantic Checks
+        js_issues = cls._verify_javascript_typescript(files)
+        issues.extend(js_issues)
+
+        # 7. Go (Golang) Architecture & Syntax Checks
+        go_issues = cls._verify_go_project(files)
+        issues.extend(go_issues)
+
+        # 8. Rust Project Checks
+        rust_issues = cls._verify_rust_project(files)
+        issues.extend(rust_issues)
+
+        # 9. C / C++ Project Checks
+        c_issues = cls._verify_c_cpp_project(files)
+        issues.extend(c_issues)
+
+        # 10. Universal Runner Script Checks
+        runner_issues = cls._verify_runner_scripts(files)
+        issues.extend(runner_issues)
+
+        # 11. Non-Python File Validation
         other_issues = cls._verify_non_python_files(files)
         issues.extend(other_issues)
 
@@ -580,5 +601,504 @@ class StaticVerifier:
                                 check='requirements_format',
                                 message=f"Invalid requirement string format: '{line_clean}'"
                             ))
+
+        return issues
+
+    @classmethod
+    def _verify_bracket_balance(cls, file_path: str, content: str, lang_type: str = 'c_like') -> list:
+        issues = []
+        stack = []
+        matching = {')': '(', '}': '{', ']': '['}
+        pairs = {'(': ')', '{': '}', '[': ']'}
+        i = 0
+        n = len(content)
+        line = 1
+        in_str = None
+        in_line_comment = False
+        in_block_comment = False
+
+        while i < n:
+            c = content[i]
+            if c == '\n':
+                line += 1
+                in_line_comment = False
+                i += 1
+                continue
+            if in_line_comment:
+                i += 1
+                continue
+            if in_block_comment:
+                if c == '*' and i + 1 < n and content[i + 1] == '/':
+                    in_block_comment = False
+                    i += 2
+                else:
+                    i += 1
+                continue
+            if in_str:
+                if c == '\\':
+                    i += 2
+                    continue
+                if c == in_str:
+                    in_str = None
+                i += 1
+                continue
+
+            # Comments
+            if c == '/' and i + 1 < n:
+                if content[i + 1] == '/':
+                    in_line_comment = True
+                    i += 2
+                    continue
+                elif content[i + 1] == '*':
+                    in_block_comment = True
+                    i += 2
+                    continue
+            elif lang_type in ('shell', 'python') and c == '#':
+                in_line_comment = True
+                i += 1
+                continue
+
+            # Strings
+            if c in ("'", '"', '`'):
+                in_str = c
+                i += 1
+                continue
+
+            # Brackets
+            if c in ('(', '{', '['):
+                stack.append((c, line))
+            elif c in (')', '}', ']'):
+                if not stack:
+                    issues.append(cls._create_issue(
+                        file_path=file_path,
+                        line=line,
+                        severity='error',
+                        check='bracket_mismatch',
+                        message=f"Unexpected closing '{c}' with no matching opening bracket."
+                    ))
+                    return issues
+                top, top_line = stack.pop()
+                if matching[c] != top:
+                    issues.append(cls._create_issue(
+                        file_path=file_path,
+                        line=line,
+                        severity='error',
+                        check='bracket_mismatch',
+                        message=f"Mismatched closing bracket '{c}' at line {line}, expected '{pairs[top]}' to match '{top}' opened at line {top_line}."
+                    ))
+                    return issues
+            i += 1
+
+        if stack:
+            top, top_line = stack[-1]
+            issues.append(cls._create_issue(
+                file_path=file_path,
+                line=top_line,
+                severity='error',
+                check='unclosed_bracket',
+                message=f"Unclosed '{top}' opened at line {top_line}."
+            ))
+
+        return issues
+
+    NODE_STDLIB_MODULES = {
+        'assert', 'async_hooks', 'buffer', 'child_process', 'cluster', 'console',
+        'constants', 'crypto', 'dgram', 'dns', 'domain', 'events', 'fs', 'fs/promises',
+        'http', 'http2', 'https', 'inspector', 'module', 'net', 'os', 'path',
+        'perf_hooks', 'process', 'punycode', 'querystring', 'readline', 'repl',
+        'stream', 'stream/promises', 'stream/consumers', 'string_decoder', 'sys',
+        'timers', 'timers/promises', 'tls', 'trace_events', 'tty', 'url', 'util',
+        'util/types', 'v8', 'vm', 'wasi', 'worker_threads', 'zlib'
+    }
+
+    @classmethod
+    def _verify_javascript_typescript(cls, files: dict) -> list:
+        issues = []
+        js_exts = ('.js', '.mjs', '.cjs', '.jsx', '.ts', '.tsx')
+        js_files = {p: c for p, c in files.items() if p.endswith(js_exts)}
+        if not js_files and 'package.json' not in files:
+            return issues
+
+        # 1. Package.json validation
+        declared_deps = set()
+        if 'package.json' in files:
+            try:
+                pkg_data = json.loads(files['package.json'])
+                if isinstance(pkg_data, dict):
+                    deps = pkg_data.get('dependencies', {})
+                    dev_deps = pkg_data.get('devDependencies', {})
+                    peer_deps = pkg_data.get('peerDependencies', {})
+                    if isinstance(deps, dict):
+                        declared_deps.update(deps.keys())
+                    if isinstance(dev_deps, dict):
+                        declared_deps.update(dev_deps.keys())
+                    if isinstance(peer_deps, dict):
+                        declared_deps.update(peer_deps.keys())
+
+                    main_entry = pkg_data.get('main')
+                    if main_entry:
+                        clean_main = main_entry.lstrip('./')
+                        if clean_main not in files and not any(p.endswith(clean_main) for p in files):
+                            issues.append(cls._create_issue(
+                                file_path='package.json',
+                                line=1,
+                                severity='error',
+                                check='missing_entry_point',
+                                message=f"package.json specifies main entrypoint '{main_entry}', but the file does not exist."
+                            ))
+            except Exception as e:
+                issues.append(cls._create_issue(
+                    file_path='package.json',
+                    line=1,
+                    severity='error',
+                    check='package_json_syntax',
+                    message=f"Invalid package.json: {str(e)}"
+                ))
+
+        # 2. Syntax & Import checks on JS/TS files
+        import_pattern = re.compile(r'''(?:import\s+(?:[\w*\s{},]*\s+from\s+)?['"]([^'"]+)['"]|require\s*\(\s*['"]([^'"]+)['"]\s*\))''')
+
+        for file_path, content in js_files.items():
+            # Bracket balance
+            b_issues = cls._verify_bracket_balance(file_path, content, lang_type='c_like')
+            issues.extend(b_issues)
+
+            # Check imports / requires
+            file_dir = os.path.dirname(file_path)
+            for line_idx, line in enumerate(content.splitlines()):
+                line_str = line.strip()
+                if line_str.startswith('//') or line_str.startswith('/*') or line_str.startswith('*'):
+                    continue
+                for m in import_pattern.finditer(line):
+                    specifier = m.group(1) or m.group(2)
+                    if not specifier:
+                        continue
+
+                    # Relative import check
+                    if specifier.startswith('.'):
+                        norm_target = os.path.normpath(os.path.join(file_dir, specifier))
+                        candidate_targets = [
+                            norm_target,
+                            norm_target + '.js',
+                            norm_target + '.ts',
+                            norm_target + '.jsx',
+                            norm_target + '.tsx',
+                            norm_target + '.mjs',
+                            norm_target + '.cjs',
+                            os.path.join(norm_target, 'index.js'),
+                            os.path.join(norm_target, 'index.ts'),
+                            os.path.join(norm_target, 'index.jsx'),
+                            os.path.join(norm_target, 'index.tsx'),
+                        ]
+                        if not any(cand in files for cand in candidate_targets):
+                            issues.append(cls._create_issue(
+                                file_path=file_path,
+                                line=line_idx + 1,
+                                severity='error',
+                                check='unresolved_import',
+                                message=f"Relative import '{specifier}' cannot be resolved. Expected target in project files."
+                            ))
+                    else:
+                        pkg_name = specifier.split('/')[0]
+                        if specifier.startswith('@'):
+                            parts = specifier.split('/')
+                            if len(parts) >= 2:
+                                pkg_name = f"{parts[0]}/{parts[1]}"
+
+                        if pkg_name not in cls.NODE_STDLIB_MODULES and 'package.json' in files:
+                            if declared_deps and pkg_name not in declared_deps:
+                                issues.append(cls._create_issue(
+                                    file_path=file_path,
+                                    line=line_idx + 1,
+                                    severity='error',
+                                    check='missing_package_dependency',
+                                    message=f"Module '{pkg_name}' is imported but not declared in package.json dependencies."
+                                ))
+
+        return issues
+
+    @classmethod
+    def _verify_go_project(cls, files: dict) -> list:
+        issues = []
+        go_files = {p: c for p, c in files.items() if p.endswith('.go')}
+        if not go_files and 'go.mod' not in files:
+            return issues
+
+        # 1. go.mod validation
+        if 'go.mod' in files:
+            mod_content = files['go.mod']
+            if not re.search(r'^\s*module\s+\S+', mod_content, re.MULTILINE):
+                issues.append(cls._create_issue(
+                    file_path='go.mod',
+                    line=1,
+                    severity='error',
+                    check='invalid_go_mod',
+                    message="go.mod must declare a module name (e.g., 'module myapp')."
+                ))
+
+        # Track packages per directory
+        dir_packages = {}
+        has_main_package = False
+        has_main_func = False
+
+        for file_path, content in go_files.items():
+            # Bracket balance
+            b_issues = cls._verify_bracket_balance(file_path, content, lang_type='c_like')
+            issues.extend(b_issues)
+
+            # Find package declaration
+            pkg_name = None
+            for line_idx, line in enumerate(content.splitlines()):
+                line_str = line.strip()
+                if not line_str or line_str.startswith('//') or line_str.startswith('/*'):
+                    continue
+                m = re.match(r'^package\s+([a-zA-Z0-9_]+)', line_str)
+                if m:
+                    pkg_name = m.group(1)
+                    break
+                else:
+                    issues.append(cls._create_issue(
+                        file_path=file_path,
+                        line=line_idx + 1,
+                        severity='error',
+                        check='missing_package_declaration',
+                        message=f"Go file '{file_path}' must begin with a 'package <name>' statement."
+                    ))
+                    break
+
+            if not pkg_name:
+                if not any(i['file'] == file_path and i['check'] == 'missing_package_declaration' for i in issues):
+                    issues.append(cls._create_issue(
+                        file_path=file_path,
+                        line=1,
+                        severity='error',
+                        check='missing_package_declaration',
+                        message=f"Go file '{file_path}' does not contain a 'package <name>' declaration."
+                    ))
+            else:
+                file_dir = os.path.dirname(file_path)
+                if file_dir not in dir_packages:
+                    dir_packages[file_dir] = {}
+                dir_packages[file_dir].setdefault(pkg_name, []).append(file_path)
+
+                if pkg_name == 'main':
+                    has_main_package = True
+                    if re.search(r'\bfunc\s+main\s*\(\s*\)', content):
+                        has_main_func = True
+
+        # Check directory package consistency
+        for directory, pkgs in dir_packages.items():
+            if len(pkgs) > 1:
+                pkg_summary = ', '.join(f"'{p}' ({len(fls)} files)" for p, fls in pkgs.items())
+                issues.append(cls._create_issue(
+                    file_path=list(pkgs.values())[0][0],
+                    line=1,
+                    severity='error',
+                    check='multiple_packages_in_dir',
+                    message=f"Directory '{directory or '.'}' contains multiple Go packages: {pkg_summary}. All files in the same directory must share the same package name."
+                ))
+
+        if has_main_package and not has_main_func:
+            issues.append(cls._create_issue(
+                file_path='main.go' if 'main.go' in go_files else list(go_files.keys())[0],
+                line=1,
+                severity='error',
+                check='missing_main_func',
+                message="Go project declares 'package main' but contains no 'func main()' entrypoint."
+            ))
+
+        return issues
+
+    @classmethod
+    def _verify_rust_project(cls, files: dict) -> list:
+        issues = []
+        rs_files = {p: c for p, c in files.items() if p.endswith('.rs')}
+        if not rs_files and 'Cargo.toml' not in files:
+            return issues
+
+        # 1. Cargo.toml validation
+        if 'Cargo.toml' in files:
+            cargo_content = files['Cargo.toml']
+            if '[package]' not in cargo_content or 'name' not in cargo_content:
+                issues.append(cls._create_issue(
+                    file_path='Cargo.toml',
+                    line=1,
+                    severity='error',
+                    check='invalid_cargo_toml',
+                    message="Cargo.toml must contain a '[package]' section with a 'name' field."
+                ))
+
+        has_main_rs = 'src/main.rs' in rs_files or 'main.rs' in rs_files
+        has_main_fn = False
+
+        mod_pattern = re.compile(r'^\s*mod\s+([a-zA-Z0-9_]+)\s*;', re.MULTILINE)
+
+        for file_path, content in rs_files.items():
+            # Bracket balance
+            b_issues = cls._verify_bracket_balance(file_path, content, lang_type='c_like')
+            issues.extend(b_issues)
+
+            if file_path in ('src/main.rs', 'main.rs'):
+                if re.search(r'\bfn\s+main\s*\(\s*\)', content):
+                    has_main_fn = True
+
+            # Local module declarations
+            file_dir = os.path.dirname(file_path)
+            for m in mod_pattern.finditer(content):
+                mod_name = m.group(1)
+                cand1 = os.path.normpath(os.path.join(file_dir, f"{mod_name}.rs"))
+                cand2 = os.path.normpath(os.path.join(file_dir, mod_name, "mod.rs"))
+                cand3 = f"src/{mod_name}.rs"
+                cand4 = f"src/{mod_name}/mod.rs"
+                if not any(c in files for c in (cand1, cand2, cand3, cand4)):
+                    line_no = content[:m.start()].count('\n') + 1
+                    issues.append(cls._create_issue(
+                        file_path=file_path,
+                        line=line_no,
+                        severity='error',
+                        check='unresolved_module',
+                        message=f"Rust module '{mod_name}' is declared, but neither '{mod_name}.rs' nor '{mod_name}/mod.rs' was found."
+                    ))
+
+        if has_main_rs and not has_main_fn:
+            target_f = 'src/main.rs' if 'src/main.rs' in rs_files else 'main.rs'
+            issues.append(cls._create_issue(
+                file_path=target_f,
+                line=1,
+                severity='error',
+                check='missing_main_func',
+                message=f"Rust binary '{target_f}' must define a 'fn main()' function."
+            ))
+
+        return issues
+
+    @classmethod
+    def _verify_c_cpp_project(cls, files: dict) -> list:
+        issues = []
+        c_exts = ('.c', '.cpp', '.cc', '.cxx', '.h', '.hpp', '.hxx')
+        c_files = {p: c for p, c in files.items() if p.endswith(c_exts)}
+        if not c_files:
+            return issues
+
+        include_pattern = re.compile(r'^\s*#\s*include\s*"([^"]+)"', re.MULTILINE)
+
+        has_main = False
+
+        for file_path, content in c_files.items():
+            # Bracket balance
+            b_issues = cls._verify_bracket_balance(file_path, content, lang_type='c_like')
+            issues.extend(b_issues)
+
+            if re.search(r'\b(int|void)\s+main\s*\(', content):
+                has_main = True
+
+            # Local header existence
+            file_dir = os.path.dirname(file_path)
+            for m in include_pattern.finditer(content):
+                hdr = m.group(1)
+                norm_cand1 = os.path.normpath(os.path.join(file_dir, hdr))
+                norm_cand2 = os.path.normpath(os.path.join('include', hdr))
+                norm_cand3 = hdr
+                if not (norm_cand1 in files or norm_cand2 in files or norm_cand3 in files or any(p.endswith('/' + hdr) for p in files)):
+                    line_no = content[:m.start()].count('\n') + 1
+                    issues.append(cls._create_issue(
+                        file_path=file_path,
+                        line=line_no,
+                        severity='error',
+                        check='missing_header',
+                        message=f"Local header '{hdr}' included in '{file_path}' was not found in project files."
+                    ))
+
+        build_scripts = [p for p in files if p in ('Makefile', 'CMakeLists.txt') or p.endswith('.sh')]
+        if build_scripts and not has_main:
+            source_files = [p for p in c_files if p.endswith(('.c', '.cpp', '.cc', '.cxx'))]
+            if source_files:
+                issues.append(cls._create_issue(
+                    file_path=source_files[0],
+                    line=1,
+                    severity='warning',
+                    check='missing_main_func',
+                    message="C/C++ project contains build scripts but defines no 'main()' function entrypoint."
+                ))
+
+        return issues
+
+    @classmethod
+    def _verify_runner_scripts(cls, files: dict) -> list:
+        issues = []
+        runner_files = {p: c for p, c in files.items() if p == 'run.sh' or p.endswith('.sh')}
+        if not runner_files:
+            return issues
+
+        for file_path, content in runner_files.items():
+            lines = content.splitlines()
+            if not lines:
+                issues.append(cls._create_issue(
+                    file_path=file_path,
+                    line=1,
+                    severity='error',
+                    check='empty_runner_script',
+                    message=f"Runner script '{file_path}' is empty."
+                ))
+                continue
+
+            first_line = lines[0].strip()
+            if not (first_line.startswith('#!/bin/bash') or first_line.startswith('#!/bin/sh') or first_line.startswith('#!/usr/bin/env bash') or first_line.startswith('#!/usr/bin/env sh')):
+                issues.append(cls._create_issue(
+                    file_path=file_path,
+                    line=1,
+                    severity='error',
+                    check='missing_shebang',
+                    message=f"Runner script '{file_path}' must begin with a valid shebang (e.g. '#!/bin/bash')."
+                ))
+
+            # Quote balance check
+            in_single = False
+            in_double = False
+            in_backtick = False
+            for line_idx, line in enumerate(lines):
+                i = 0
+                while i < len(line):
+                    ch = line[i]
+                    if ch == '\\':
+                        i += 2
+                        continue
+                    if not in_single and not in_double and not in_backtick and ch == '#':
+                        break
+                    if ch == "'" and not in_double and not in_backtick:
+                        in_single = not in_single
+                    elif ch == '"' and not in_single and not in_backtick:
+                        in_double = not in_double
+                    elif ch == '`' and not in_single:
+                        in_backtick = not in_backtick
+                    i += 1
+
+            if in_single or in_double or in_backtick:
+                issues.append(cls._create_issue(
+                    file_path=file_path,
+                    line=len(lines),
+                    severity='error',
+                    check='unclosed_quote',
+                    message=f"Runner script '{file_path}' has unclosed quote literals."
+                ))
+
+            # Referenced targets check
+            if 'python manage.py' in content and 'manage.py' not in files:
+                issues.append(cls._create_issue(
+                    file_path=file_path,
+                    line=1,
+                    severity='error',
+                    check='missing_runner_target',
+                    message=f"Runner script '{file_path}' runs 'manage.py', but 'manage.py' is missing from project files."
+                ))
+            if 'flutter run' in content or 'flutter test' in content:
+                if 'pubspec.yaml' not in files:
+                    issues.append(cls._create_issue(
+                        file_path=file_path,
+                        line=1,
+                        severity='error',
+                        check='missing_runner_target',
+                        message=f"Runner script '{file_path}' executes Flutter, but 'pubspec.yaml' is missing."
+                    ))
 
         return issues
