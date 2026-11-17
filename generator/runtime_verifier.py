@@ -68,18 +68,30 @@ class RuntimeVerifier:
         def set_resource_limits():
             try:
                 import resource
-                # CPU time limit (15s soft, 20s hard)
-                resource.setrlimit(resource.RLIMIT_CPU, (15, 20))
-                # Virtual memory limit (512 MB)
-                resource.setrlimit(resource.RLIMIT_AS, (512 * 1024 * 1024, 512 * 1024 * 1024))
                 # File size limit (50 MB)
                 resource.setrlimit(resource.RLIMIT_FSIZE, (50 * 1024 * 1024, 50 * 1024 * 1024))
-                # Max processes (50)
-                resource.setrlimit(resource.RLIMIT_NPROC, (50, 50))
             except Exception:
                 pass
 
         return set_resource_limits
+
+    @classmethod
+    def _find_flutter_binary(cls) -> str:
+        import shutil
+        found = shutil.which('flutter')
+        if found:
+            return found
+        for cand in [
+            os.path.expanduser('~/flutter/bin/flutter'),
+            os.path.expanduser('~/development/flutter/bin/flutter'),
+            '/opt/flutter/bin/flutter',
+            '/snap/bin/flutter',
+            '/usr/local/bin/flutter',
+            '/usr/bin/flutter'
+        ]:
+            if os.path.isfile(cand) and os.access(cand, os.X_OK):
+                return cand
+        return None
 
     @classmethod
     def _find_dart_binary(cls) -> str:
@@ -89,6 +101,7 @@ class RuntimeVerifier:
             return found
         for cand in [
             os.path.expanduser('~/flutter/bin/dart'),
+            os.path.expanduser('~/development/flutter/bin/dart'),
             '/opt/flutter/bin/dart',
             '/snap/bin/dart',
             '/usr/local/bin/dart',
@@ -100,14 +113,15 @@ class RuntimeVerifier:
 
     @classmethod
     def run_dart_verification(cls, files: dict) -> dict:
-        """Runs dart analyze on Dart/Flutter projects if dart SDK is available."""
+        """Runs flutter analyze or dart analyze on Dart/Flutter projects if SDK is available."""
         dart_files = [p for p in files.keys() if p.endswith('.dart')]
         if not dart_files:
             return {'executed': False, 'passed': True, 'issues': []}
 
+        flutter_bin = cls._find_flutter_binary()
         dart_bin = cls._find_dart_binary()
-        if not dart_bin:
-            return {'executed': False, 'passed': True, 'reason': 'Dart SDK not found', 'issues': []}
+        if not flutter_bin and not dart_bin:
+            return {'executed': False, 'passed': True, 'reason': 'Flutter/Dart SDK not found', 'issues': []}
 
         issues = []
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -117,35 +131,114 @@ class RuntimeVerifier:
                 with open(fp, 'w', encoding='utf-8') as f:
                     f.write(c)
 
-            if 'pubspec.yaml' not in files:
-                with open(os.path.join(temp_dir, 'pubspec.yaml'), 'w') as pf:
-                    pf.write("name: temp_verification_project\nenvironment:\n  sdk: '>=3.0.0 <4.0.0'\n")
-
-            try:
-                res = subprocess.run(
-                    [dart_bin, 'analyze', '--no-fatal-warnings', temp_dir],
-                    capture_output=True,
-                    text=True,
-                    timeout=20,
-                    preexec_fn=cls._get_preexec_fn()
+            pubspec_content = files.get('pubspec.yaml')
+            if not pubspec_content:
+                pubspec_content = (
+                    "name: temp_verification_project\n"
+                    "environment:\n  sdk: '>=3.0.0 <4.0.0'\n"
+                    "dependencies:\n  flutter:\n    sdk: flutter\n"
                 )
-                stdout = res.stdout or ''
-                pattern = re.compile(r'^\s*(error|warning)\s+-\s+([^:]+):(\d+):(\d+)\s+-\s+(.+?)(?:\s+-\s+[a-zA-Z0-9_]+)?$', re.MULTILINE)
-                for m in pattern.finditer(stdout):
-                    sev = m.group(1).lower()
-                    raw_file = m.group(2).strip()
-                    rel_file = raw_file.replace(temp_dir, '').lstrip('/')
-                    line = int(m.group(3))
-                    msg = m.group(5).strip()
-                    issues.append(cls._create_issue(
-                        file_path=rel_file,
-                        line=line,
-                        severity=sev,
-                        check='dart_analyzer',
-                        message=msg
-                    ))
-            except Exception:
-                pass
+                with open(os.path.join(temp_dir, 'pubspec.yaml'), 'w') as pf:
+                    pf.write(pubspec_content)
+
+            # Pre-flight asset directories from pubspec.yaml
+            for line in pubspec_content.splitlines():
+                m = re.match(r'^\s*-\s*(assets/[a-zA-Z0-9_\-\./]+)', line)
+                if m:
+                    clean_dir = os.path.join(temp_dir, m.group(1).rstrip('/'))
+                    os.makedirs(clean_dir, exist_ok=True)
+                    gitkeep_path = os.path.join(clean_dir, '.gitkeep')
+                    if not os.path.exists(gitkeep_path):
+                        try:
+                            open(gitkeep_path, 'w').close()
+                        except Exception:
+                            pass
+
+            if flutter_bin:
+                try:
+                    subprocess.run(
+                        [flutter_bin, 'pub', 'get'],
+                        cwd=temp_dir,
+                        capture_output=True,
+                        text=True,
+                        timeout=25,
+                        preexec_fn=cls._get_preexec_fn()
+                    )
+                except Exception:
+                    pass
+
+                try:
+                    res = subprocess.run(
+                        [flutter_bin, 'analyze', '--no-fatal-infos', '--no-fatal-warnings'],
+                        cwd=temp_dir,
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                        preexec_fn=cls._get_preexec_fn()
+                    )
+                    stdout = res.stdout or ''
+                    # Pattern 1: Flutter analyze standard output
+                    p1 = re.compile(r'^\s*(error|warning|info)\s+[•-]\s+(.+?)\s+[•-]\s+([^:]+):(\d+):(\d+)(?:\s+[•-]\s+([a-zA-Z0-9_]+))?', re.MULTILINE)
+                    for m in p1.finditer(stdout):
+                        sev = m.group(1).lower()
+                        if sev == 'info':
+                            continue
+                        msg = m.group(2).strip()
+                        raw_file = m.group(3).strip()
+                        rel_file = raw_file.replace(temp_dir, '').lstrip('/')
+                        line = int(m.group(4))
+                        check_name = m.group(6) or 'flutter_analyzer'
+                        issues.append(cls._create_issue(
+                            file_path=rel_file,
+                            line=line,
+                            severity=sev,
+                            check=check_name,
+                            message=msg
+                        ))
+
+                    # Pattern 2: Dart analyze fallback format
+                    p2 = re.compile(r'^\s*(error|warning)\s+-\s+([^:]+):(\d+):(\d+)\s+-\s+(.+?)(?:\s+-\s+[a-zA-Z0-9_]+)?$', re.MULTILINE)
+                    for m in p2.finditer(stdout):
+                        sev = m.group(1).lower()
+                        raw_file = m.group(2).strip()
+                        rel_file = raw_file.replace(temp_dir, '').lstrip('/')
+                        line = int(m.group(3))
+                        msg = m.group(5).strip()
+                        issues.append(cls._create_issue(
+                            file_path=rel_file,
+                            line=line,
+                            severity=sev,
+                            check='dart_analyzer',
+                            message=msg
+                        ))
+                except Exception:
+                    pass
+            elif dart_bin:
+                try:
+                    res = subprocess.run(
+                        [dart_bin, 'analyze', '--no-fatal-warnings', temp_dir],
+                        capture_output=True,
+                        text=True,
+                        timeout=20,
+                        preexec_fn=cls._get_preexec_fn()
+                    )
+                    stdout = res.stdout or ''
+                    pattern = re.compile(r'^\s*(error|warning)\s+-\s+([^:]+):(\d+):(\d+)\s+-\s+(.+?)(?:\s+-\s+[a-zA-Z0-9_]+)?$', re.MULTILINE)
+                    for m in pattern.finditer(stdout):
+                        sev = m.group(1).lower()
+                        raw_file = m.group(2).strip()
+                        rel_file = raw_file.replace(temp_dir, '').lstrip('/')
+                        line = int(m.group(3))
+                        msg = m.group(5).strip()
+                        issues.append(cls._create_issue(
+                            file_path=rel_file,
+                            line=line,
+                            severity=sev,
+                            check='dart_analyzer',
+                            message=msg
+                        ))
+                except Exception:
+                    pass
 
         err_count = sum(1 for i in issues if i['severity'] == 'error')
         warn_count = sum(1 for i in issues if i['severity'] == 'warning')

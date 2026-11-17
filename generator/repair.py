@@ -135,20 +135,49 @@ class CodeRepairEngine:
 
     @classmethod
     def _build_repair_prompt(cls, files: dict, issues: list, plan_data: dict) -> str:
+        import re
+        from generator.code_builder import CodeBuilder
+
         issue_lines = [f"- File '{i['file']}' Line {i['line']} [{i['check']}]: {i['message']}" for i in issues]
         issues_text = "\n".join(issue_lines)
 
-        failing_files = {i['file'] for i in issues}
+        failing_files = {i['file'] for i in issues if i['file'] in files}
+
+        # Also detect referenced files in issue messages (e.g. "defined in package:.../board.dart" or "candidate in ...")
+        for i in issues:
+            msg = i.get('message', '')
+            for m in re.finditer(r'[\'"]([a-zA-Z0-9_\-\./]+\.(?:dart|py|js|ts|jsx|tsx|yaml))[\'"]', msg):
+                ref_path = m.group(1).lstrip('/')
+                for p in files.keys():
+                    if p.endswith(ref_path) or ref_path.endswith(p):
+                        failing_files.add(p)
+
         file_snippets = []
-        for path in failing_files:
+        for path in sorted(failing_files):
             if path in files:
                 file_snippets.append(f"=== File: {path} ===\n{files[path]}")
 
         snippets_text = "\n\n".join(file_snippets)
 
+        # Include public signatures of other project files for cross-file alignment
+        other_files = {p: c for p, c in files.items() if p not in failing_files}
+        signatures = CodeBuilder.extract_signatures(other_files) if other_files else {}
+        sig_snippets = [f"=== File Signatures: {p} ===\n{s}" for p, s in signatures.items() if s]
+        sig_text = "\n\n".join(sig_snippets[:20])
+
+        sig_section = f"\nOTHER PROJECT FILE SIGNATURES (FOR ALIGNING CALLERS & CONSTRUCTORS):\n{sig_text}\n" if sig_text else ""
+
         return (
-            f"VERIFICATION ISSUES TO REPAIR:\n{issues_text}\n\n"
-            f"FAILING FILES CONTENT:\n{snippets_text}\n\n"
+            f"VERIFICATION & COMPILER ISSUES TO REPAIR:\n{issues_text}\n\n"
+            f"FAILING & REFERENCED FILES CONTENT:\n{snippets_text}\n"
+            f"{sig_section}\n"
+            "MANDATORY REPAIR INSTRUCTIONS:\n"
+            "1. Fix ALL compiler and verification errors above.\n"
+            "2. Align constructor parameter names and types with callers. If callers pass no parameters, ensure constructors have optional/default parameters.\n"
+            "3. If a method or getter is missing (e.g. 'isCheckmate', 'getValidMovesForPiece', 'getPiece'), implement it or correct the caller.\n"
+            "4. In Dart: NEVER access library-private '_' members across files. Make members public if called from another file.\n"
+            "5. Consolidate duplicate enums (e.g. 'PlayerColor') into a single file to eliminate colliding import errors.\n"
+            "6. In conditions like `if (engine.makeMove(...))`, ensure the method returns `bool`, not `void`.\n"
             "Generate atomic replace_in_file JSON operations to resolve these issues."
         )
 

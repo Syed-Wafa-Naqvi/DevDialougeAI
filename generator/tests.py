@@ -791,6 +791,61 @@ class CodeGenerationRobustnessTestCase(TestCase):
         self.assertIn('run.sh', packaged)
         self.assertIn('grep -E', packaged['run.sh'])
 
+    def test_runtime_flutter_verification_detects_compiler_errors(self):
+        from generator.runtime_verifier import RuntimeVerifier
+        broken_files = {
+            'pubspec.yaml': (
+                "name: flutter_chess_game\n"
+                "environment:\n  sdk: '>=3.0.0 <4.0.0'\n"
+                "dependencies:\n  flutter:\n    sdk: flutter\n"
+            ),
+            'lib/chess_engine/board.dart': 'enum PlayerColor { white, black }\nclass Board { void _init() {} }\n',
+            'lib/chess_engine/chess_engine.dart': (
+                "import 'package:flutter_chess_game/chess_engine/board.dart';\n"
+                "enum PlayerColor { white, black }\n"
+                "class ChessEngine {\n"
+                "  final Board _board = Board();\n"
+                "  void start() { _board._init(); }\n"
+                "}\n"
+            ),
+            'lib/main.dart': (
+                "import 'package:flutter/material.dart';\n"
+                "import 'package:flutter_chess_game/chess_engine/board.dart';\n"
+                "import 'package:flutter_chess_game/chess_engine/chess_engine.dart';\n"
+                "void main() {\n"
+                "  PlayerColor c = PlayerColor.white;\n"
+                "  final engine = ChessEngine();\n"
+                "  runApp(const MaterialApp());\n"
+                "}\n"
+            )
+        }
+        res = RuntimeVerifier.run_dart_verification(broken_files)
+        if res.get('executed'):
+            self.assertFalse(res['passed'])
+            self.assertGreater(res['error_count'], 0)
+
+    def test_runtime_flutter_verification_clean_project_passes(self):
+        from generator.runtime_verifier import RuntimeVerifier
+        clean_files = {
+            'pubspec.yaml': (
+                "name: clean_flutter_app\n"
+                "environment:\n  sdk: '>=3.0.0 <4.0.0'\n"
+                "dependencies:\n  flutter:\n    sdk: flutter\n"
+                "flutter:\n"
+                "  assets:\n"
+                "    - assets/images/\n"
+            ),
+            'lib/main.dart': (
+                "import 'package:flutter/material.dart';\n"
+                "void main() => runApp(const MaterialApp(home: Scaffold(body: Text('Ready'))));\n"
+            )
+        }
+        res = RuntimeVerifier.run_dart_verification(clean_files)
+        if res.get('executed'):
+            self.assertTrue(res['passed'])
+            self.assertEqual(res['error_count'], 0)
+
+
 
 
 

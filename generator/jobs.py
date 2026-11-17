@@ -222,15 +222,45 @@ class JobExecutionEngine:
             job.save(update_fields=['progress_current', 'updated_at'])
             job.log_event('file_done', f"Completed '{file_path}'.")
 
-        # Static Verification & Repair Loop Phase
+        # Generate complete runner, build manifests and asset directories before verification
+        from exporter.harness_agent import AIHarnessPackager
+        from exporter.archiver import ZipArchiver
+        project_name = ZipArchiver.get_project_name(session)
+        harness_files = AIHarnessPackager.generate_harness(session, generated_files, project_name)
+        for hpath, hcontent in harness_files.items():
+            if hpath not in generated_files:
+                generated_files[hpath] = hcontent
+                ProjectFile.objects.get_or_create(
+                    session=session,
+                    path=hpath,
+                    defaults={'content': hcontent, 'status': 'verified', 'current_version': 1}
+                )
+
+        # Pre-flight asset directories from pubspec.yaml into ProjectFiles
+        pubspec_content = generated_files.get('pubspec.yaml', '')
+        if pubspec_content:
+            for line in pubspec_content.splitlines():
+                m = re.match(r'^\s*-\s*(assets/[a-zA-Z0-9_\-\./]+)', line)
+                if m:
+                    asset_dir = m.group(1).rstrip('/')
+                    gitkeep_path = f"{asset_dir}/.gitkeep"
+                    if gitkeep_path not in generated_files:
+                        generated_files[gitkeep_path] = ""
+                        ProjectFile.objects.get_or_create(
+                            session=session,
+                            path=gitkeep_path,
+                            defaults={'content': '', 'status': 'verified', 'current_version': 1}
+                        )
+
+        # Verification & Automated Self-Repair Loop Phase
         SessionStateMachine.transition_to(session, 'verifying')
-        job.log_event('info', "Running static verification and repair loop...")
+        job.log_event('info', "Running pre-flight compiler verification and repair loop...")
 
         repair_res = CodeRepairEngine.run_repair_loop(
             session=session,
             files_dict=generated_files,
             plan_data=plan_data,
-            max_attempts=3,
+            max_attempts=4,
             provider_name=provider_name
         )
 
