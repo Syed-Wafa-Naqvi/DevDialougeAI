@@ -457,7 +457,7 @@ def stream_agent_response(
             ))
 
             response_text = (
-                f"### ✅ Codebase Verified — 100% Error-Free\n\n"
+                f"### Codebase Verified — 100% Error-Free\n\n"
                 f"I have inspected all **{len(existing_files)}** project files in your workspace:\n\n"
                 f"- **Static Analysis**: Passed (0 errors, {verif_res.get('warning_count', 0)} warnings)\n"
                 f"- **Compiler Verification**: Passed (0 errors)\n"
@@ -521,10 +521,10 @@ def stream_agent_response(
             ))
 
             file_list_str = "\n".join([f"- **`{p}`**" for p in modified_paths]) if modified_paths else "All files inspected and harmonized."
-            status_summary = "✅ **All compiler and static checks passed with 0 errors!**" if rem_errors == 0 else f"⚠️ {rem_errors} error(s) remaining."
+            status_summary = "**All compiler and static checks passed with 0 errors.**" if rem_errors == 0 else f"**{rem_errors} error(s) remaining.**"
 
             response_text = (
-                f"### 🛠️ Codebase Repaired & Verified\n\n"
+                f"### Codebase Repaired and Verified\n\n"
                 f"I have inspected the project and applied repairs across the following files:\n\n"
                 f"{file_list_str}\n\n"
                 f"**Verification Status**: {status_summary}\n\n"
@@ -645,7 +645,7 @@ def stream_agent_response(
         ))
 
         response_text = (
-            f"### ✏️ Codebase Updated Successfully!\n\n"
+            f"### Codebase Updated Successfully\n\n"
             f"I have applied your requested changes to the following project file(s):\n\n"
             + "\n".join(response_items) + "\n\n"
             f"The updated code and static verification checks are ready in your workspace. You can inspect the changes in the **Verification & Diffs** tab, review the live code in the editor, or download the updated project ZIP package."

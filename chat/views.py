@@ -255,19 +255,19 @@ def _run_job_worker(job_id, provider_name):
         sess.refresh_from_db()
         if j.status == 'failed':
             msg_text = (
-                "### ⚠️ Codebase Generation Encountered an Issue\n\n"
+                "### Codebase Generation Encountered an Issue\n\n"
                 f"{j.error_message or 'The build engine encountered an error while generating project files.'}\n\n"
                 "Please try again or request modifications to your requirements."
             )
         elif sess.status == 'needs_attention':
             msg_text = (
-                "### ⚠️ Complete Project Codebase Ready (Verification Warnings Remain)\n\n"
+                "### Complete Project Codebase Ready (Verification Warnings Remain)\n\n"
                 f"{j.result_summary or 'All project files have been planned and generated, but some static verification checks need attention.'}\n\n"
                 "You can inspect each file in the workspace file tree on the right, view verification issues in the Checks panel, and download the project ZIP."
             )
         else:
             msg_text = (
-                "### 🎉 Complete Project Codebase Ready!\n\n"
+                "### Complete Project Codebase Ready\n\n"
                 f"{j.result_summary or 'All project files have been planned, generated, and verified.'}\n\n"
                 "You can inspect each file in the workspace file tree on the right, view the architecture plan and verification checks, and download your turnkey project ZIP."
             )
@@ -286,7 +286,7 @@ def _run_job_worker(job_id, provider_name):
                 Message.objects.create(
                     session=sess,
                     role='assistant',
-                    content=f"### ⚠️ Generation Failed\n\nAn unexpected worker error occurred: {str(worker_err)}"
+                    content=f"### Generation Failed\n\nAn unexpected worker error occurred: {str(worker_err)}"
                 )
         except Exception:
             pass
@@ -302,7 +302,7 @@ def _trigger_generation_job(session, user, provider_name, run_async=True):
         thread = threading.Thread(target=_run_job_worker, args=(job.id, provider_name), daemon=True)
         thread.start()
         response_text = (
-            "### 🚀 Codebase Generation Started!\n\n"
+            "### Codebase Generation Started\n\n"
             "I have started planning, generating, and verifying your project files in the background.\n\n"
             "You can watch real-time generation and static verification in the progress banner above. The workspace files will populate automatically as they complete."
         )
@@ -312,19 +312,19 @@ def _trigger_generation_job(session, user, provider_name, run_async=True):
         session.refresh_from_db()
         if job.status == 'failed':
             response_text = (
-                "### ⚠️ Codebase Generation Encountered an Issue\n\n"
+                "### Codebase Generation Encountered an Issue\n\n"
                 f"{job.error_message or 'The build engine encountered an error while generating project files.'}\n\n"
                 "Please try again or request modifications to your requirements."
             )
         elif session.status == 'needs_attention':
             response_text = (
-                "### ⚠️ Complete Project Codebase Ready (Verification Warnings Remain)\n\n"
+                "### Complete Project Codebase Ready (Verification Warnings Remain)\n\n"
                 f"{job.result_summary or 'All project files have been planned and generated, but some static verification checks need attention.'}\n\n"
                 "You can inspect each file in the workspace file tree on the right, view the architecture plan and verification checks, and download your turnkey project ZIP."
             )
         else:
             response_text = (
-                "### 🎉 Complete Project Codebase Ready!\n\n"
+                "### Complete Project Codebase Ready\n\n"
                 f"{job.result_summary or 'All project files have been planned, generated, and verified.'}\n\n"
                 "You can inspect each file in the workspace file tree on the right, view the architecture plan and verification checks, and download your turnkey project ZIP."
             )
@@ -393,14 +393,14 @@ def _handle_module_edit(session, user_content, summary, existing_files, provider
         warn_cnt = final_verif.get('warning_count', 0)
         
         if err_cnt == 0:
-            status_text = "✅ **All compiler and static checks passed with 0 errors!**"
+            status_text = "**All compiler and static checks passed with 0 errors.**"
         else:
-            status_text = f"⚠️ Compiler checks report {err_cnt} error(s) remaining."
+            status_text = f"Compiler checks report {err_cnt} error(s) remaining."
 
         file_list_str = "\n".join([f"- `{p}`" for p in modified_paths]) if modified_paths else "All files inspected and harmonized."
 
         return (
-            f"### 🛠️ Codebase Repaired & Verified\n\n"
+            f"### Codebase Repaired and Verified\n\n"
             f"I have inspected the project and resolved the reported issues across all files:\n\n"
             f"{file_list_str}\n\n"
             f"**Verification Status**: {status_text} ({warn_cnt} warnings)\n\n"
@@ -436,10 +436,10 @@ def _handle_module_edit(session, user_content, summary, existing_files, provider
         target_pf.status = 'has_issues' if err_cnt > 0 else 'verified'
         target_pf.save(update_fields=['status'])
 
-        verif_msg = f"\n\n**Compiler / Static Verification**: {'✅ 0 errors' if err_cnt == 0 else f'⚠️ {err_cnt} error(s) remaining.'}"
+        verif_msg = f"\n\n**Compiler / Static Verification**: {'0 errors (Passed)' if err_cnt == 0 else f'{err_cnt} error(s) remaining.'}"
 
         return (
-            f"### ✏️ Updated Module `{target_pf.path}`\n\n"
+            f"### Updated Module `{target_pf.path}`\n\n"
             f"I have modified `{target_pf.path}` based on your request: *\"{user_content}\"*\n\n"
             f"You can review the updated code in the right panel and download the project ZIP anytime.{verif_msg}"
         )
@@ -505,7 +505,7 @@ def _complete_incremental_project(session, plan_obj, provider_name):
         SessionStateMachine.transition_to(session, 'needs_attention')
 
     return (
-        f"### 🚀 Incremental Generation Complete!\n\n"
+        f"### Incremental Generation Complete\n\n"
         f"{repair_res.get('honest_message', 'All project files have been planned, generated, and verified.')}\n\n"
         "All project modules have been approved and generated. You can download the complete project ZIP from the sidebar."
     )
@@ -625,7 +625,7 @@ def _run_mode2_worker(job_id, provider_name, task, save_message=True):
             job.save(update_fields=['status', 'error_message', 'updated_at'])
             Message.objects.create(
                 session=job.session, role='assistant',
-                content=f"### ⚠️ Module Generation Failed\n\n{worker_err}\n\nSay **yes** to try again."
+                content=f"### Module Generation Failed\n\n{worker_err}\n\nSay **yes** to try again."
             )
     finally:
         connection.close()
@@ -640,8 +640,8 @@ def _start_mode2_task(session, user, provider_name, task, run_async=True):
         import threading
         threading.Thread(target=_run_mode2_worker, args=(job.id, provider_name, task), daemon=True).start()
         if task == 'complete':
-            return job, "### 🔍 Verifying your project...\n\nAll modules are approved. Running final verification and repair in the background."
-        return job, "### ⚙️ Generating the next module...\n\nThis runs in the background; the file will appear on the right when it's ready."
+            return job, "### Verifying your project...\n\nAll modules are approved. Running final verification and repair in the background."
+        return job, "### Generating the next module...\n\nThis runs in the background; the file will appear on the right when it's ready."
     # Inline (tests / X-Run-Sync: true): the caller saves the reply as the assistant message
     _run_mode2_worker(job.id, provider_name, task, save_message=False)
     job.refresh_from_db()
@@ -902,7 +902,7 @@ def send_message_api(request, session_id):
             'status': session.status
         }, status=429)
     except RuntimeError as rerr:
-        err_msg = "⚠️ The AI service is temporarily unavailable or experiencing high traffic. Please try sending your message again in a few moments."
+        err_msg = "The AI service is temporarily unavailable or experiencing high traffic. Please try sending your message again in a few moments."
         Message.objects.create(session=session, role='assistant', content=err_msg)
         return JsonResponse({
             'error': str(rerr),
@@ -912,7 +912,7 @@ def send_message_api(request, session_id):
     except Exception as gen_err:
         import logging
         logging.getLogger(__name__).exception("Unhandled exception in send_message_api")
-        err_msg = "⚠️ An unexpected server error occurred while processing your message. Please try again."
+        err_msg = "An unexpected server error occurred while processing your message. Please try again."
         Message.objects.create(session=session, role='assistant', content=err_msg)
         return JsonResponse({
             'error': str(gen_err),
@@ -932,7 +932,7 @@ def send_message_api(request, session_id):
     if is_cancelled:
         return JsonResponse({
             'cancelled': True,
-            'response': '⚠️ Message generation was cancelled by user.',
+            'response': 'Message generation was cancelled by user.',
             'status': session.status
         })
 
