@@ -137,3 +137,86 @@ class AccountsTestCase(TestCase):
         request = factory.get('/', HTTP_X_FORWARDED_FOR='203.0.113.195', REMOTE_ADDR='198.51.100.1')
         ip = get_client_ip(request)
         self.assertEqual(ip, '198.51.100.1')
+
+    def test_dynamic_token_usage_in_settings_and_api(self):
+        """
+        Verify that settings view and user_usage_api calculate and render real-time dynamic tokens,
+        completely replacing the previous hardcoded 142,500 token values.
+        """
+        from llm_engine.models import LLMCallLog
+        user = User.objects.create_user(username='usage_user', email='usage@example.com', password='Password123!')
+        user.profile.is_verified = True
+        user.profile.plan = 'basic'
+        user.profile.save()
+        self.client.login(username='usage_user', password='Password123!')
+
+        # 1. New user with 0 tokens used
+        res = self.client.get('/settings/')
+        self.assertEqual(res.status_code, 200)
+        self.assertIn('usage', res.context)
+        self.assertEqual(res.context['usage']['monthly_tokens'], 0)
+        self.assertEqual(res.context['usage']['monthly_quota'], 1_000_000)
+        content = res.content.decode('utf-8')
+        self.assertNotIn('142,500', content)
+        self.assertIn('0', content)
+        self.assertIn('1,000,000 Tokens', content)
+
+        # 2. Add realistic LLM usage logs for this user
+        LLMCallLog.objects.create(
+            user=user,
+            purpose='codegen',
+            provider='gemini',
+            model_id='gemini-2.5-flash',
+            input_tokens=15000,
+            output_tokens=35000,
+            success=True
+        )
+        LLMCallLog.objects.create(
+            user=user,
+            purpose='chat',
+            provider='gemini',
+            model_id='gemini-2.5-flash',
+            input_tokens=2500,
+            output_tokens=7500,
+            success=True
+        )
+
+        res2 = self.client.get('/settings/')
+        self.assertEqual(res2.status_code, 200)
+        self.assertEqual(res2.context['usage']['monthly_tokens'], 60000)
+        self.assertEqual(res2.context['usage']['monthly_tokens_formatted'], '60,000')
+        self.assertEqual(res2.context['usage']['total_calls_this_month'], 2)
+        content2 = res2.content.decode('utf-8')
+        self.assertIn('60,000', content2)
+        self.assertNotIn('142,500', content2)
+
+        # 3. Check JSON API endpoint
+        api_res = self.client.get('/api/user/usage/')
+        self.assertEqual(api_res.status_code, 200)
+        data = api_res.json()
+        self.assertEqual(data['monthly_tokens'], 60000)
+        self.assertEqual(data['monthly_quota'], 1000000)
+        self.assertEqual(data['total_calls_this_month'], 2)
+        self.assertEqual(data['usage_percentage'], '6.0')
+
+    def test_plan_quota_scaling(self):
+        """
+        Verify that monthly token quotas scale according to plan tiers.
+        """
+        user = User.objects.create_user(username='pro_user', email='pro@example.com', password='Password123!')
+        user.profile.is_verified = True
+        user.profile.plan = 'pro'
+        user.profile.save()
+        self.client.login(username='pro_user', password='Password123!')
+
+        from accounts.views import get_user_usage_stats
+        stats_pro = get_user_usage_stats(user)
+        self.assertEqual(stats_pro['monthly_quota'], 5_000_000)
+        self.assertEqual(stats_pro['monthly_quota_formatted'], '5,000,000')
+
+        user.profile.plan = 'premium'
+        user.profile.save()
+        stats_prem = get_user_usage_stats(user)
+        self.assertEqual(stats_prem['monthly_quota'], 20_000_000)
+        self.assertEqual(stats_prem['monthly_quota_formatted'], '20,000,000')
+

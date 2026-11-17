@@ -348,6 +348,119 @@ def reset_password_view(request):
     return render(request, 'reset_password.html', {'form': form, 'email': email})
 
 
+def get_user_usage_stats(user):
+    """
+    Computes real-time, dynamic token usage and quotas for the user.
+    Aggregates LLMCallLogs across all user sessions and interactions for the current month.
+    """
+    from django.db.models import Sum, Q, Count
+    from django.utils import timezone
+    from llm_engine.models import LLMCallLog
+    from chat.models import Message, Session
+
+    profile = getattr(user, 'profile', None)
+    now = timezone.now()
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    # Next month reset date (1st of next month)
+    if now.month == 12:
+        next_month_reset = now.replace(year=now.year + 1, month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    else:
+        next_month_reset = now.replace(month=now.month + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    # 1. Monthly token usage from LLMCallLog
+    user_logs = LLMCallLog.objects.filter(Q(user=user) | Q(session__user=user))
+    month_logs = user_logs.filter(created_at__gte=month_start)
+
+    month_agg = month_logs.aggregate(
+        in_tok=Sum('input_tokens'),
+        out_tok=Sum('output_tokens'),
+        total_calls=Count('id')
+    )
+    month_in = month_agg['in_tok'] or 0
+    month_out = month_agg['out_tok'] or 0
+    monthly_tokens = month_in + month_out
+    total_calls_this_month = month_agg['total_calls'] or 0
+
+    # Fallback to chat messages if user has messages but no call logs (e.g. earlier sessions or tests)
+    if monthly_tokens == 0:
+        month_messages = Message.objects.filter(session__user=user, timestamp__gte=month_start)
+        if month_messages.exists():
+            monthly_tokens = sum(max(1, len(m.content or '') // 4) for m in month_messages)
+            total_calls_this_month = month_messages.filter(role='assistant').count()
+
+    # 2. All-time token usage
+    all_agg = user_logs.aggregate(
+        in_tok=Sum('input_tokens'),
+        out_tok=Sum('output_tokens'),
+        all_calls=Count('id')
+    )
+    all_time_tokens = (all_agg['in_tok'] or 0) + (all_agg['out_tok'] or 0)
+    if all_time_tokens == 0:
+        all_messages = Message.objects.filter(session__user=user)
+        if all_messages.exists():
+            all_time_tokens = sum(max(1, len(m.content or '') // 4) for m in all_messages)
+
+    # 3. Monthly token quota based on user plan
+    plan_limits = getattr(settings, 'PLAN_TOKEN_LIMITS', {
+        'basic': 1_000_000,
+        'pro': 5_000_000,
+        'premium': 20_000_000,
+    })
+    plan_name = getattr(profile, 'plan', 'basic') or 'basic'
+    monthly_quota = plan_limits.get(plan_name, 1_000_000)
+    if getattr(user, 'is_staff', False) or getattr(user, 'is_superuser', False):
+        monthly_quota = 50_000_000
+
+    if monthly_quota > 0:
+        usage_pct = min(100.0, (monthly_tokens / monthly_quota) * 100)
+    else:
+        usage_pct = 0.0
+
+    remaining_tokens = max(0, monthly_quota - monthly_tokens)
+
+    # 4. Breakdown by category/purpose
+    purpose_labels = dict(LLMCallLog.PURPOSE_CHOICES)
+    purpose_breakdown = []
+    if month_logs.exists():
+        grouped = month_logs.values('purpose').annotate(
+            in_tok=Sum('input_tokens'),
+            out_tok=Sum('output_tokens'),
+            calls=Count('id')
+        ).order_by('-calls')
+        for item in grouped:
+            p_tot = (item['in_tok'] or 0) + (item['out_tok'] or 0)
+            purpose_breakdown.append({
+                'purpose': item['purpose'],
+                'label': purpose_labels.get(item['purpose'], item['purpose'].title()),
+                'tokens': p_tot,
+                'tokens_formatted': f"{p_tot:,}",
+                'calls': item['calls'],
+                'pct': round((p_tot / max(monthly_tokens, 1)) * 100, 1)
+            })
+
+    total_sessions_count = Session.objects.filter(user=user).count()
+
+    return {
+        'monthly_tokens': monthly_tokens,
+        'monthly_tokens_formatted': f"{monthly_tokens:,}",
+        'monthly_quota': monthly_quota,
+        'monthly_quota_formatted': f"{monthly_quota:,}",
+        'usage_percentage': f"{usage_pct:.1f}",
+        'usage_percentage_float': usage_pct,
+        'remaining_tokens': remaining_tokens,
+        'remaining_tokens_formatted': f"{remaining_tokens:,}",
+        'all_time_tokens': all_time_tokens,
+        'all_time_tokens_formatted': f"{all_time_tokens:,}",
+        'total_calls_this_month': total_calls_this_month,
+        'total_sessions_count': total_sessions_count,
+        'next_reset_date': next_month_reset.strftime('%b %d, %Y'),
+        'purpose_breakdown': purpose_breakdown,
+        'plan_display': profile.get_plan_display() if profile else 'Basic',
+        'has_custom_keys': bool(profile and (profile.encrypted_openai_key or profile.encrypted_gemini_key)),
+    }
+
+
 @verification_required
 def settings_view(request):
     user = request.user
@@ -404,9 +517,17 @@ def settings_view(request):
     
     user_form = UserUpdateForm(instance=user)
     password_form = PasswordChangeForm(user=user)
+    usage_data = get_user_usage_stats(user)
     
     return render(request, 'settings.html', {
         'profile': profile,
         'user_form': user_form,
         'password_form': password_form,
+        'usage': usage_data,
     })
+
+
+@verification_required
+def user_usage_api(request):
+    usage_data = get_user_usage_stats(request.user)
+    return JsonResponse(usage_data)
