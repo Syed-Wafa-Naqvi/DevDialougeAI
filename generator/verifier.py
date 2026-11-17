@@ -444,8 +444,9 @@ class StaticVerifier:
                     declared_classes[cname] = {}
 
                 ctors = []
-                for ctor_m in re.finditer(r'(?:const\s+)?(?:factory\s+)?\b' + cname + r'(?:\.[A-Za-z0-9_]+)?\s*\(([^)]*)\)', body):
-                    params_str = ctor_m.group(1).strip()
+                for ctor_m in re.finditer(r'(?:const\s+)?(?:factory\s+)?\b' + cname + r'(?:\.([A-Za-z0-9_]+))?\s*\(([^)]*)\)', body):
+                    ctor_subname = ctor_m.group(1)
+                    params_str = ctor_m.group(2).strip()
                     required_params = []
                     all_params = []
                     named_m = re.search(r'\{([^}]+)\}', params_str)
@@ -459,7 +460,7 @@ class StaticVerifier:
                                 all_params.append(p_name)
                                 if is_req and '=' not in p_clean:
                                     required_params.append(p_name)
-                    ctors.append({'raw': params_str, 'required': required_params, 'all_named': all_params})
+                    ctors.append({'name': ctor_subname, 'raw': params_str, 'required': required_params, 'all_named': all_params})
 
                 methods = set()
                 void_methods = set()
@@ -536,8 +537,13 @@ class StaticVerifier:
                 for decl_file, cinfo in decl_map.items():
                     for ctor in cinfo['constructors']:
                         reqs = ctor.get('required', [])
+                        ctor_subname = ctor.get('name')
                         if reqs:
-                            for call_m in re.finditer(r'\b' + cname + r'\s*\(([^)]*)\)', content):
+                            if ctor_subname:
+                                pattern = r'\b' + cname + r'\.' + ctor_subname + r'\s*\(([^)]*)\)'
+                            else:
+                                pattern = r'(?<!\.)\b' + cname + r'\s*\(([^)]*)\)'
+                            for call_m in re.finditer(pattern, content):
                                 call_args = call_m.group(1)
                                 # Skip constructor declarations (e.g. Piece({required this.type, required this.color}))
                                 if re.search(r'\b(?:required\s+this\.|this\.|super\.|required\s+)', call_args):
@@ -554,9 +560,16 @@ class StaticVerifier:
                                         ))
 
         # Check 4: Void expression in condition or assignment (e.g. if (e.makeMove(1, 2)) where makeMove is void)
+        all_non_void_methods = set()
+        for cname, decl_map in declared_classes.items():
+            for decl_file, cinfo in decl_map.items():
+                all_non_void_methods.update(cinfo.get('methods', set()) - cinfo.get('void_methods', set()))
+
         for path, content in dart_files.items():
             for m in re.finditer(r'(?:if\s*\(|[=]\s*)[^;{}]*?\.([a-zA-Z0-9_]+)\s*\(', content):
                 mname = m.group(1)
+                if mname in all_non_void_methods:
+                    continue
                 for cname, decl_map in declared_classes.items():
                     for decl_file, cinfo in decl_map.items():
                         if mname in cinfo.get('void_methods', set()):
@@ -569,10 +582,12 @@ class StaticVerifier:
                                 message=f"Method '{mname}' on '{cname}' returns 'void' and cannot be evaluated in an 'if' condition or assigned to a variable. Update the method to return 'bool'."
                             ))
 
-        # Check 5: Null safety on map lookup (e.g. _hasRookMoved[player].kingSide)
+        # Check 5: Null safety on map lookup (e.g. data["key"].property or _hasRookMoved[player].kingSide)
         for path, content in dart_files.items():
-            for m in re.finditer(r'\[[^\]]+\]\.([a-zA-Z0-9_]+)', content):
-                prop_name = m.group(1)
+            map_vars = set(re.findall(r'(?:Map<[^>]+>|final\s+Map|\bMap\b)\s+([a-zA-Z0-9_]+)', content))
+
+            for m in re.finditer(r'\b([a-zA-Z0-9_]+)\s*\[\s*[\'"][^\'"]+[\'"]\s*\]\.([a-zA-Z0-9_]+)', content):
+                prop_name = m.group(2)
                 line_no = content[:m.start()].count('\n') + 1
                 issues.append(cls._create_issue(
                     file_path=path,
@@ -581,6 +596,19 @@ class StaticVerifier:
                     check='null_safety_map_access',
                     message=f"Property '{prop_name}' cannot be accessed directly on a nullable map/record lookup. Use '?.' and '??' instead."
                 ))
+
+            if map_vars:
+                pat = r'\b(' + '|'.join(re.escape(v) for v in map_vars) + r')\s*\[[^\]]+\]\.([a-zA-Z0-9_]+)'
+                for m in re.finditer(pat, content):
+                    prop_name = m.group(2)
+                    line_no = content[:m.start()].count('\n') + 1
+                    issues.append(cls._create_issue(
+                        file_path=path,
+                        line=line_no,
+                        severity='error',
+                        check='null_safety_map_access',
+                        message=f"Property '{prop_name}' cannot be accessed directly on a nullable map/record lookup. Use '?.' and '??' instead."
+                    ))
 
         # Check 6: Asset directory existence in pubspec.yaml
         if 'pubspec.yaml' in files:

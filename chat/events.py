@@ -395,11 +395,13 @@ def stream_agent_response(
         plan_data = plan_obj.plan_data if plan_obj and isinstance(plan_obj.plan_data, dict) else None
 
         UniversalProjectHarmonizer.harmonize(files_dict)
-        for h_path in ('pubspec.yaml', 'requirements.txt', 'package.json'):
-            if h_path in files_dict:
-                h_pf = session.project_files.filter(path=h_path).first()
-                if h_pf and h_pf.content != files_dict[h_path]:
-                    h_pf.create_new_version(files_dict[h_path], source='harmonizer')
+        for h_path, h_content in files_dict.items():
+            h_pf = session.project_files.filter(path=h_path).first()
+            if h_pf:
+                if h_pf.content != h_content:
+                    h_pf.create_new_version(h_content, source='harmonizer')
+            else:
+                session.project_files.create(path=h_path, content=h_content, status='verified', current_version=1)
 
         verif_res = StaticVerifier.verify_project(files_dict, plan_data=plan_data)
         runtime_res = RuntimeVerifier.run_verification(files_dict, user=user, plan_data=plan_data)
@@ -606,6 +608,13 @@ def stream_agent_response(
 
         # Re-harmonize and re-verify full project
         UniversalProjectHarmonizer.harmonize(files_dict)
+        for h_path, h_content in files_dict.items():
+            h_pf = session.project_files.filter(path=h_path).first()
+            if h_pf:
+                if h_pf.content != h_content:
+                    h_pf.create_new_version(h_content, source='harmonizer')
+            else:
+                session.project_files.create(path=h_path, content=h_content, status='verified', current_version=1)
         verif_res = StaticVerifier.verify_project(files_dict)
         runtime_res = RuntimeVerifier.run_verification(files_dict, user=user)
         err_count = verif_res.get('error_count', 0) + (runtime_res.get('error_count', 0) if runtime_res.get('executed') else 0)
