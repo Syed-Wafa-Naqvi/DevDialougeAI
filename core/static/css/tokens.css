@@ -64,6 +64,16 @@
     --r-xl: 16px;
     --r-full: 9999px;
 
+    /* Radii Aliases */
+    --radius-sm: var(--r-sm);
+    --radius-md: var(--r-md);
+    --radius-lg: var(--r-lg);
+    --radius-full: var(--r-full);
+
+    /* Durations Aliases */
+    --dur-fast: var(--t-micro);
+    --dur-slow: var(--t-long);
+
     /* Motion Durations (§7.1) */
     --t-micro: 150ms;
     --t-short: 250ms;
@@ -142,27 +152,72 @@
     --diff-remove-bg: #FDECEC;
     --diff-remove-text: #C62A30;
 
-    /* Backward-Compatibility Variables Mapping */
+    /* Backward-Compatibility & Subsystem Variables Mapping */
     --void: var(--canvas);
     --bg: var(--canvas);
+    --bg-primary: var(--canvas);
+    --bg-secondary: var(--surface);
+    --bg-sidebar: var(--surface-sunken);
     --bg-2: var(--surface-sunken);
+    --nav-bg: var(--surface);
+    --input-bg: var(--surface);
+    --card-bg: var(--surface);
+    --card-hover-bg: var(--surface-hover);
+    --surface-2: var(--surface-sunken);
+
     --text: var(--ink);
+    --text-primary: var(--ink);
     --text-2: var(--ink-2);
+    --text-secondary: var(--ink-2);
     --text-3: var(--ink-3);
+    --text-tertiary: var(--ink-3);
+    --text-placeholder: var(--ink-disabled);
+    --text-muted: var(--ink-3);
+
     --line: var(--border);
     --line-glow: rgba(37, 72, 232, 0.2);
+    --border-color: var(--border);
+    --border-hover: var(--border-strong);
+    --border-focus: var(--brand);
+
     --electric: var(--brand);
     --electric-soft: var(--brand-tint);
     --violet: var(--brand);
     --violet-soft: var(--brand-tint);
     --cyan: var(--brand);
     --cyan-soft: var(--brand-tint);
+
+    --accent-hover: var(--brand-hover);
+    --accent-glow: var(--brand-tint);
+    --accent-soft: var(--brand-tint);
+    --accent-border: var(--border-strong);
+    --accent-gradient: var(--brand);
+    --g-brand: linear-gradient(135deg, var(--brand), #4F46E5);
+
+    /* Blueprint Component Subsystem Tokens */
+    --sheet: var(--surface);
+    --paper: var(--surface-sunken);
+    --rule: var(--border);
+    --pencil: var(--ink-3);
+    --blueprint: var(--brand);
+    --blueprint-bg: var(--brand-tint);
+    --grid-line: rgba(11, 18, 32, 0.05);
+    --stamp-border: var(--brand);
+
     --ok: var(--success-solid);
     --ok-soft: var(--success-tint);
+    --ok-bg: var(--diff-add-bg);
+    --ok-border: rgba(22, 163, 74, 0.3);
     --warn: var(--warning-solid);
     --warn-soft: var(--warning-tint);
+    --warn-bg: var(--warning-tint);
     --err: var(--error-solid);
     --err-soft: var(--error-tint);
+    --err-bg: var(--diff-remove-bg);
+    --err-border: rgba(229, 72, 77, 0.3);
+    --info: var(--info-solid);
+    --info-bg: var(--info-tint);
+    --info-border: rgba(37, 72, 232, 0.3);
 }
 
 /* ==========================================================================
@@ -230,27 +285,72 @@
     --diff-remove-bg: rgba(239, 68, 68, 0.16);
     --diff-remove-text: #FCA5A5;
 
-    /* Backward-Compatibility Variables Mapping */
+    /* Backward-Compatibility & Subsystem Variables Mapping */
     --void: var(--canvas);
     --bg: var(--canvas);
+    --bg-primary: var(--canvas);
+    --bg-secondary: var(--surface);
+    --bg-sidebar: var(--surface-sunken);
     --bg-2: var(--surface-sunken);
+    --nav-bg: var(--surface);
+    --input-bg: var(--surface);
+    --card-bg: var(--surface);
+    --card-hover-bg: var(--surface-hover);
+    --surface-2: var(--surface-sunken);
+
     --text: var(--ink);
+    --text-primary: var(--ink);
     --text-2: var(--ink-2);
+    --text-secondary: var(--ink-2);
     --text-3: var(--ink-3);
+    --text-tertiary: var(--ink-3);
+    --text-placeholder: var(--ink-disabled);
+    --text-muted: var(--ink-3);
+
     --line: var(--border);
     --line-glow: rgba(107, 133, 255, 0.25);
+    --border-color: var(--border);
+    --border-hover: var(--border-strong);
+    --border-focus: var(--brand);
+
     --electric: var(--brand);
     --electric-soft: var(--brand-tint);
     --violet: var(--brand);
     --violet-soft: var(--brand-tint);
     --cyan: var(--brand);
     --cyan-soft: var(--brand-tint);
+
+    --accent-hover: var(--brand-hover);
+    --accent-glow: var(--brand-tint);
+    --accent-soft: var(--brand-tint);
+    --accent-border: var(--border-strong);
+    --accent-gradient: var(--brand);
+    --g-brand: linear-gradient(135deg, var(--brand), #818CF8);
+
+    /* Blueprint Component Subsystem Tokens */
+    --sheet: var(--surface);
+    --paper: var(--surface-sunken);
+    --rule: var(--border);
+    --pencil: var(--ink-3);
+    --blueprint: var(--brand);
+    --blueprint-bg: var(--brand-tint);
+    --grid-line: rgba(255, 255, 255, 0.05);
+    --stamp-border: var(--brand);
+
     --ok: var(--success-solid);
     --ok-soft: var(--success-tint);
+    --ok-bg: var(--diff-add-bg);
+    --ok-border: rgba(34, 197, 94, 0.3);
     --warn: var(--warning-solid);
     --warn-soft: var(--warning-tint);
+    --warn-bg: var(--warning-tint);
     --err: var(--error-solid);
     --err-soft: var(--error-tint);
+    --err-bg: var(--diff-remove-bg);
+    --err-border: rgba(248, 113, 113, 0.3);
+    --info: var(--info-solid);
+    --info-bg: var(--info-tint);
+    --info-border: rgba(107, 133, 255, 0.3);
 }
 
 ::selection {
