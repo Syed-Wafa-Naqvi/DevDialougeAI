@@ -840,6 +840,27 @@
                         </button>
                     </div>
 
+                    <!-- Queued Messages Floating Stack -->
+                    <div id="queued-messages-container" class="queued-messages-container hidden">
+                        <div class="queued-messages-card" id="queued-messages-card">
+                            <div class="queued-card-header" id="queued-card-header" onclick="toggleQueueCollapse()">
+                                <div class="queued-header-left">
+                                    <span class="queued-title">Queued Messages</span>
+                                    <span class="queued-count-badge" id="queued-count-badge">0</span>
+                                    <span class="queued-subtitle">Sends after current response</span>
+                                </div>
+                                <div class="queued-header-right">
+                                    <button type="button" class="btn-queue-collapse" id="btn-queue-collapse" title="Collapse/Expand queue">
+                                        <i data-lucide="chevron-down" id="queue-collapse-icon"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="queued-items-list" id="queued-items-list">
+                                <!-- Dynamically populated -->
+                            </div>
+                        </div>
+                    </div>
+
                     <form id="chat-input-form" class="input-form" enctype="multipart/form-data">
                         {% csrf_token %}
                         <input type="file" id="chat-file-input" name="file" style="display: none;" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.tiff,.svg,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.txt,.md,.json,.yaml,.yml,.py,.js,.ts,.jsx,.tsx,.html,.css,.sql,.sh">
@@ -1131,27 +1152,285 @@
         return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
     }
 
-    // Auto-expanding textarea & Send button state logic
-    if (inputField) {
-        inputField.addEventListener('input', function() {
-            this.style.height = 'auto';
-            this.style.height = (this.scrollHeight) + 'px';
-            
-            const sendBtn = document.getElementById('btn-send-message');
-            if (this.value.trim().length > 0 || currentAttachedFile) {
+    // =========================================================================
+    // Message Queue System & Agent Generation State
+    // =========================================================================
+    window.queuedMessages = [];
+    window.isStreamingResponse = false;
+    const QUEUE_STORAGE_KEY = `devdialogue_queue_${activeSessionUuid}`;
+
+    window.isAgentWorking = function() {
+        if (window.isStreamingResponse) return true;
+        if (typeof currentAbortController !== 'undefined' && currentAbortController !== null) return true;
+        if (typeof currentJobId !== 'undefined' && currentJobId !== null && typeof activeJobPollInterval !== 'undefined' && activeJobPollInterval !== null) return true;
+        const sendBtn = document.getElementById('btn-send-message');
+        if (sendBtn && sendBtn.classList.contains('generating')) return true;
+        return false;
+    };
+
+    window.updateSendBtnState = function() {
+        const sendBtn = document.getElementById('btn-send-message');
+        if (!sendBtn || !inputField) return;
+
+        const hasInput = (inputField.value.trim().length > 0) || !!currentAttachedFile;
+        const working = isAgentWorking();
+
+        if (working) {
+            sendBtn.removeAttribute('disabled');
+            sendBtn.classList.add('generating', 'active');
+            if (hasInput) {
+                sendBtn.title = "Queue message (sends after current response)";
+                sendBtn.innerHTML = '<i data-lucide="arrow-up" id="send-btn-icon"></i>';
+            } else {
+                sendBtn.title = "Stop generation";
+                sendBtn.innerHTML = '<i data-lucide="square" style="width:10px; height:10px; fill:currentColor;"></i>';
+            }
+        } else {
+            sendBtn.classList.remove('generating');
+            sendBtn.title = "Send message";
+            sendBtn.innerHTML = '<i data-lucide="arrow-up" id="send-btn-icon"></i>';
+            if (hasInput) {
                 sendBtn.removeAttribute('disabled');
                 sendBtn.classList.add('active');
             } else {
                 sendBtn.setAttribute('disabled', 'true');
                 sendBtn.classList.remove('active');
             }
+        }
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    };
+
+    function saveQueuedMessagesToStorage() {
+        try {
+            const serializable = (window.queuedMessages || []).map(m => ({
+                id: m.id,
+                text: m.text,
+                fileMeta: m.fileMeta ? {
+                    name: m.fileMeta.name,
+                    sizeStr: m.fileMeta.sizeStr,
+                    type: m.fileMeta.type
+                } : null,
+                timestamp: m.timestamp
+            }));
+            sessionStorage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(serializable));
+        } catch (e) {
+            console.warn('Failed to save queued messages to sessionStorage:', e);
+        }
+    }
+
+    function loadQueuedMessagesFromStorage() {
+        try {
+            const raw = sessionStorage.getItem(QUEUE_STORAGE_KEY);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    window.queuedMessages = parsed;
+                    renderQueuedMessagesUI();
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to load queued messages from sessionStorage:', e);
+        }
+    }
+
+    function enqueueMessage(text, file, fileMeta) {
+        if (!window.queuedMessages) window.queuedMessages = [];
+        const item = {
+            id: 'qm_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+            text: text,
+            file: file,
+            fileMeta: fileMeta,
+            timestamp: Date.now()
+        };
+        window.queuedMessages.push(item);
+        saveQueuedMessagesToStorage();
+        renderQueuedMessagesUI();
+    }
+
+    function renderQueuedMessagesUI() {
+        const container = document.getElementById('queued-messages-container');
+        const badge = document.getElementById('queued-count-badge');
+        const list = document.getElementById('queued-items-list');
+        if (!container || !list) return;
+
+        const queue = window.queuedMessages || [];
+        if (queue.length === 0) {
+            container.classList.add('hidden');
+            list.innerHTML = '';
+            if (badge) badge.textContent = '0';
+            return;
+        }
+
+        container.classList.remove('hidden');
+        if (badge) badge.textContent = queue.length;
+
+        list.innerHTML = queue.map(item => {
+            let thumbHtml = '';
+            if (item.fileMeta) {
+                if (item.fileMeta.type === 'image' && item.fileMeta.thumbUrl) {
+                    thumbHtml = `<img src="${item.fileMeta.thumbUrl}" class="queued-thumb" alt="attachment">`;
+                } else if (item.fileMeta.type === 'image' && item.file) {
+                    const blobUrl = URL.createObjectURL(item.file);
+                    thumbHtml = `<img src="${blobUrl}" class="queued-thumb" alt="attachment">`;
+                } else {
+                    thumbHtml = `<div class="queued-thumb-placeholder"><i data-lucide="file-text"></i></div>`;
+                }
+            }
+            return `
+                <div class="queued-message-item" data-id="${item.id}">
+                    <div class="queued-item-content">
+                        ${thumbHtml}
+                        <span class="queued-item-text" title="${escapeHtml(item.text)}">${escapeHtml(item.text)}</span>
+                    </div>
+                    <div class="queued-item-actions">
+                        <button type="button" class="btn-queue-action btn-queue-override" onclick="sendQueuedNow('${item.id}')" title="Send immediately (override running response)">
+                            <i data-lucide="arrow-right"></i>
+                        </button>
+                        <button type="button" class="btn-queue-action btn-queue-edit" onclick="editQueuedMessage('${item.id}')" title="Edit message">
+                            <i data-lucide="pencil"></i>
+                        </button>
+                        <button type="button" class="btn-queue-action btn-queue-delete" onclick="deleteQueuedMessage('${item.id}')" title="Delete from queue">
+                            <i data-lucide="trash-2"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    }
+
+    window.sendQueuedNow = async function(id) {
+        if (!window.queuedMessages) return;
+        const idx = window.queuedMessages.findIndex(m => m.id === id);
+        if (idx === -1) return;
+
+        const msg = window.queuedMessages.splice(idx, 1)[0];
+        saveQueuedMessagesToStorage();
+        renderQueuedMessagesUI();
+
+        // Abort current agent run without generic cancelled bubble
+        abortCurrentAgentRun(false);
+
+        // Allow immediate dispatch after abort cleanup
+        setTimeout(async () => {
+            appendMessageBubble('user', msg.text, msg.fileMeta);
+            scrollToBottom();
+            await dispatchChatMessage(msg.text, msg.file, null);
+        }, 120);
+    };
+
+    window.editQueuedMessage = function(id) {
+        if (!window.queuedMessages) return;
+        const idx = window.queuedMessages.findIndex(m => m.id === id);
+        if (idx === -1) return;
+
+        const msg = window.queuedMessages.splice(idx, 1)[0];
+        saveQueuedMessagesToStorage();
+        renderQueuedMessagesUI();
+
+        if (inputField) {
+            inputField.value = msg.text;
+            inputField.style.height = 'auto';
+            inputField.style.height = (inputField.scrollHeight) + 'px';
+            inputField.focus();
+        }
+
+        if (msg.file && typeof renderAttachmentPreview === 'function') {
+            renderAttachmentPreview(msg.file);
+        }
+
+        updateSendBtnState();
+    };
+
+    window.deleteQueuedMessage = function(id) {
+        if (!window.queuedMessages) return;
+        window.queuedMessages = window.queuedMessages.filter(m => m.id !== id);
+        saveQueuedMessagesToStorage();
+        renderQueuedMessagesUI();
+    };
+
+    window.toggleQueueCollapse = function() {
+        const card = document.getElementById('queued-messages-card');
+        if (card) {
+            card.classList.toggle('collapsed');
+        }
+    };
+
+    window.checkAndProcessNextQueuedMessage = function() {
+        if (isAgentWorking()) return;
+        if (!window.queuedMessages || window.queuedMessages.length === 0) return;
+
+        setTimeout(async () => {
+            if (isAgentWorking()) return;
+            if (!window.queuedMessages || window.queuedMessages.length === 0) return;
+
+            const nextMsg = window.queuedMessages.shift();
+            saveQueuedMessagesToStorage();
+            renderQueuedMessagesUI();
+
+            appendMessageBubble('user', nextMsg.text, nextMsg.fileMeta);
+            scrollToBottom();
+            await dispatchChatMessage(nextMsg.text, nextMsg.file, null);
+        }, 600);
+    };
+
+    window.abortCurrentAgentRun = function(showCancelledBubble = true) {
+        if (typeof currentAbortController !== 'undefined' && currentAbortController) {
+            currentAbortController.abort();
+            currentAbortController = null;
+        }
+        if (typeof activeJobPollInterval !== 'undefined' && activeJobPollInterval) {
+            clearInterval(activeJobPollInterval);
+            activeJobPollInterval = null;
+        }
+        if (typeof window.activeJobTimerInterval !== 'undefined' && window.activeJobTimerInterval) {
+            clearInterval(window.activeJobTimerInterval);
+            window.activeJobTimerInterval = null;
+        }
+        if (typeof currentJobId !== 'undefined') {
+            currentJobId = null;
+        }
+        const banner = document.getElementById('job-progress-banner');
+        if (banner) banner.classList.add('hidden');
+
+        const reqToCancel = window.currentRequestId;
+        window.currentRequestId = null;
+        fetch("{% url 'cancel_session_api' session_id=session.uuid %}", {
+            method: 'POST',
+            headers: { 'X-CSRFToken': '{{ csrf_token }}', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ request_id: reqToCancel })
+        }).catch(() => {});
+
+        if (typingIndicator) typingIndicator.classList.add('hidden');
+        const card = document.getElementById('input-card');
+        if (card) card.classList.remove('generating');
+        window.isStreamingResponse = false;
+        updateSendBtnState();
+
+        if (showCancelledBubble) {
+            appendMessageBubble('assistant', 'Message processing cancelled.');
+        }
+    };
+
+    // Auto-expanding textarea & Send button state logic
+    if (inputField) {
+        inputField.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+            updateSendBtnState();
         });
         
         // Submit on Enter unless Shift is pressed
         inputField.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if ((inputField.value.trim().length > 0 || currentAttachedFile) && chatForm) {
+                const hasInput = (inputField.value.trim().length > 0) || !!currentAttachedFile;
+                if ((hasInput || isAgentWorking()) && chatForm) {
                     if (typeof chatForm.requestSubmit === 'function') {
                         chatForm.requestSubmit();
                     } else {
@@ -1212,11 +1491,7 @@
         previewArea.classList.remove('hidden');
         if (typeof lucide !== 'undefined') lucide.createIcons();
 
-        const sendBtn = document.getElementById('btn-send-message');
-        if (sendBtn) {
-            sendBtn.removeAttribute('disabled');
-            sendBtn.classList.add('active');
-        }
+        updateSendBtnState();
     }
     
     window.removeAttachment = function() {
@@ -1232,11 +1507,7 @@
             previewArea.innerHTML = '';
             previewArea.classList.add('hidden');
         }
-        const sendBtn = document.getElementById('btn-send-message');
-        if (sendBtn && (!inputField || inputField.value.trim().length === 0)) {
-            sendBtn.setAttribute('disabled', 'true');
-            sendBtn.classList.remove('active');
-        }
+        updateSendBtnState();
     };
 
     // Drag and drop attachment support on input card
@@ -1421,11 +1692,8 @@
         const sendBtnInit = document.getElementById('btn-send-message');
         if (sendBtnInit) {
             sendBtnInit.addEventListener('click', (e) => {
-                if (sendBtnInit.classList.contains('generating')) {
-                    // Handled inside submit handler
-                    return;
-                }
-                if (!sendBtnInit.disabled && inputField && inputField.value.trim().length > 0) {
+                const hasInput = (inputField && inputField.value.trim().length > 0) || !!currentAttachedFile;
+                if (!sendBtnInit.disabled && (hasInput || isAgentWorking())) {
                     e.preventDefault();
                     if (typeof chatForm.requestSubmit === 'function') {
                         chatForm.requestSubmit();
@@ -1442,31 +1710,16 @@
             const card = document.getElementById('input-card');
             const sendBtn = document.getElementById('btn-send-message');
 
-            // If user clicked send button while it's in generating state, abort!
-            if (sendBtn && sendBtn.classList.contains('generating')) {
-                if (currentAbortController) {
-                    currentAbortController.abort();
-                    currentAbortController = null;
-                }
-                const reqToCancel = window.currentRequestId;
-                window.currentRequestId = null;
-                fetch("{% url 'cancel_session_api' session_id=session.uuid %}", {
-                    method: 'POST',
-                    headers: { 'X-CSRFToken': '{{ csrf_token }}', 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ request_id: reqToCancel })
-                }).catch(() => {});
-                typingIndicator.classList.add('hidden');
-                if (card) card.classList.remove('generating');
-                sendBtn.classList.remove('generating');
-                sendBtn.innerHTML = '<i data-lucide="arrow-up" id="send-btn-icon"></i>';
-                lucide.createIcons();
-                appendMessageBubble('assistant', '⚠️ Message processing cancelled.');
+            let messageText = inputField ? inputField.value.trim() : '';
+            const attachedFileToSend = currentAttachedFile || (fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0] : null);
+
+            // Case 1: Agent is busy AND user clicked stop button (empty input) -> Abort current generation
+            if (isAgentWorking() && !messageText && !attachedFileToSend) {
+                abortCurrentAgentRun(true);
                 return;
             }
 
-            let messageText = inputField.value.trim();
-            const attachedFileToSend = currentAttachedFile || (fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0] : null);
-
+            // Empty input when agent is idle: ignore
             if (!messageText && !attachedFileToSend) return;
             
             if (!messageText && attachedFileToSend) {
@@ -1482,7 +1735,24 @@
                     thumbUrl: currentAttachedThumbUrl
                 };
             }
-            
+
+            // Case 2: Agent is currently busy AND user typed a prompt -> Add to Message Queue!
+            if (isAgentWorking()) {
+                enqueueMessage(messageText, attachedFileToSend, attachedMeta);
+
+                // Clear inputs & previews for next prompt
+                if (inputField) {
+                    inputField.value = '';
+                    inputField.style.height = 'auto';
+                }
+                if (window.removeAttachment) {
+                    window.removeAttachment();
+                }
+                updateSendBtnState();
+                return;
+            }
+
+            // Case 3: Agent is idle -> Normal immediate dispatch
             // Check and animate first-load transition
             const consolePanel = document.querySelector('.chat-console-panel');
             if (consolePanel && consolePanel.classList.contains('first-load-state')) {
@@ -1502,12 +1772,14 @@
             appendMessageBubble('user', messageText, attachedMeta);
             
             // Clear inputs & previews
-            inputField.value = '';
-            inputField.style.height = 'auto'; // Reset height
-            sendBtn.classList.remove('active');
+            if (inputField) {
+                inputField.value = '';
+                inputField.style.height = 'auto'; // Reset height
+            }
             if (window.removeAttachment) {
                 window.removeAttachment();
             }
+            updateSendBtnState();
             scrollToBottom();
             
             await dispatchChatMessage(messageText, attachedFileToSend, null);
@@ -1518,17 +1790,14 @@
             const card = document.getElementById('input-card');
             const sendBtn = document.getElementById('btn-send-message');
 
+            window.isStreamingResponse = true;
+
             // Show typing indicator & set generating state
             typingIndicator.classList.remove('hidden');
             scrollToBottom();
             
             if (card) card.classList.add('generating');
-            if (sendBtn) {
-                sendBtn.classList.add('generating');
-                sendBtn.removeAttribute('disabled');
-                sendBtn.innerHTML = '<i data-lucide="square" style="width:10px; height:10px; fill:currentColor;"></i>';
-                if (typeof lucide !== 'undefined') lucide.createIcons();
-            }
+            updateSendBtnState();
             
             currentAbortController = new AbortController();
             const thisRequestId = 'req_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8);
@@ -1816,6 +2085,10 @@
 
                                     if (ev.active_job_id) {
                                         pollActiveJobEvents(ev.active_job_id);
+                                    } else {
+                                        setTimeout(() => {
+                                            checkAndProcessNextQueuedMessage();
+                                        }, 600);
                                     }
 
                                     if (ev.session_status) {
@@ -1967,13 +2240,14 @@
                 clearInterval(timerInterval);
                 typingIndicator.classList.add('hidden');
                 if (card) card.classList.remove('generating');
-                if (sendBtn) {
-                    sendBtn.classList.remove('generating');
-                    sendBtn.setAttribute('disabled', 'true');
-                    sendBtn.innerHTML = '<i data-lucide="arrow-up" id="send-btn-icon"></i>';
-                    lucide.createIcons();
-                }
+                window.isStreamingResponse = false;
                 currentAbortController = null;
+                updateSendBtnState();
+                if (typeof currentJobId === 'undefined' || currentJobId === null) {
+                    setTimeout(() => {
+                        checkAndProcessNextQueuedMessage();
+                    }, 600);
+                }
             }
             scrollToBottom();
         };
@@ -3008,7 +3282,11 @@
                     lastProgress = data.progress_current;
                     if (data.status === 'succeeded' || data.status === 'failed' || data.status === 'cancelled') {
                         clearInterval(activeJobPollInterval);
+                        activeJobPollInterval = null;
                         if (window.activeJobTimerInterval) clearInterval(window.activeJobTimerInterval);
+                        window.activeJobTimerInterval = null;
+                        currentJobId = null;
+                        updateSendBtnState();
                         const chatRow = document.getElementById('active-job-chat-row');
                         if (chatRow) chatRow.remove();
 
@@ -3044,11 +3322,17 @@
                                 appendMessageBubble('assistant', `### Complete Project Codebase Ready\n\n${data.result_summary}\n\nYou can inspect each file in the workspace file tree on the right, view the architecture plan and verification checks, and download your turnkey project ZIP.`);
                             }
                             }
+                            setTimeout(() => {
+                                checkAndProcessNextQueuedMessage();
+                            }, 800);
                         } else if (data.status === 'failed') {
                             updateModuleReviewBar(data.session_status, false);
                             updateStatusBadge(data.session_status || 'needs_attention');
                             updateStepperStage('needs_attention');
                             appendMessageBubble('assistant', `### Generation Failed\n\n${data.error_message || 'An error occurred during build. Please try again or request modifications.'}`);
+                            setTimeout(() => {
+                                checkAndProcessNextQueuedMessage();
+                            }, 800);
                         }
                     }
                 }
@@ -3924,6 +4208,10 @@ chmod +x run.sh && ./run.sh
         if (topbarTitle && topbarTitle.dataset.sessionId) {
             topbarTitle.style.viewTransitionName = 'project-' + topbarTitle.dataset.sessionId;
         }
+
+        // Load and render any pending queued messages
+        loadQueuedMessagesFromStorage();
+        updateSendBtnState();
 
         const activeJobEl = document.getElementById('active-job-data');
         const activeJobId = activeJobEl && activeJobEl.dataset.activeJobId ? parseInt(activeJobEl.dataset.activeJobId, 10) : null;

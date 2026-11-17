@@ -1161,6 +1161,45 @@ class ChatTestCase(TestCase):
         self.assertEqual(data['version'], 2)
         self.assertIn("void reset()", data['code_content'])
 
+    def test_queued_messages_container_and_cancel_override(self):
+        """
+        Verify that the chat workspace includes the Queued Messages card elements
+        and client queue logic, and that session cancellation supports immediate override.
+        """
+        sess = Session.objects.create(user=self.user, title="Queue Test Session", status="ready")
+        resp = self.client.get(f"/chat/{sess.uuid}/")
+        self.assertEqual(resp.status_code, 200)
+        content = resp.content.decode('utf-8')
+
+        # Queued messages container and header elements
+        self.assertIn('id="queued-messages-container"', content)
+        self.assertIn('id="queued-messages-card"', content)
+        self.assertIn('id="queued-count-badge"', content)
+        self.assertIn('Sends after current response', content)
+        self.assertIn('id="btn-queue-collapse"', content)
+        self.assertIn('id="queued-items-list"', content)
+
+        # Client JavaScript methods for queue management
+        self.assertIn('window.queuedMessages', content)
+        self.assertIn('window.isAgentWorking', content)
+        self.assertIn('window.sendQueuedNow', content)
+        self.assertIn('window.editQueuedMessage', content)
+        self.assertIn('window.deleteQueuedMessage', content)
+        self.assertIn('window.checkAndProcessNextQueuedMessage', content)
+
+        # Verify session cancellation endpoint handles request_id for immediate override
+        req_id = "test_req_override_123"
+        cancel_resp = self.client.post(
+            f"/api/session/{sess.uuid}/cancel/",
+            data=json.dumps({"request_id": req_id}),
+            content_type="application/json"
+        )
+        self.assertEqual(cancel_resp.status_code, 200)
+        data = cancel_resp.json()
+        self.assertEqual(data.get("status"), "cancelled")
+        from django.core.cache import cache
+        self.assertTrue(cache.get(f"cancel_req_{req_id}"))
+
 
 class SelfHealingEngineTestCase(TestCase):
     """Unit and integration test suite for DevDialogue AI Autonomous Self-Healing Engine."""

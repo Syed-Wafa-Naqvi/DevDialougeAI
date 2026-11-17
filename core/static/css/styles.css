@@ -3154,23 +3154,275 @@ body.chat-page-body .main-content-wrapper {
     color: #9AA1AC !important;
 }
 
-/* Disabled state during generation */
+/* Active state during generation: allow typing to queue upcoming messages */
 .input-container-card.generating textarea {
-    opacity: 0.6;
-    pointer-events: none;
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .input-container-card.generating:focus-within {
-    border-color: rgba(15, 23, 42, 0.08) !important;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06) !important;
+    border-color: var(--brand) !important;
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.15) !important;
 }
 
 [data-theme="dark"] .input-container-card.generating:focus-within,
 [data-theme="dim"] .input-container-card.generating:focus-within,
 :root[data-theme="dark"] .input-container-card.generating:focus-within,
 :root[data-theme="dim"] .input-container-card.generating:focus-within {
-    border-color: rgba(255, 255, 255, 0.08) !important;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3) !important;
+    border-color: rgba(96, 165, 250, 0.4) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* ==========================================================================
+   Queued Messages Component
+   ========================================================================== */
+.queued-messages-container {
+    width: 100%;
+    margin-bottom: 8px;
+    transition: all 0.2s ease-in-out;
+}
+
+.queued-messages-container.hidden {
+    display: none !important;
+}
+
+.queued-messages-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    overflow: hidden;
+    backdrop-filter: blur(12px);
+    transition: max-height 0.25s ease, opacity 0.2s ease;
+}
+
+[data-theme="dark"] .queued-messages-card,
+[data-theme="dim"] .queued-messages-card,
+:root[data-theme="dark"] .queued-messages-card,
+:root[data-theme="dim"] .queued-messages-card {
+    background: #181d28;
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+}
+
+.queued-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 12px;
+    cursor: pointer;
+    user-select: none;
+    border-bottom: 1px solid transparent;
+    transition: background 0.15s ease;
+}
+
+.queued-card-header:hover {
+    background: var(--surface-hover);
+}
+
+.queued-messages-card:not(.collapsed) .queued-card-header {
+    border-bottom-color: var(--border);
+}
+
+[data-theme="dark"] .queued-messages-card:not(.collapsed) .queued-card-header,
+[data-theme="dim"] .queued-messages-card:not(.collapsed) .queued-card-header,
+:root[data-theme="dark"] .queued-messages-card:not(.collapsed) .queued-card-header,
+:root[data-theme="dim"] .queued-messages-card:not(.collapsed) .queued-card-header {
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+.queued-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+}
+
+.queued-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+    white-space: nowrap;
+}
+
+.queued-count-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 6px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 9999px;
+    background: rgba(100, 116, 139, 0.2);
+    color: var(--ink-2);
+}
+
+[data-theme="dark"] .queued-count-badge,
+[data-theme="dim"] .queued-count-badge,
+:root[data-theme="dark"] .queued-count-badge,
+:root[data-theme="dim"] .queued-count-badge {
+    background: rgba(255, 255, 255, 0.12);
+    color: #cbd5e1;
+}
+
+.queued-subtitle {
+    font-size: 12px;
+    color: var(--ink-3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.queued-header-right {
+    display: flex;
+    align-items: center;
+}
+
+.btn-queue-collapse {
+    background: transparent;
+    border: none;
+    padding: 2px 4px;
+    color: var(--ink-3);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: color 0.15s ease;
+}
+
+.btn-queue-collapse:hover {
+    color: var(--ink);
+}
+
+.btn-queue-collapse svg {
+    width: 15px;
+    height: 15px;
+    transition: transform 0.2s ease;
+}
+
+.queued-messages-card.collapsed .btn-queue-collapse svg {
+    transform: rotate(180deg);
+}
+
+.queued-items-list {
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.queued-messages-card.collapsed .queued-items-list {
+    display: none;
+}
+
+.queued-message-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s ease;
+}
+
+[data-theme="dark"] .queued-message-item,
+[data-theme="dim"] .queued-message-item,
+:root[data-theme="dark"] .queued-message-item,
+:root[data-theme="dim"] .queued-message-item {
+    border-bottom-color: rgba(255, 255, 255, 0.04);
+}
+
+.queued-message-item:last-child {
+    border-bottom: none;
+}
+
+.queued-message-item:hover {
+    background: var(--surface-hover);
+}
+
+.queued-item-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+.queued-thumb {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+}
+
+.queued-thumb-placeholder {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    background: rgba(100, 116, 139, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.queued-thumb-placeholder svg {
+    width: 14px;
+    height: 14px;
+    color: var(--ink-2);
+}
+
+.queued-item-text {
+    font-size: 13px;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.4;
+}
+
+.queued-item-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.btn-queue-action {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--ink-3);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.btn-queue-action svg {
+    width: 14px;
+    height: 14px;
+}
+
+.btn-queue-action:hover {
+    background: var(--surface-hover);
+    color: var(--ink);
+}
+
+.btn-queue-action.btn-queue-override:hover {
+    color: var(--brand);
+    background: rgba(59, 130, 246, 0.15);
+}
+
+.btn-queue-action.btn-queue-delete:hover {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.15);
 }
 
 /* Attachment Preview Chip */
