@@ -1,22 +1,19 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}Workspace Console - DevDialogue AI{% endblock %}
 
 {% block body_class %}chat-page-body{% endblock %}
 
 {% block extra_head %}
-<!-- Prism.js Syntax Highlighting Theme -->
-<link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
-<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markup.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-dart.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-go.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-rust.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<!-- Vendored Prism.js Syntax Highlighting Theme & Engines -->
+<link href="{% static 'vendor/prism.min.css' %}" rel="stylesheet" />
+<script src="{% static 'vendor/prism.min.js' %}"></script>
+<script src="{% static 'vendor/prism-python.min.js' %}"></script>
+<script src="{% static 'vendor/prism-javascript.min.js' %}"></script>
+<script src="{% static 'vendor/prism-dart.min.js' %}"></script>
+<script src="{% static 'vendor/prism-bash.min.js' %}"></script>
+<script src="{% static 'vendor/prism-json.min.js' %}"></script>
+<script src="{% static 'vendor/prism-yaml.min.js' %}"></script>
 <!-- DOMPurify for XSS Protection -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
 <!-- Mermaid for Interactive Architecture Flowcharts -->
@@ -565,8 +562,8 @@
         </header>
 
         <!-- Honest Status Banner & Live Completeness Ticks (§4.5, §4.8, §8) -->
-        <div class="honest-status-bar">
-            <div class="status-indicators">
+        <div class="honest-status-bar" id="honest-status-bar-container">
+            <div class="status-indicators {% if not project_files %}hidden{% endif %}" id="status-indicators-group">
                 <button type="button" class="status-pill {% if latest_static_run %}{% if latest_static_run.passed %}status-static-pass{% else %}status-static-fail{% endif %}{% elif project_files %}status-static-pass{% else %}status-runtime-off{% endif %}" id="pill-static-checks" onclick="handleStaticPillClick()" style="cursor: pointer; transition: all 0.15s ease; border: 1px solid var(--border);" title="Click to view Static AST & Import Verification checks">
                     <i data-lucide="{% if latest_static_run and not latest_static_run.passed %}shield-alert{% else %}shield-check{% endif %}" class="icon-sm" id="static-pill-icon"></i>
                     <span>Static:</span>
@@ -576,7 +573,7 @@
                         {% elif project_files %}
                             Passed ({{ project_files.count }} files)
                         {% else %}
-                            Pre-build (Ready)
+                            Ready
                         {% endif %}
                     </strong>
                 </button>
@@ -590,7 +587,7 @@
                         {% elif project_files %}
                             Run Checks
                         {% else %}
-                            Not run (Off)
+                            Off
                         {% endif %}
                     </strong>
                 </button>
@@ -807,12 +804,36 @@
                     {% if is_first_load %}
                         <div class="first-load-header-group">
                             <h2 class="first-load-greeting">What can we build today?</h2>
-                            <p class="first-load-subheading">Start a new workspace or continue where you left off.</p>
+                            <p class="first-load-subheading">Start a new workspace or select an architecture pattern below.</p>
                             <div class="suggested-prompts-container">
-                                <button type="button" class="suggested-prompt-chip" onclick="fillPromptText(this)">Django blog with comments and auth</button>
-                                <button type="button" class="suggested-prompt-chip" onclick="fillPromptText(this)">Flutter expense tracker with SQLite</button>
-                                <button type="button" class="suggested-prompt-chip" onclick="fillPromptText(this)">REST API for a digital library with JWT</button>
-                                <button type="button" class="suggested-prompt-chip" onclick="fillPromptText(this)">FastAPI real-time chat with WebSockets</button>
+                                <button type="button" class="starter-prompt-card" onclick="fillPromptText(this)" data-prompt="Build a full-stack Django web application with clean models, PostgreSQL/SQLite support, user authentication, and REST APIs.">
+                                    <div class="starter-card-icon"><i data-lucide="layers"></i></div>
+                                    <div class="starter-card-body">
+                                        <span class="starter-card-title">Full-Stack Web App</span>
+                                        <span class="starter-card-desc">Django, models, authentication & REST APIs</span>
+                                    </div>
+                                </button>
+                                <button type="button" class="starter-prompt-card" onclick="fillPromptText(this)" data-prompt="Develop a cross-platform mobile application in Flutter with local state management, offline SQLite caching, and beautiful UI.">
+                                    <div class="starter-card-icon"><i data-lucide="smartphone"></i></div>
+                                    <div class="starter-card-body">
+                                        <span class="starter-card-title">Mobile Application</span>
+                                        <span class="starter-card-desc">Flutter, state management & local database</span>
+                                    </div>
+                                </button>
+                                <button type="button" class="starter-prompt-card" onclick="fillPromptText(this)" data-prompt="Build a high-performance backend REST API in FastAPI with async SQLAlchemy, JWT authentication, and automated verification tests.">
+                                    <div class="starter-card-icon"><i data-lucide="server"></i></div>
+                                    <div class="starter-card-body">
+                                        <span class="starter-card-title">Cloud REST Engine</span>
+                                        <span class="starter-card-desc">FastAPI, async ORM, JWT & OpenAPI schemas</span>
+                                    </div>
+                                </button>
+                                <button type="button" class="starter-prompt-card" onclick="fillPromptText(this)" data-prompt="Develop an interactive 2D chess game or board game simulation in Flutter with move validation, turn history, and minimax AI opponent.">
+                                    <div class="starter-card-icon"><i data-lucide="gamepad-2"></i></div>
+                                    <div class="starter-card-body">
+                                        <span class="starter-card-title">Game or Interactive Logic</span>
+                                        <span class="starter-card-desc">Turn-based rules, validation engine & AI opponent</span>
+                                    </div>
+                                </button>
                             </div>
                         </div>
                     {% endif %}
@@ -998,10 +1019,10 @@
             </div>
         </div>
 
-        <!-- Floating Reopen Workspace Tab when collapsed -->
-        <button type="button" id="btn-floating-reopen-workspace" class="floating-workspace-reopen-tab" onclick="toggleCodeWorkspace()" title="Reopen Code Workspace" style="display: none;">
-            <i data-lucide="chevron-left" style="width: 14px; height: 14px;"></i>
-            <span>Code Workspace</span>
+        <!-- Floating Reopen Workspace Pill when collapsed -->
+        <button type="button" id="btn-floating-reopen-workspace" class="floating-workspace-reopen-pill" onclick="toggleCodeWorkspace()" title="Open Code Workspace" style="display: none;">
+            <i data-lucide="panel-right-open" style="width: 15px; height: 15px;"></i>
+            <span>Workspace</span>
         </button>
     </div>
     <div id="active-job-data" data-active-job-id="{% if active_job %}{{ active_job.id }}{% endif %}" style="display:none;"></div>
@@ -1108,7 +1129,7 @@
 
     // Fill suggested prompt text into textarea & auto-dispatch
     window.fillPromptText = function(button) {
-        const text = button.textContent.trim();
+        const text = (button.dataset.prompt || button.textContent).trim();
         if (inputField) {
             inputField.value = text;
             inputField.dispatchEvent(new Event('input'));
@@ -2854,13 +2875,21 @@
                 else if (modName.endsWith('.json')) langClass = 'language-json';
                 else if (modName.endsWith('.md')) langClass = 'language-markdown';
 
+                // Generate line numbers gutter
+                const rawContent = data.code_content || '';
+                const lineCount = rawContent.split('\n').length;
+                const gutterHtml = Array.from({ length: lineCount }, (_, i) => `<span>${i + 1}</span>`).join('');
+
                 codeViewContainer.innerHTML = `
-                    <pre class="code-block ${langClass}"><code id="code-output-block" class="${langClass}"></code></pre>
+                    <div class="code-editor-viewport">
+                        <div class="code-gutter" aria-hidden="true">${gutterHtml}</div>
+                        <pre class="code-block ${langClass}"><code id="code-output-block" class="${langClass}"></code></pre>
+                    </div>
                 `;
                 
-                // Escape code content
+                // Set and highlight code content
                 const codeNode = document.getElementById('code-output-block');
-                codeNode.textContent = data.code_content;
+                codeNode.textContent = rawContent;
 
                 if (window.Prism) {
                     Prism.highlightElement(codeNode);
@@ -4122,6 +4151,11 @@ chmod +x run.sh && ./run.sh
     };
 
     window.updateVerificationPills = function(staticPassed, filesCount, errorCount, runtimePassed) {
+        const group = document.getElementById('status-indicators-group');
+        if (group && filesCount > 0) {
+            group.classList.remove('hidden');
+        }
+
         const sStatus = document.getElementById('static-pill-status');
         const sBtn = document.getElementById('pill-static-checks');
         const rStatus = document.getElementById('runtime-pill-status');
@@ -4212,6 +4246,37 @@ chmod +x run.sh && ./run.sh
         // Load and render any pending queued messages
         loadQueuedMessagesFromStorage();
         updateSendBtnState();
+
+        // Format and highlight initial code block if present
+        const initCodeBlock = document.getElementById('code-output-block');
+        const activeTitleEl = document.getElementById('active-file-title');
+        if (initCodeBlock && initCodeBlock.textContent.trim().length > 0) {
+            const fName = (activeTitleEl ? activeTitleEl.textContent : '').toLowerCase().trim();
+            let lang = 'language-python';
+            if (fName.endsWith('.dart')) lang = 'language-dart';
+            else if (fName.endsWith('.js') || fName.endsWith('.ts') || fName.endsWith('.tsx') || fName.endsWith('.jsx')) lang = 'language-javascript';
+            else if (fName.endsWith('.json')) lang = 'language-json';
+            else if (fName.endsWith('.yaml') || fName.endsWith('.yml')) lang = 'language-yaml';
+            else if (fName.endsWith('.sh') || fName.endsWith('.bat')) lang = 'language-bash';
+
+            const rawContent = initCodeBlock.textContent;
+            const lineCount = rawContent.split('\n').length;
+            const gutterHtml = Array.from({ length: lineCount }, (_, i) => `<span>${i + 1}</span>`).join('');
+            const parent = initCodeBlock.closest('.code-pre-wrapper');
+            if (parent) {
+                parent.innerHTML = `
+                    <div class="code-editor-viewport">
+                        <div class="code-gutter" aria-hidden="true">${gutterHtml}</div>
+                        <pre class="code-block ${lang}"><code id="code-output-block" class="${lang}"></code></pre>
+                    </div>
+                `;
+                const nBlock = document.getElementById('code-output-block');
+                if (nBlock) {
+                    nBlock.textContent = rawContent;
+                    if (window.Prism) Prism.highlightElement(nBlock);
+                }
+            }
+        }
 
         const activeJobEl = document.getElementById('active-job-data');
         const activeJobId = activeJobEl && activeJobEl.dataset.activeJobId ? parseInt(activeJobEl.dataset.activeJobId, 10) : null;
