@@ -21,6 +21,14 @@
             } else {
                 document.documentElement.setAttribute('data-theme', 'light');
             }
+            const savedFontSize = localStorage.getItem('devdialogue_code_font_size');
+            if (savedFontSize) {
+                document.documentElement.style.setProperty('--code-font-size', savedFontSize + 'px');
+            }
+            const savedWrap = localStorage.getItem('devdialogue_code_wrap');
+            if (savedWrap === 'true') {
+                document.documentElement.setAttribute('data-code-wrap', 'true');
+            }
         })();
     </script>
 

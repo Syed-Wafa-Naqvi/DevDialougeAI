@@ -15,6 +15,7 @@ class App {
     constructor() {
         this.heroScene = null;
         window.app = this;
+        window.qualityManager = qualityManager;
         this.init();
     }
 

@@ -4310,9 +4310,41 @@ body.chat-page-body .main-content-wrapper {
     min-height: 100%;
     background: var(--code-bg, #1a1c22);
     font-family: var(--font-mono, 'JetBrains Mono', monospace);
-    font-size: 13px;
+    font-size: var(--code-font-size, 13px);
     line-height: 1.6;
     overflow: auto;
+}
+
+html[data-code-wrap="true"] .code-editor-viewport pre.code-block {
+    white-space: pre-wrap !important;
+    word-break: break-all;
+}
+
+html[data-code-wrap="true"] .code-editor-viewport pre.code-block code {
+    white-space: pre-wrap !important;
+}
+
+/* Theme & Quality Settings Card Active States */
+.theme-select-card.active,
+.quality-card.active {
+    border-color: var(--electric, #3b82f6) !important;
+    box-shadow: 0 0 0 1px var(--electric, #3b82f6), 0 4px 12px rgba(59, 130, 246, 0.15);
+}
+
+.theme-select-card:hover,
+.quality-card:hover {
+    border-color: var(--text-3);
+}
+
+.theme-select-card.active:hover,
+.quality-card.active:hover {
+    border-color: var(--electric, #3b82f6) !important;
+}
+
+.font-size-btn.active {
+    background: var(--electric) !important;
+    color: #ffffff !important;
+    border-color: var(--electric) !important;
 }
 
 [data-theme="light"] .code-editor-viewport,
