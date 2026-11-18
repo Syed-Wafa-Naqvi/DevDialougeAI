@@ -1,48 +1,406 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Features — DevDialogue AI{% endblock %}
+{% block title %}Platform Capabilities & Technical Architecture — DevDialogue AI{% endblock %}
 {% block page_namespace %}features{% endblock %}
 
 {% block content %}
-<div style="max-width: 1200px; margin: 0 auto; padding: 80px 24px;">
-    <div class="text-center" style="margin-bottom: 60px;">
-        <div class="badge badge-violet" style="margin-bottom: 16px;">Platform Capabilities</div>
-        <h1 style="font-size: var(--text-hero); margin-bottom: 16px;" data-reveal="split">Requirement-Aware AI Software System</h1>
-        <p style="color: var(--text-2); font-size: var(--text-lead); max-width: 640px; margin: 0 auto;">DevDialogue AI turns natural language ideas into production software without missing requirements.</p>
+<div style="max-width: 1240px; margin: 0 auto; padding: 70px 24px 100px;">
+
+    <!-- Hero Section -->
+    <div class="text-center" style="margin-bottom: 64px;">
+        <div class="badge badge-brand" style="margin-bottom: 16px; padding: 6px 14px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">
+            Platform Capabilities & Technical Architecture
+        </div>
+        <h1 style="font-size: clamp(32px, 5vw, 52px); font-weight: 800; color: var(--text-primary); margin-bottom: 18px; letter-spacing: -0.03em; line-height: 1.15;">
+            Requirement-Aware AI Software System
+        </h1>
+        <p style="color: var(--text-secondary); font-size: 18px; max-width: 760px; margin: 0 auto 32px; line-height: 1.6;">
+            DevDialogue AI turns natural language ideas into production-verified software without missing requirements, broken imports, or phantom dependencies through multi-modal ingestion, AST validation, and autonomous self-healing.
+        </p>
+
+        <!-- Live Platform Metric Badges -->
+        <div style="display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 36px;">
+            <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); padding: 10px 18px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                <i data-lucide="check-circle" style="width: 16px; height: 16px; color: #22c55e;"></i>
+                <span>100% Requirement Completeness Rubric</span>
+            </div>
+            <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); padding: 10px 18px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                <i data-lucide="layers" style="width: 16px; height: 16px; color: #3b82f6;"></i>
+                <span>3 Tailored Generation Workflows</span>
+            </div>
+            <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); padding: 10px 18px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                <i data-lucide="shield-check" style="width: 16px; height: 16px; color: #a855f7;"></i>
+                <span>AST Static & Compiler Verification</span>
+            </div>
+            <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); padding: 10px 18px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                <i data-lucide="activity" style="width: 16px; height: 16px; color: #f59e0b;"></i>
+                <span>24/7 Autonomous Self-Healing Hot-Patching</span>
+            </div>
+        </div>
+
+        <div style="display: flex; justify-content: center; gap: 14px; flex-wrap: wrap;">
+            <a href="{% url 'new_chat' %}" class="btn btn-primary" style="padding: 12px 24px; font-size: 15px; font-weight: 600;">
+                <i data-lucide="sparkles" style="width: 16px; height: 16px;"></i> Start New Workspace
+            </a>
+            <a href="{% url 'pricing' %}" class="btn btn-secondary" style="padding: 12px 24px; font-size: 15px; font-weight: 600;">
+                <i data-lucide="credit-card" style="width: 16px; height: 16px;"></i> View Subscriptions
+            </a>
+        </div>
     </div>
 
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 32px;">
-        <div class="tilt-card" style="background: var(--surface); border: 1px solid var(--line); padding: 36px; border-radius: var(--r-xl);">
-            <div class="tilt-card-inner">
-                <div style="width: 48px; height: 48px; background: var(--violet-soft); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--violet); margin-bottom: 20px;">
-                    <i data-lucide="message-square-code"></i>
-                </div>
-                <h3 style="font-size: var(--text-title-sm); margin-bottom: 12px;">Interactive Interview Engine</h3>
-                <p style="color: var(--text-2); font-size: var(--text-sm); line-height: 1.7;">Conducts context-aware conversations to elicit stack choices, authentication roles, database schemas, and business rules.</p>
-            </div>
+    <!-- Section 1: The 6 Core Architectural Foundations -->
+    <div style="margin-bottom: 80px;">
+        <div style="text-align: center; margin-bottom: 40px;">
+            <span class="badge badge-brand" style="margin-bottom: 8px; font-size: 11px;">Core Architecture</span>
+            <h2 style="font-size: 28px; font-weight: 700; color: var(--text-primary); margin: 0 0 10px;">Six Groundbreaking Platform Pillars</h2>
+            <p style="color: var(--text-secondary); font-size: 15px; max-width: 600px; margin: 0 auto;">How DevDialogue AI guarantees requirement fidelity, code safety, and turnkey execution.</p>
         </div>
 
-        <div class="tilt-card" style="background: var(--surface); border: 1px solid var(--line); padding: 36px; border-radius: var(--r-xl);">
-            <div class="tilt-card-inner">
-                <div style="width: 48px; height: 48px; background: var(--cyan-soft); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--cyan); margin-bottom: 20px;">
-                    <i data-lucide="map-pin"></i>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 24px;">
+            <!-- Pillar 1 -->
+            <div class="tilt-card" style="background: var(--bg-secondary); border: 1px solid var(--border-color); padding: 32px; border-radius: var(--r-xl); display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <div style="width: 48px; height: 48px; background: rgba(99, 102, 241, 0.12); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #6366f1;">
+                            <i data-lucide="messages-square" style="width: 24px; height: 24px;"></i>
+                        </div>
+                        <span style="font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: rgba(99, 102, 241, 0.12); color: #6366f1;">Elicitation</span>
+                    </div>
+                    <h3 style="font-size: 20px; font-weight: 700; color: var(--text-primary); margin-bottom: 10px;">Interactive Requirement Interview</h3>
+                    <p style="color: var(--text-secondary); font-size: 14px; line-height: 1.6; margin-bottom: 18px;">
+                        Proactively interviews developers across an 8-category completeness rubric (Purpose, Core Features, Data Model, Auth & Roles, Tech Stack, External APIs, Non-Functional, Deployment) to eliminate ambiguous assumptions before coding.
+                    </p>
                 </div>
-                <h3 style="font-size: var(--text-title-sm); margin-bottom: 12px;">2.5D & 3D Architecture Blueprint</h3>
-                <p style="color: var(--text-2); font-size: var(--text-sm); line-height: 1.7;">Generates an interactive node map of your application architecture with full 3D rotatable WebGL visualization.</p>
+                <div style="padding-top: 16px; border-top: 1px solid var(--border-color); font-size: 12px; color: var(--text-tertiary);">
+                    <i data-lucide="check" style="width: 14px; height: 14px; color: #22c55e; display: inline-block; vertical-align: -2px; margin-right: 4px;"></i>
+                    Real-time completeness score with focused architectural follow-ups.
+                </div>
             </div>
-        </div>
 
-        <div class="tilt-card" style="background: var(--surface); border: 1px solid var(--line); padding: 36px; border-radius: var(--r-xl);">
-            <div class="tilt-card-inner">
-                <div style="width: 48px; height: 48px; background: var(--ok-soft); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--ok); margin-bottom: 20px;">
-                    <i data-lucide="shield-check"></i>
+            <!-- Pillar 2 -->
+            <div class="tilt-card" style="background: var(--bg-secondary); border: 1px solid var(--border-color); padding: 32px; border-radius: var(--r-xl); display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <div style="width: 48px; height: 48px; background: rgba(14, 165, 233, 0.12); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #0ea5e9;">
+                            <i data-lucide="file-up" style="width: 24px; height: 24px;"></i>
+                        </div>
+                        <span style="font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: rgba(14, 165, 233, 0.12); color: #0ea5e9;">Multi-Modal</span>
+                    </div>
+                    <h3 style="font-size: 20px; font-weight: 700; color: var(--text-primary); margin-bottom: 10px;">Multi-Modal Document Ingestion</h3>
+                    <p style="color: var(--text-secondary); font-size: 14px; line-height: 1.6; margin-bottom: 18px;">
+                        Drop PDF briefs, Word (.docx) specifications, Excel/Spreadsheet data models, PowerPoint presentations, or architecture diagrams directly into the dialogue to auto-extract technical specifications into memory.
+                    </p>
                 </div>
-                <h3 style="font-size: var(--text-title-sm); margin-bottom: 12px;">Automated Static Verification</h3>
-                <p style="color: var(--text-2); font-size: var(--text-sm); line-height: 1.7;">Verifies syntax, imports, and cross-file references before presenting generated code, ensuring zero missing dependencies.</p>
+                <div style="padding-top: 16px; border-top: 1px solid var(--border-color); font-size: 12px; color: var(--text-tertiary);">
+                    <i data-lucide="check" style="width: 14px; height: 14px; color: #22c55e; display: inline-block; vertical-align: -2px; margin-right: 4px;"></i>
+                    Parses schema entities, constraints, and business logic into the SRS.
+                </div>
+            </div>
+
+            <!-- Pillar 3 -->
+            <div class="tilt-card" style="background: var(--bg-secondary); border: 1px solid var(--border-color); padding: 32px; border-radius: var(--r-xl); display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <div style="width: 48px; height: 48px; background: rgba(168, 85, 247, 0.12); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #a855f7;">
+                            <i data-lucide="box" style="width: 24px; height: 24px;"></i>
+                        </div>
+                        <span style="font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: rgba(168, 85, 247, 0.12); color: #a855f7;">3D Blueprint</span>
+                    </div>
+                    <h3 style="font-size: 20px; font-weight: 700; color: var(--text-primary); margin-bottom: 10px;">2.5D & 3D Architecture Visualizer</h3>
+                    <p style="color: var(--text-secondary); font-size: 14px; line-height: 1.6; margin-bottom: 18px;">
+                        Generates interactive WebGL spatial component graphs alongside Mermaid sequence diagrams, database relationship trees, and modular SRS blueprints so developers inspect system topology before code generation.
+                    </p>
+                </div>
+                <div style="padding-top: 16px; border-top: 1px solid var(--border-color); font-size: 12px; color: var(--text-tertiary);">
+                    <i data-lucide="check" style="width: 14px; height: 14px; color: #22c55e; display: inline-block; vertical-align: -2px; margin-right: 4px;"></i>
+                    Interactive rotatable 3D nodes, module filters, and sequence flows.
+                </div>
+            </div>
+
+            <!-- Pillar 4 -->
+            <div class="tilt-card" style="background: var(--bg-secondary); border: 1px solid var(--border-color); padding: 32px; border-radius: var(--r-xl); display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <div style="width: 48px; height: 48px; background: rgba(34, 197, 94, 0.12); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #22c55e;">
+                            <i data-lucide="shield-check" style="width: 24px; height: 24px;"></i>
+                        </div>
+                        <span style="font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: rgba(34, 197, 94, 0.12); color: #22c55e;">Static AST</span>
+                    </div>
+                    <h3 style="font-size: 20px; font-weight: 700; color: var(--text-primary); margin-bottom: 10px;">Automated Static AST Verification</h3>
+                    <p style="color: var(--text-secondary); font-size: 14px; line-height: 1.6; margin-bottom: 18px;">
+                        Deep static analysis inspects Abstract Syntax Trees across Python, Dart/Flutter, and JavaScript. Catches undefined types, invalid constructor parameters, missing imports, and N+1 query hazards before code presentation.
+                    </p>
+                </div>
+                <div style="padding-top: 16px; border-top: 1px solid var(--border-color); font-size: 12px; color: var(--text-tertiary);">
+                    <i data-lucide="check" style="width: 14px; height: 14px; color: #22c55e; display: inline-block; vertical-align: -2px; margin-right: 4px;"></i>
+                    Pre-commit AST linting with automated patch suggestion engine.
+                </div>
+            </div>
+
+            <!-- Pillar 5 -->
+            <div class="tilt-card" style="background: var(--bg-secondary); border: 1px solid var(--border-color); padding: 32px; border-radius: var(--r-xl); display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <div style="width: 48px; height: 48px; background: rgba(245, 158, 11, 0.12); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #f59e0b;">
+                            <i data-lucide="terminal" style="width: 24px; height: 24px;"></i>
+                        </div>
+                        <span style="font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: rgba(245, 158, 11, 0.12); color: #f59e0b;">Compiler Checks</span>
+                    </div>
+                    <h3 style="font-size: 20px; font-weight: 700; color: var(--text-primary); margin-bottom: 10px;">Simulated Runtime & Compiler Checks</h3>
+                    <p style="color: var(--text-secondary); font-size: 14px; line-height: 1.6; margin-bottom: 18px;">
+                        Executes sandboxed compiler passes (Flutter/Dart analyzer, Python bytecode compilation, Node syntax checks). Identifies exact file lines, candidate argument mismatches, and undefined getters before export.
+                    </p>
+                </div>
+                <div style="padding-top: 16px; border-top: 1px solid var(--border-color); font-size: 12px; color: var(--text-tertiary);">
+                    <i data-lucide="check" style="width: 14px; height: 14px; color: #22c55e; display: inline-block; vertical-align: -2px; margin-right: 4px;"></i>
+                    Line-by-line compiler diagnostics panel with live status pills.
+                </div>
+            </div>
+
+            <!-- Pillar 6 -->
+            <div class="tilt-card" style="background: var(--bg-secondary); border: 1px solid var(--border-color); padding: 32px; border-radius: var(--r-xl); display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <div style="width: 48px; height: 48px; background: rgba(239, 68, 68, 0.12); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #ef4444;">
+                            <i data-lucide="activity" style="width: 24px; height: 24px;"></i>
+                        </div>
+                        <span style="font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: rgba(239, 68, 68, 0.12); color: #ef4444;">Hot-Patching</span>
+                    </div>
+                    <h3 style="font-size: 20px; font-weight: 700; color: var(--text-primary); margin-bottom: 10px;">Autonomous AI Self-Healing Engine</h3>
+                    <p style="color: var(--text-secondary); font-size: 14px; line-height: 1.6; margin-bottom: 18px;">
+                        When unhandled server crashes or 500 errors occur, the platform activates autonomous hot-patching: waits for quiet traffic, diagnoses the root cause via LLM, applies AST-verified repairs, commits to Git, and safely restarts.
+                    </p>
+                </div>
+                <div style="padding-top: 16px; border-top: 1px solid var(--border-color); font-size: 12px; color: var(--text-tertiary);">
+                    <i data-lucide="check" style="width: 14px; height: 14px; color: #22c55e; display: inline-block; vertical-align: -2px; margin-right: 4px;"></i>
+                    Zero user disruption with professional maintenance fallback screen.
+                </div>
             </div>
         </div>
     </div>
+
+    <!-- Section 2: Three Tailored Generation Workflows -->
+    <div style="margin-bottom: 80px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--r-xl); padding: 48px 36px;">
+        <div style="text-align: center; margin-bottom: 40px;">
+            <span class="badge badge-brand" style="margin-bottom: 8px; font-size: 11px;">Flexible Workflows</span>
+            <h2 style="font-size: 28px; font-weight: 700; color: var(--text-primary); margin: 0 0 10px;">Three Tailored Code Generation Modes</h2>
+            <p style="color: var(--text-secondary); font-size: 15px; max-width: 600px; margin: 0 auto;">Select the workflow tailored to your project scope and architectural review requirements.</p>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;">
+            <!-- Mode 1 -->
+            <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: var(--r-lg); padding: 28px;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px;">
+                    <div style="width: 32px; height: 32px; border-radius: 8px; background: rgba(59, 130, 246, 0.15); display: flex; align-items: center; justify-content: center; color: #3b82f6; font-weight: 700;">1</div>
+                    <h3 style="font-size: 18px; font-weight: 700; color: var(--text-primary); margin: 0;">All at Once</h3>
+                </div>
+                <span style="font-size: 12px; font-weight: 600; color: #3b82f6; display: block; margin-bottom: 10px;">Dialogue-Driven SRS Architecture</span>
+                <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 16px;">
+                    Full architectural elicitation interview, comprehensive SRS blueprint construction, and simultaneous synthesis of the entire multi-file project repository.
+                </p>
+                <div style="font-size: 12px; color: var(--text-tertiary);">
+                    <strong>Best for:</strong> Full-stack applications, turn-based games, and end-to-end repository scaffolding.
+                </div>
+            </div>
+
+            <!-- Mode 2 -->
+            <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: var(--r-lg); padding: 28px;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px;">
+                    <div style="width: 32px; height: 32px; border-radius: 8px; background: rgba(168, 85, 247, 0.15); display: flex; align-items: center; justify-content: center; color: #a855f7; font-weight: 700;">2</div>
+                    <h3 style="font-size: 18px; font-weight: 700; color: var(--text-primary); margin: 0;">File by File</h3>
+                </div>
+                <span style="font-size: 12px; font-weight: 600; color: #a855f7; display: block; margin-bottom: 10px;">Incremental Staged Review</span>
+                <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 16px;">
+                    Generates modules in strict topological dependency order (Data Models first, then Views, then Controllers). Lets you review, diff, and approve each file before proceeding.
+                </p>
+                <div style="font-size: 12px; color: var(--text-tertiary);">
+                    <strong>Best for:</strong> Mission-critical enterprise architectures and granular human-in-the-loop code review.
+                </div>
+            </div>
+
+            <!-- Mode 3 -->
+            <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: var(--r-lg); padding: 28px;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px;">
+                    <div style="width: 32px; height: 32px; border-radius: 8px; background: rgba(34, 197, 94, 0.15); display: flex; align-items: center; justify-content: center; color: #22c55e; font-weight: 700;">3</div>
+                    <h3 style="font-size: 18px; font-weight: 700; color: var(--text-primary); margin: 0;">Quick Code</h3>
+                </div>
+                <span style="font-size: 12px; font-weight: 600; color: #22c55e; display: block; margin-bottom: 10px;">Direct Snippet & AST Bug Fixer</span>
+                <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 16px;">
+                    Instant generation for standalone scripts, algorithms, or pasted code snippets. Automatically diagnoses syntax errors, missing functions, and returns fixed verified code.
+                </p>
+                <div style="font-size: 12px; color: var(--text-tertiary);">
+                    <strong>Best for:</strong> Quick functions, algorithmic puzzles, bug fixes, and fast snippet prototyping.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 3: Supported Frameworks & Tech Stacks -->
+    <div style="margin-bottom: 80px;">
+        <div style="text-align: center; margin-bottom: 40px;">
+            <span class="badge badge-brand" style="margin-bottom: 8px; font-size: 11px;">Ecosystem Support</span>
+            <h2 style="font-size: 28px; font-weight: 700; color: var(--text-primary); margin: 0 0 10px;">Native Multi-Stack Support</h2>
+            <p style="color: var(--text-secondary); font-size: 15px; max-width: 600px; margin: 0 auto;">DevDialogue AI writes idiomatically structured code across major frameworks.</p>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px;">
+            <!-- Stack 1 -->
+            <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--r-lg); padding: 24px;">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                    <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(2, 132, 199, 0.15); display: flex; align-items: center; justify-content: center; color: #0284c7;">
+                        <i data-lucide="smartphone" style="width: 20px; height: 20px;"></i>
+                    </div>
+                    <div>
+                        <h4 style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin: 0;">Flutter & Dart</h4>
+                        <span style="font-size: 11px; color: var(--text-tertiary);">Mobile & Cross-Platform</span>
+                    </div>
+                </div>
+                <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.5; margin: 0 0 12px;">
+                    BLoC, Provider, and Riverpod state management, responsive UI widgets, offline SQLite, network providers, and clean layer separation.
+                </p>
+                <div style="font-size: 11px; color: var(--text-tertiary); font-family: var(--font-mono);">
+                    pubspec.yaml • lib/main.dart
+                </div>
+            </div>
+
+            <!-- Stack 2 -->
+            <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--r-lg); padding: 24px;">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                    <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(16, 185, 129, 0.15); display: flex; align-items: center; justify-content: center; color: #10b981;">
+                        <i data-lucide="server" style="width: 20px; height: 20px;"></i>
+                    </div>
+                    <div>
+                        <h4 style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin: 0;">Django & DRF</h4>
+                        <span style="font-size: 11px; color: var(--text-tertiary);">Enterprise Full-Stack</span>
+                    </div>
+                </div>
+                <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.5; margin: 0 0 12px;">
+                    Relational models, serializers, ViewSets, JWT/session authentication, PostgreSQL ORM optimization, and Django admin scaffolding.
+                </p>
+                <div style="font-size: 11px; color: var(--text-tertiary); font-family: var(--font-mono);">
+                    models.py • views.py • serializers.py
+                </div>
+            </div>
+
+            <!-- Stack 3 -->
+            <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--r-lg); padding: 24px;">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                    <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(14, 165, 233, 0.15); display: flex; align-items: center; justify-content: center; color: #0ea5e9;">
+                        <i data-lucide="zap" style="width: 20px; height: 20px;"></i>
+                    </div>
+                    <div>
+                        <h4 style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin: 0;">FastAPI & Async ORM</h4>
+                        <span style="font-size: 11px; color: var(--text-tertiary);">High-Speed Cloud APIs</span>
+                    </div>
+                </div>
+                <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.5; margin: 0 0 12px;">
+                    Pydantic v2 data schemas, SQLAlchemy async sessions, OAuth2 password flows, OpenAPI auto-docs, and high-concurrency routing.
+                </p>
+                <div style="font-size: 11px; color: var(--text-tertiary); font-family: var(--font-mono);">
+                    main.py • schemas.py • database.py
+                </div>
+            </div>
+
+            <!-- Stack 4 -->
+            <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--r-lg); padding: 24px;">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                    <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(234, 179, 8, 0.15); display: flex; align-items: center; justify-content: center; color: #eab308;">
+                        <i data-lucide="package" style="width: 20px; height: 20px;"></i>
+                    </div>
+                    <div>
+                        <h4 style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin: 0;">Turnkey Packaging</h4>
+                        <span style="font-size: 11px; color: var(--text-tertiary);">Execution Harness</span>
+                    </div>
+                </div>
+                <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.5; margin: 0 0 12px;">
+                    Every export includes automated run scripts (`run.sh`, `run.bat`), dependency locks, setup manifests, `.gitignore`, and detailed setup guides.
+                </p>
+                <div style="font-size: 11px; color: var(--text-tertiary); font-family: var(--font-mono);">
+                    run.sh • run.bat • README.md
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 4: Integrated Workspace Features -->
+    <div style="margin-bottom: 80px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--r-xl); padding: 48px 36px;">
+        <div style="text-align: center; margin-bottom: 36px;">
+            <span class="badge badge-brand" style="margin-bottom: 8px; font-size: 11px;">Developer Experience</span>
+            <h2 style="font-size: 28px; font-weight: 700; color: var(--text-primary); margin: 0 0 10px;">Engineered for Professional Developers</h2>
+            <p style="color: var(--text-secondary); font-size: 15px; max-width: 600px; margin: 0 auto;">An interactive in-browser IDE tailored for AI-synthesized codebases.</p>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+            <div style="padding: 16px;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                    <i data-lucide="panel-left-close" style="width: 18px; height: 18px; color: #3b82f6;"></i>
+                    <h4 style="font-size: 15px; font-weight: 600; color: var(--text-primary); margin: 0;">Collapsible Dual-Pane IDE</h4>
+                </div>
+                <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin: 0;">
+                    Toggle between full-screen chat focus and dual-pane code inspection using floating reopen pills or center divider chevrons.
+                </p>
+            </div>
+
+            <div style="padding: 16px;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                    <i data-lucide="code" style="width: 18px; height: 18px; color: #10b981;"></i>
+                    <h4 style="font-size: 15px; font-weight: 600; color: var(--text-primary); margin: 0;">Numbered Gutter & Offline Prism</h4>
+                </div>
+                <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin: 0;">
+                    Syntax highlighting across Dart, Python, JavaScript, and Bash with numbered line gutters and customizable font scaling.
+                </p>
+            </div>
+
+            <div style="padding: 16px;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                    <i data-lucide="git-pull-request" style="width: 18px; height: 18px; color: #a855f7;"></i>
+                    <h4 style="font-size: 15px; font-weight: 600; color: var(--text-primary); margin: 0;">Unified & Split Diffs</h4>
+                </div>
+                <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin: 0;">
+                    Inspect modifications between generated code iterations with color-coded syntax diffs and version history rollbacks.
+                </p>
+            </div>
+
+            <div style="padding: 16px;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                    <i data-lucide="clock" style="width: 18px; height: 18px; color: #f59e0b;"></i>
+                    <h4 style="font-size: 15px; font-weight: 600; color: var(--text-primary); margin: 0;">Queued Prompt Manager</h4>
+                </div>
+                <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin: 0;">
+                    Type next requirements while code is generating. Queue prompts, reorder, edit, or dispatch priority overrides anytime.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 5: Call to Action -->
+    <div class="text-center" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.12)); border: 1px solid var(--border-color); border-radius: var(--r-xl); padding: 56px 24px;">
+        <h2 style="font-size: 32px; font-weight: 800; color: var(--text-primary); margin-bottom: 12px; letter-spacing: -0.02em;">
+            Ready to Build Verified Production Software?
+        </h2>
+        <p style="color: var(--text-secondary); font-size: 16px; max-width: 600px; margin: 0 auto 28px; line-height: 1.6;">
+            Start a new workspace, upload your specifications, and experience requirement-driven software synthesis.
+        </p>
+        <div style="display: flex; justify-content: center; gap: 14px; flex-wrap: wrap;">
+            <a href="{% url 'new_chat' %}" class="btn btn-primary" style="padding: 12px 28px; font-size: 15px; font-weight: 600;">
+                <i data-lucide="play" style="width: 15px; height: 15px;"></i> Launch New Workspace
+            </a>
+            <a href="{% url 'dashboard' %}" class="btn btn-secondary" style="padding: 12px 28px; font-size: 15px; font-weight: 600;">
+                <i data-lucide="layout-dashboard" style="width: 15px; height: 15px;"></i> Go to Dashboard
+            </a>
+        </div>
+    </div>
+
 </div>
 {% endblock %}
 
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+        }
+    });
+</script>
+{% endblock %}
