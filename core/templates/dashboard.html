@@ -16,24 +16,48 @@
             </p>
         </div>
 
-        <form method="POST" action="{% url 'create_session' %}">
+        <form method="POST" action="{% url 'create_session' %}" id="composer-create-form" onsubmit="return validateComposerMode()">
             {% csrf_token %}
-            <div style="background: var(--surface-sunken); border: 1px solid var(--border-strong); border-radius: var(--r-lg); padding: 16px; margin-bottom: 20px;">
-                <textarea name="description" rows="3" style="background: transparent; border: none; width: 100%; color: var(--ink); font-family: var(--font-sans); font-size: 15px; outline: none; resize: none;" placeholder="e.g. 'A real-time Library Management System with Django, SQLite schema, borrow limits, and fine notifications...'" required></textarea>
+            <div style="background: var(--surface-sunken); border: 1px solid var(--border-strong); border-radius: var(--r-lg); padding: 18px; margin-bottom: 20px;">
+                <textarea name="description" rows="3" style="background: transparent; border: none; width: 100%; color: var(--ink); font-family: var(--font-sans); font-size: 15px; outline: none; resize: none; margin-bottom: 14px;" placeholder="e.g. 'A real-time Library Management System with Django, SQLite schema, borrow limits, and fine notifications...'" required></textarea>
                 
-                <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 14px; border-top: 1px solid var(--border); margin-top: 12px; flex-wrap: wrap; gap: 12px;">
-                    <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
-                        <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); cursor: pointer; font-weight: 500;">
-                            <input type="radio" name="mode" value="mode1" checked /> All at Once (Dialogue-Driven)
+                <!-- 3 Generation Modes Grid: None checked by default (§Don't keep by default) -->
+                <div style="margin-bottom: 6px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-3);">Generation Mode (Required):</span>
+                        <span id="composer-mode-status" style="font-size: 12px; color: var(--ink-3); font-weight: 500;">Select one of 3 modes</span>
+                    </div>
+                    <div class="composer-mode-grid" id="dashboard-composer-modes">
+                        <label class="composer-mode-card" data-mode="mode1" onclick="chooseComposerMode('mode1', this)">
+                            <input type="radio" name="mode" value="mode1" required />
+                            <div class="card-radio-disc"></div>
+                            <div class="card-texts">
+                                <span class="card-title">All at Once (Mode 1)</span>
+                                <span class="card-desc">Full Project Scaffolding</span>
+                            </div>
                         </label>
-                        <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); cursor: pointer; font-weight: 500;">
-                            <input type="radio" name="mode" value="mode2" /> File by File (Incremental)
+                        <label class="composer-mode-card" data-mode="mode2" onclick="chooseComposerMode('mode2', this)">
+                            <input type="radio" name="mode" value="mode2" required />
+                            <div class="card-radio-disc"></div>
+                            <div class="card-texts">
+                                <span class="card-title">File by File (Mode 2)</span>
+                                <span class="card-desc">Incremental Architecture</span>
+                            </div>
                         </label>
-                        <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); cursor: pointer; font-weight: 500;">
-                            <input type="radio" name="mode" value="mode3" /> Quick Code (Direct Snippet & Fixer)
+                        <label class="composer-mode-card" data-mode="mode3" onclick="chooseComposerMode('mode3', this)">
+                            <input type="radio" name="mode" value="mode3" required />
+                            <div class="card-radio-disc"></div>
+                            <div class="card-texts">
+                                <span class="card-title">Quick Code (Mode 3)</span>
+                                <span class="card-desc">Snippet & Bug Fixer</span>
+                            </div>
                         </label>
                     </div>
-                    <button type="submit" class="btn btn-primary">
+                </div>
+
+                <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 14px; border-top: 1px solid var(--border); flex-wrap: wrap; gap: 12px;">
+                    <span style="font-size: 12px; color: var(--ink-3);">Describe your prompt and pick a mode to start building.</span>
+                    <button type="submit" class="btn btn-primary" id="btn-dashboard-create">
                         Create Workspace
                     </button>
                 </div>
@@ -51,9 +75,15 @@
 
     <!-- Recent Projects Grid -->
     <div>
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px;">
-            <h2 style="font-size: var(--text-heading); font-weight: 600; color: var(--ink);">Recent Projects</h2>
-            <span style="font-size: 14px; color: var(--ink-3);">{{ sessions|length }} Workspaces</span>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
+            <div style="display: flex; align-items: baseline; gap: 12px;">
+                <h2 style="font-size: var(--text-heading); font-weight: 600; color: var(--ink);">Recent Projects</h2>
+                <span style="font-size: 14px; color: var(--ink-3);">{{ sessions|length }} Workspaces</span>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm" onclick="openNewChatModeModal()" style="display: flex; align-items: center; gap: 6px;">
+                <i data-lucide="plus" style="width: 15px; height: 15px;"></i>
+                <span>New Chat</span>
+            </button>
         </div>
 
         {% if sessions %}
@@ -96,4 +126,47 @@
         {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function chooseComposerMode(mode, el) {
+        document.querySelectorAll('#dashboard-composer-modes .composer-mode-card').forEach(c => {
+            c.classList.remove('selected');
+        });
+        if (el) {
+            el.classList.add('selected');
+            const radio = el.querySelector('input[type="radio"]');
+            if (radio) radio.checked = true;
+        }
+        const statusEl = document.getElementById('composer-mode-status');
+        if (statusEl) {
+            const modeNames = {
+                'mode1': 'Mode 1: All at Once',
+                'mode2': 'Mode 2: File by File',
+                'mode3': 'Mode 3: Quick Code'
+            };
+            statusEl.textContent = 'Selected: ' + (modeNames[mode] || mode);
+            statusEl.style.color = 'var(--brand)';
+        }
+    }
+
+    function validateComposerMode() {
+        const checked = document.querySelector('#dashboard-composer-modes input[name="mode"]:checked');
+        if (!checked) {
+            const statusEl = document.getElementById('composer-mode-status');
+            if (statusEl) {
+                statusEl.textContent = 'Please choose one of the 3 modes to proceed';
+                statusEl.style.color = 'var(--error-text, #ef4444)';
+            }
+            const grid = document.getElementById('dashboard-composer-modes');
+            if (grid) {
+                grid.classList.add('grid-shake');
+                setTimeout(() => grid.classList.remove('grid-shake'), 400);
+            }
+            return false;
+        }
+        return true;
+    }
+</script>
 {% endblock %}

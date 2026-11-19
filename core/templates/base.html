@@ -365,6 +365,9 @@
             }
         });
     </script>
+    {% if user.is_authenticated %}
+        {% include 'components/new_chat_modal.html' %}
+    {% endif %}
     {% block extra_js %}{% endblock %}
 </body>
 </html>

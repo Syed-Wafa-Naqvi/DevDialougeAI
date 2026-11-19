@@ -156,8 +156,31 @@ def dashboard_view(request):
 
 @verification_required
 def new_chat_view(request):
+    mode = request.GET.get('mode') or request.POST.get('mode')
+    if mode in ['mode1', 'mode2', 'mode3']:
+        unused_session = (
+            Session.objects.filter(user=request.user, status__in=['active', 'ready'])
+            .annotate(msg_count=models.Count('messages'))
+            .filter(msg_count=0)
+            .first()
+        )
+        if unused_session:
+            unused_session.mode = mode
+            unused_session.status = 'ready' if mode == 'mode3' else 'active'
+            unused_session.save(update_fields=['mode', 'status'])
+            logger.info("[NEW CHAT] Reusing empty Session #%s (%s) set to mode '%s'", unused_session.id, unused_session.uuid, mode)
+            return redirect('chat', session_id=unused_session.uuid)
+
+        session = Session.objects.create(
+            user=request.user,
+            mode=mode,
+            status='ready' if mode == 'mode3' else 'active'
+        )
+        logger.info("[NEW CHAT] Created fresh Session #%s (%s) for %s with mode '%s'", session.id, session.uuid, request.user, mode)
+        return redirect('chat', session_id=session.uuid)
+
     unused_session = (
-        Session.objects.filter(user=request.user, status='active')
+        Session.objects.filter(user=request.user, status__in=['active', 'ready'])
         .annotate(msg_count=models.Count('messages'))
         .filter(msg_count=0)
         .first()

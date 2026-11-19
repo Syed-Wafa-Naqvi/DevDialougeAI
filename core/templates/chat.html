@@ -348,10 +348,10 @@
                 </button>
             </div>
             
-            <a href="{% url 'new_chat' %}" class="new-chat-btn">
+            <button type="button" class="new-chat-btn" id="btn-sidebar-new-chat" onclick="openNewChatModeModal()" title="Start New Chat">
                 <i data-lucide="plus" class="new-chat-icon"></i>
                 <span>New Chat</span>
-            </a>
+            </button>
             
             <div class="sidebar-search">
                 <i data-lucide="search" class="search-icon"></i>
@@ -804,7 +804,36 @@
                     {% if is_first_load %}
                         <div class="first-load-header-group">
                             <h2 class="first-load-greeting">What can we build today?</h2>
-                            <p class="first-load-subheading">Start a new workspace or select an architecture pattern below.</p>
+                            <p class="first-load-subheading">Choose your workflow mode below or select an architecture starter.</p>
+
+                            <!-- Generation Mode Switcher Banner -->
+                            <div class="workspace-mode-selector-banner">
+                                <span class="mode-selector-eyebrow">Workspace Mode:</span>
+                                <div class="workspace-mode-pills" id="empty-chat-mode-pills">
+                                    <button type="button" class="empty-mode-pill {% if session.mode == 'mode1' %}active{% endif %}" data-mode="mode1" onclick="switchEmptySessionMode('mode1', this)" title="Mode 1: Full multi-file project scaffolding generated in a single coherent pass">
+                                        <i data-lucide="layers" class="pill-icon"></i>
+                                        <div class="pill-texts">
+                                            <span class="pill-title">All at Once</span>
+                                            <span class="pill-desc">Full Scaffolding</span>
+                                        </div>
+                                    </button>
+                                    <button type="button" class="empty-mode-pill {% if session.mode == 'mode2' %}active{% endif %}" data-mode="mode2" onclick="switchEmptySessionMode('mode2', this)" title="Mode 2: Incremental, architecture-guided generation with user verification at each step">
+                                        <i data-lucide="git-commit" class="pill-icon"></i>
+                                        <div class="pill-texts">
+                                            <span class="pill-title">File by File</span>
+                                            <span class="pill-desc">Step-by-Step Approval</span>
+                                        </div>
+                                    </button>
+                                    <button type="button" class="empty-mode-pill {% if session.mode == 'mode3' %}active{% endif %}" data-mode="mode3" onclick="switchEmptySessionMode('mode3', this)" title="Mode 3: Direct synthesis and code repair mode for standalone code snippets, bug fixes, algorithmic inquiries, and targeted scripts">
+                                        <i data-lucide="zap" class="pill-icon"></i>
+                                        <div class="pill-texts">
+                                            <span class="pill-title">Quick Code</span>
+                                            <span class="pill-desc">Snippet & Bug Fixer</span>
+                                        </div>
+                                    </button>
+                                </div>
+                            </div>
+
                             <div class="suggested-prompts-container">
                                 <button type="button" class="starter-prompt-card" onclick="fillPromptText(this)" data-prompt="Build a full-stack Django web application with clean models, PostgreSQL/SQLite support, user authentication, and REST APIs.">
                                     <div class="starter-card-icon"><i data-lucide="layers"></i></div>
@@ -4224,6 +4253,51 @@ chmod +x run.sh && ./run.sh
             }
         } catch (e) {
             console.error("Failed to toggle mode:", e);
+        }
+    };
+
+    window.switchEmptySessionMode = async function(mode, el) {
+        try {
+            const resp = await fetch("{% url 'update_session_mode_api' session_id=session.uuid %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ mode: mode })
+            });
+            const data = await resp.json();
+            if (data.status === 'success') {
+                SESSION_MODE = data.mode;
+                document.querySelectorAll('#empty-chat-mode-pills .empty-mode-pill').forEach(p => p.classList.remove('active'));
+                if (el) el.classList.add('active');
+
+                const label = document.getElementById('mode-label');
+                if (label) {
+                    if (data.mode === 'mode1') label.textContent = 'All at once';
+                    else if (data.mode === 'mode2') label.textContent = 'File by file';
+                    else label.textContent = 'Quick Code';
+                }
+
+                const stepper = document.getElementById('stage-stepper-row');
+                const quickBadge = document.getElementById('quick-code-header-badge');
+                const compBox = document.getElementById('completeness-box-wrapper');
+                const inputF = document.getElementById('chat-input-field');
+                if (data.mode === 'mode3') {
+                    if (stepper) stepper.style.display = 'none';
+                    if (quickBadge) quickBadge.style.display = 'flex';
+                    if (compBox) compBox.style.display = 'none';
+                    if (inputF && !inputF.value) inputF.placeholder = 'Ask for any code, snippet, script, or paste code to fix...';
+                } else {
+                    if (stepper) stepper.style.display = 'flex';
+                    if (quickBadge) quickBadge.style.display = 'none';
+                    if (compBox) compBox.style.display = 'flex';
+                    if (inputF && !inputF.value) inputF.placeholder = 'Message DevDialogue or drop PDF, images, Word, PPT, Excel...';
+                }
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            }
+        } catch (e) {
+            console.error("Failed to switch empty session mode:", e);
         }
     };
 

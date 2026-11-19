@@ -1,0 +1,274 @@
+<!-- New Chat Mode Selection Modal Component -->
+<div id="new-chat-mode-modal" class="mode-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="new-chat-modal-title" style="display: none;">
+    <div class="mode-modal-overlay" onclick="closeNewChatModeModal()"></div>
+    <div class="mode-modal-container">
+        <!-- Modal Header -->
+        <div class="mode-modal-header">
+            <div class="mode-modal-title-group">
+                <div class="mode-modal-badge-icon">
+                    <i data-lucide="sparkles" style="width: 18px; height: 18px;"></i>
+                </div>
+                <div>
+                    <h2 id="new-chat-modal-title" class="mode-modal-title">Start New Chat Workspace</h2>
+                    <p class="mode-modal-subtitle">Choose the generation mode for this new workspace. Select how DevDialogue AI should synthesize code:</p>
+                </div>
+            </div>
+            <button type="button" class="btn-mode-modal-close" onclick="closeNewChatModeModal()" title="Close dialog" aria-label="Close dialog">
+                <i data-lucide="x" style="width: 18px; height: 18px;"></i>
+            </button>
+        </div>
+
+        <!-- Mode Cards Grid: None selected by default -->
+        <div class="mode-selection-grid" id="new-chat-mode-grid">
+            <!-- Mode 1: All at Once -->
+            <div class="mode-select-card" data-mode="mode1" onclick="selectNewChatMode('mode1', this)" ondblclick="launchSelectedMode('mode1')">
+                <div class="mode-card-topbar">
+                    <span class="mode-category-badge badge-mode1">Full Scaffolding</span>
+                    <div class="mode-radio-circle">
+                        <i data-lucide="check" class="mode-check-icon"></i>
+                    </div>
+                </div>
+                <div class="mode-card-icon-wrap icon-mode1">
+                    <i data-lucide="layers" style="width: 22px; height: 22px;"></i>
+                </div>
+                <h3 class="mode-card-heading">All at Once</h3>
+                <span class="mode-card-tagline">Mode 1: Dialogue-Driven Synthesis</span>
+                <p class="mode-card-description">
+                    Full multi-file project scaffolding generated in a single coherent pass. Ideal for end-to-end applications from scratch with complete architecture.
+                </p>
+                <div class="mode-card-features">
+                    <div class="mode-feature-item">
+                        <i data-lucide="check" style="width: 13px; height: 13px;"></i>
+                        <span>Complete multi-file directory scaffold and runner manifests</span>
+                    </div>
+                    <div class="mode-feature-item">
+                        <i data-lucide="check" style="width: 13px; height: 13px;"></i>
+                        <span>Interactive requirement elicitation (SRS interview)</span>
+                    </div>
+                    <div class="mode-feature-item">
+                        <i data-lucide="check" style="width: 13px; height: 13px;"></i>
+                        <span>Interactive 2.5D/3D WebGL architecture blueprint</span>
+                    </div>
+                    <div class="mode-feature-item">
+                        <i data-lucide="check" style="width: 13px; height: 13px;"></i>
+                        <span>Cross-file dependency resolution and static verifier</span>
+                    </div>
+                </div>
+                <div class="mode-card-footer-cta">
+                    <span class="mode-card-status-text">Click to choose Mode 1</span>
+                </div>
+            </div>
+
+            <!-- Mode 2: File by File -->
+            <div class="mode-select-card" data-mode="mode2" onclick="selectNewChatMode('mode2', this)" ondblclick="launchSelectedMode('mode2')">
+                <div class="mode-card-topbar">
+                    <span class="mode-category-badge badge-mode2">Incremental Architecture</span>
+                    <div class="mode-radio-circle">
+                        <i data-lucide="check" class="mode-check-icon"></i>
+                    </div>
+                </div>
+                <div class="mode-card-icon-wrap icon-mode2">
+                    <i data-lucide="git-commit" style="width: 22px; height: 22px;"></i>
+                </div>
+                <h3 class="mode-card-heading">File by File</h3>
+                <span class="mode-card-tagline">Mode 2: Step-by-Step Approval</span>
+                <p class="mode-card-description">
+                    Incremental, architecture-guided generation with user verification at each step. Best for step-by-step modular builds.
+                </p>
+                <div class="mode-card-features">
+                    <div class="mode-feature-item">
+                        <i data-lucide="check" style="width: 13px; height: 13px;"></i>
+                        <span>Guided module-by-module generation workflow</span>
+                    </div>
+                    <div class="mode-feature-item">
+                        <i data-lucide="check" style="width: 13px; height: 13px;"></i>
+                        <span>Inspect and verify code diffs before the next file</span>
+                    </div>
+                    <div class="mode-feature-item">
+                        <i data-lucide="check" style="width: 13px; height: 13px;"></i>
+                        <span>Targeted developer feedback and revision loops</span>
+                    </div>
+                    <div class="mode-feature-item">
+                        <i data-lucide="check" style="width: 13px; height: 13px;"></i>
+                        <span>Tightly controlled architectural progression</span>
+                    </div>
+                </div>
+                <div class="mode-card-footer-cta">
+                    <span class="mode-card-status-text">Click to choose Mode 2</span>
+                </div>
+            </div>
+
+            <!-- Mode 3: Quick Code -->
+            <div class="mode-select-card" data-mode="mode3" onclick="selectNewChatMode('mode3', this)" ondblclick="launchSelectedMode('mode3')">
+                <div class="mode-card-topbar">
+                    <span class="mode-category-badge badge-mode3">Direct Synthesis & Repair</span>
+                    <div class="mode-radio-circle">
+                        <i data-lucide="check" class="mode-check-icon"></i>
+                    </div>
+                </div>
+                <div class="mode-card-icon-wrap icon-mode3">
+                    <i data-lucide="zap" style="width: 22px; height: 22px;"></i>
+                </div>
+                <h3 class="mode-card-heading">Quick Code</h3>
+                <span class="mode-card-tagline">Mode 3: Snippet & Bug Fixer</span>
+                <p class="mode-card-description">
+                    Direct synthesis and code repair mode for standalone code snippets, bug fixes, algorithmic inquiries, and targeted scripts without forcing an entire project directory scaffold.
+                </p>
+                <div class="mode-card-features">
+                    <div class="mode-feature-item">
+                        <i data-lucide="check" style="width: 13px; height: 13px;"></i>
+                        <span>Instant code generation with zero scaffold overhead</span>
+                    </div>
+                    <div class="mode-feature-item">
+                        <i data-lucide="check" style="width: 13px; height: 13px;"></i>
+                        <span>Paste broken code to automatically diagnose and fix</span>
+                    </div>
+                    <div class="mode-feature-item">
+                        <i data-lucide="check" style="width: 13px; height: 13px;"></i>
+                        <span>Targeted algorithms, single scripts, and SQL schemas</span>
+                    </div>
+                    <div class="mode-feature-item">
+                        <i data-lucide="check" style="width: 13px; height: 13px;"></i>
+                        <span>Native compiler syntax verification on solutions</span>
+                    </div>
+                </div>
+                <div class="mode-card-footer-cta">
+                    <span class="mode-card-status-text">Click to choose Mode 3</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Footer Actions -->
+        <div class="mode-modal-footer">
+            <div class="mode-modal-status-col">
+                <span id="new-chat-mode-status-label" class="mode-status-text">Please choose a generation mode to continue</span>
+            </div>
+            <div class="mode-modal-actions-col">
+                <button type="button" class="btn btn-ghost" onclick="closeNewChatModeModal()">Cancel</button>
+                <button type="button" id="btn-create-workspace-confirm" class="btn btn-primary" disabled onclick="submitNewChatModeChoice()">
+                    <span>Select a Mode</span>
+                    <i data-lucide="arrow-right" style="width: 15px; height: 15px; margin-left: 6px;"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function() {
+        let currentSelectedMode = null;
+
+        window.openNewChatModeModal = function() {
+            const modal = document.getElementById('new-chat-mode-modal');
+            if (!modal) return;
+            // Reset selection ("Don't keep by default")
+            currentSelectedMode = null;
+            document.querySelectorAll('#new-chat-mode-grid .mode-select-card').forEach(c => {
+                c.classList.remove('selected');
+                const st = c.querySelector('.mode-card-status-text');
+                if (st) {
+                    const m = c.getAttribute('data-mode');
+                    const num = m === 'mode1' ? '1' : (m === 'mode2' ? '2' : '3');
+                    st.textContent = `Click to choose Mode ${num}`;
+                }
+            });
+            const confirmBtn = document.getElementById('btn-create-workspace-confirm');
+            if (confirmBtn) {
+                confirmBtn.disabled = true;
+                confirmBtn.innerHTML = `<span>Select a Mode</span><i data-lucide="arrow-right" style="width: 15px; height: 15px; margin-left: 6px;"></i>`;
+            }
+            const statusLabel = document.getElementById('new-chat-mode-status-label');
+            if (statusLabel) {
+                statusLabel.textContent = 'Please choose a generation mode to continue';
+                statusLabel.classList.remove('has-selection');
+            }
+
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        };
+
+        window.closeNewChatModeModal = function() {
+            const modal = document.getElementById('new-chat-mode-modal');
+            if (!modal) return;
+            modal.style.display = 'none';
+            document.body.style.overflow = '';
+        };
+
+        window.selectNewChatMode = function(mode, el) {
+            currentSelectedMode = mode;
+            document.querySelectorAll('#new-chat-mode-grid .mode-select-card').forEach(c => {
+                c.classList.remove('selected');
+                const st = c.querySelector('.mode-card-status-text');
+                if (st) {
+                    const m = c.getAttribute('data-mode');
+                    const num = m === 'mode1' ? '1' : (m === 'mode2' ? '2' : '3');
+                    st.textContent = `Click to choose Mode ${num}`;
+                }
+            });
+
+            if (el) {
+                el.classList.add('selected');
+                const st = el.querySelector('.mode-card-status-text');
+                if (st) st.textContent = 'Selected (Ready to launch)';
+            }
+
+            const modeNames = {
+                'mode1': 'All at Once (Mode 1)',
+                'mode2': 'File by File (Mode 2)',
+                'mode3': 'Quick Code (Mode 3)'
+            };
+
+            const confirmBtn = document.getElementById('btn-create-workspace-confirm');
+            if (confirmBtn) {
+                confirmBtn.disabled = false;
+                confirmBtn.innerHTML = `<span>Start with ${modeNames[mode]}</span><i data-lucide="arrow-right" style="width: 15px; height: 15px; margin-left: 6px;"></i>`;
+            }
+
+            const statusLabel = document.getElementById('new-chat-mode-status-label');
+            if (statusLabel) {
+                statusLabel.textContent = `Selected: ${modeNames[mode]}`;
+                statusLabel.classList.add('has-selection');
+            }
+
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        };
+
+        window.launchSelectedMode = function(mode) {
+            window.selectNewChatMode(mode, document.querySelector(`.mode-select-card[data-mode="${mode}"]`));
+            window.submitNewChatModeChoice();
+        };
+
+        window.submitNewChatModeChoice = function() {
+            if (!currentSelectedMode) {
+                const statusLabel = document.getElementById('new-chat-mode-status-label');
+                if (statusLabel) {
+                    statusLabel.textContent = 'Please choose one of the three modes first';
+                    statusLabel.style.color = 'var(--error-text, #ef4444)';
+                }
+                const grid = document.getElementById('new-chat-mode-grid');
+                if (grid) {
+                    grid.classList.add('grid-shake');
+                    setTimeout(() => grid.classList.remove('grid-shake'), 400);
+                }
+                return;
+            }
+
+            const confirmBtn = document.getElementById('btn-create-workspace-confirm');
+            if (confirmBtn) {
+                confirmBtn.disabled = true;
+                confirmBtn.innerHTML = `<span>Starting Workspace...</span>`;
+            }
+
+            const newChatUrl = "{% url 'new_chat' %}?mode=" + encodeURIComponent(currentSelectedMode);
+            window.location.href = newChatUrl;
+        };
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                window.closeNewChatModeModal();
+            }
+        });
+    })();
+</script>
+

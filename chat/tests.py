@@ -38,6 +38,45 @@ class ChatTestCase(TestCase):
         self.assertEqual(response2.url, f'/chat/{session.uuid}/')
         self.assertEqual(Session.objects.filter(user=self.user, status='active').count(), 1)
 
+    def test_new_chat_with_specific_modes(self):
+        """Verify that passing mode1, mode2, or mode3 sets the session mode explicitly."""
+        # 1. Start Mode 2 (File by file)
+        r2 = self.client.get('/new-chat/?mode=mode2')
+        self.assertEqual(r2.status_code, 302)
+        s2 = Session.objects.filter(user=self.user).order_by('-started_at').first()
+        self.assertEqual(s2.mode, 'mode2')
+        self.assertEqual(r2.url, f'/chat/{s2.uuid}/')
+
+        # 2. Start Mode 3 (Quick Code) reuses empty session and updates its mode
+        r3 = self.client.get('/new-chat/?mode=mode3')
+        self.assertEqual(r3.status_code, 302)
+        s3 = Session.objects.filter(user=self.user).order_by('-started_at').first()
+        self.assertEqual(s3.id, s2.id)
+        self.assertEqual(s3.mode, 'mode3')
+        self.assertEqual(s3.status, 'ready')
+        self.assertEqual(r3.url, f'/chat/{s3.uuid}/')
+
+        # 3. Mode 1 (All at once) updates empty session
+        r1 = self.client.get('/new-chat/?mode=mode1')
+        self.assertEqual(r1.status_code, 302)
+        s1 = Session.objects.filter(user=self.user).order_by('-started_at').first()
+        self.assertEqual(s1.id, s2.id)
+        self.assertEqual(s1.mode, 'mode1')
+        self.assertEqual(s1.status, 'active')
+
+    def test_new_chat_modal_rendered_in_workspace(self):
+        """Verify that the 3-mode selection modal is included and rendered in chat view."""
+        sess = Session.objects.create(user=self.user, mode='mode1', status='active')
+        res = self.client.get(f'/chat/{sess.uuid}/')
+        self.assertEqual(res.status_code, 200)
+        content = res.content.decode('utf-8')
+        self.assertIn('id="new-chat-mode-modal"', content)
+        self.assertIn('data-mode="mode1"', content)
+        self.assertIn('data-mode="mode2"', content)
+        self.assertIn('data-mode="mode3"', content)
+        self.assertIn('openNewChatModeModal', content)
+        self.assertIn('btn-sidebar-new-chat', content)
+
     def test_chat_view_and_api_via_uuid(self):
         session = Session.objects.create(user=self.user, mode='mode1', status='active')
         

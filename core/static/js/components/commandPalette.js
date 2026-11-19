@@ -29,7 +29,7 @@ export class CommandPalette {
         const resultsList = dialog.querySelector('#palette-results');
 
         const commands = [
-            { label: 'New Project', action: () => window.location.href = '/new-chat/', shortcut: 'Ctrl+N' },
+            { label: 'New Project / New Chat', action: () => (window.openNewChatModeModal ? window.openNewChatModeModal() : window.location.href = '/new-chat/'), shortcut: 'Ctrl+N' },
             { label: 'Switch to Stage: Discover (Interview)', action: () => switchStage('discover'), shortcut: 'Alt+1' },
             { label: 'Switch to Stage: Blueprint (Plan)', action: () => switchStage('blueprint'), shortcut: 'Alt+2' },
             { label: 'Switch to Stage: Build (Generate)', action: () => switchStage('build'), shortcut: 'Alt+3' },
