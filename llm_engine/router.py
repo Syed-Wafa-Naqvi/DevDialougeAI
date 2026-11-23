@@ -30,7 +30,7 @@ class LLMRouter:
         requested = (provider_name or "").lower().strip()
         
         openai_key = os.environ.get('OPENAI_API_KEY')
-        claude_key = os.environ.get('ANTHROPIC_API_KEY')
+        claude_key = os.environ.get('ANTHROPIC_API_KEY') or os.environ.get('CLAUDE_API_KEY')
         gemini_key = os.environ.get('GEMINI_API_KEY')
         deepseek_key = os.environ.get('DEEPSEEK_API_KEY')
 

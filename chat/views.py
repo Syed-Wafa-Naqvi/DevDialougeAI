@@ -291,7 +291,7 @@ def chat_view(request, session_id):
     available_providers = ['auto', 'free']
     has_openai = bool(os.environ.get('OPENAI_API_KEY') or (hasattr(request.user, 'profile') and request.user.profile.get_openai_key()))
     has_gemini = bool(os.environ.get('GEMINI_API_KEY') or (hasattr(request.user, 'profile') and request.user.profile.get_gemini_key()))
-    has_claude = bool(os.environ.get('ANTHROPIC_API_KEY'))
+    has_claude = bool(os.environ.get('ANTHROPIC_API_KEY') or os.environ.get('CLAUDE_API_KEY'))
     has_deepseek = bool(os.environ.get('DEEPSEEK_API_KEY'))
 
     if has_gemini:
